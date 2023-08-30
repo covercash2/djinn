@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "djinn"
+version = "0.1.0"
+description = "generate images with my M2"
+authors = ["Chris Overcash <covercash2@gmail.com>"]
+readme = "README.md"
+packages = [
+	{include = "create", from = "src" },
+]
+
+[tool.poetry.scripts]
+create = "create.test:run"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+diffusers = "^0.20.0"
+transformers = "^4.31.0"
+safetensors = "^0.3.2"
+invisible-watermark = "^0.2.0"
+accelerate = "^0.21.0"
+pillow = "^10.0.0"
+torchvision = "^0.15.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pyright = "^1.1.323"
+pylint = "^2.17.5"
+black = "^23.7.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
