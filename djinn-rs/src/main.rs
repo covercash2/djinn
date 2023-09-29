@@ -222,18 +222,18 @@ pub fn run<T: Task>(args: Args) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    //    use tracing_chrome::ChromeLayerBuilder;
-    //    use tracing_subscriber::prelude::*;
+    use tracing_chrome::ChromeLayerBuilder;
+    use tracing_subscriber::prelude::*;
 
     let args = Args::parse();
 
-    //    let _guard = if args.tracing {
-    //        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
-    //        tracing_subscriber::registry().with(chrome_layer).init();
-    //        Some(guard)
-    //    } else {
-    //        None
-    //    };
+    let _guard = if args.tracing {
+        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
+        tracing_subscriber::registry().with(chrome_layer).init();
+        Some(guard)
+    } else {
+        None
+    };
 
     match args.task {
         YoloTask::Detect => run::<YoloV8>(args)?,
