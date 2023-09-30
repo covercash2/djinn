@@ -1,3 +1,4 @@
+pub mod args;
 pub mod model;
 
 use candle_core::{IndexOp, Result, Tensor};
