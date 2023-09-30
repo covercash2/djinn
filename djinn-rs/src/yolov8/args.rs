@@ -1,10 +1,7 @@
-use std::path::PathBuf;
-
-use candle_core::{safetensors::MmapedFile, DType, Device, Error, Module, Result, Tensor};
+use candle_core::{Module, Result, Tensor};
 use candle_nn::VarBuilder;
 use clap::{Parser, ValueEnum};
 use image::DynamicImage;
-use safetensors::SafeTensors;
 
 use super::{
     model::{Multiples, YoloV8, YoloV8Pose},
@@ -12,7 +9,7 @@ use super::{
 };
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
-enum Which {
+pub enum Which {
     N,
     S,
     M,
@@ -31,29 +28,25 @@ pub enum YoloTask {
 pub struct Args {
     /// Run on CPU rather than on GPU.
     #[arg(long)]
-    cpu: bool,
-
-    /// Enable tracing (generates a trace-timestamp.json file).
-    #[arg(long)]
-    pub tracing: bool,
+    pub cpu: bool,
 
     /// Model weights, in safetensors format.
     #[arg(long)]
-    model: Option<String>,
+    pub model: Option<String>,
 
     /// Which model variant to use.
     #[arg(long, value_enum, default_value_t = Which::S)]
-    which: Which,
+    pub which: Which,
 
-    images: Vec<String>,
+    pub images: Vec<String>,
 
     /// Threshold for the model confidence level.
     #[arg(long, default_value_t = 0.25)]
-    confidence_threshold: f32,
+    pub confidence_threshold: f32,
 
     /// Threshold for non-maximum suppression.
     #[arg(long, default_value_t = 0.45)]
-    nms_threshold: f32,
+    pub nms_threshold: f32,
 
     /// The task to be run.
     #[arg(long, default_value = "detect")]
@@ -61,11 +54,11 @@ pub struct Args {
 
     /// The size for the legend, 0 means no legend.
     #[arg(long, default_value_t = 14)]
-    legend_size: u32,
+    pub legend_size: u32,
 }
 
 impl Args {
-    fn model(&self) -> anyhow::Result<std::path::PathBuf> {
+    pub fn model(&self) -> anyhow::Result<std::path::PathBuf> {
         let path = match &self.model {
             Some(model) => std::path::PathBuf::from(model),
             None => {
@@ -144,76 +137,4 @@ impl Task for YoloV8Pose {
     ) -> Result<DynamicImage> {
         report_pose(pred, img, w, h, confidence_threshold, nms_threshold)
     }
-}
-
-pub fn run<T: Task>(args: Args) -> anyhow::Result<()> {
-    let device = if args.cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0)?
-    };
-    // Create the model and load the weights from the file.
-    let multiples = match args.which {
-        Which::N => Multiples::n(),
-        Which::S => Multiples::s(),
-        Which::M => Multiples::m(),
-        Which::L => Multiples::l(),
-        Which::X => Multiples::x(),
-    };
-    let model: PathBuf = args.model()?;
-    let mmapped_file: MmapedFile = unsafe { candle_core::safetensors::MmapedFile::new(model)? };
-    let tensors: SafeTensors = mmapped_file.deserialize()?;
-    let vb = VarBuilder::from_safetensors(vec![tensors], DType::F32, &device);
-    let model = T::load(vb, multiples)?;
-    println!("model loaded");
-    for image_name in args.images.iter() {
-        println!("processing {image_name}");
-        let mut image_name = std::path::PathBuf::from(image_name);
-        let original_image = image::io::Reader::open(&image_name)?
-            .decode()
-            .map_err(Error::wrap)?;
-        let (width, height) = {
-            let w = original_image.width() as usize;
-            let h = original_image.height() as usize;
-            if w < h {
-                let w = w * 640 / h;
-                // Sizes have to be divisible by 32.
-                (w / 32 * 32, 640)
-            } else {
-                let h = h * 640 / w;
-                (640, h / 32 * 32)
-            }
-        };
-        let image_t = {
-            let img = original_image.resize_exact(
-                width as u32,
-                height as u32,
-                image::imageops::FilterType::CatmullRom,
-            );
-            let data = img.to_rgb8().into_raw();
-            Tensor::from_vec(
-                data,
-                (img.height() as usize, img.width() as usize, 3),
-                &device,
-            )?
-            .permute((2, 0, 1))?
-        };
-        let image_t = (image_t.unsqueeze(0)?.to_dtype(DType::F32)? * (1. / 255.))?;
-        let predictions = model.forward(&image_t)?.squeeze(0)?;
-        println!("generated predictions {predictions:?}");
-        let image_t = T::report(
-            &predictions,
-            original_image,
-            width,
-            height,
-            args.confidence_threshold,
-            args.nms_threshold,
-            args.legend_size,
-        )?;
-        image_name.set_extension("pp.jpg");
-        println!("writing {image_name:?}");
-        image_t.save(image_name)?
-    }
-
-    Ok(())
 }

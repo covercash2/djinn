@@ -1,9 +1,20 @@
 pub mod args;
 pub mod model;
 
-use candle_core::{IndexOp, Result, Tensor};
+use std::path::PathBuf;
+
+use candle_core::{safetensors::MmapedFile, DType, Device, Error, IndexOp, Result, Tensor};
+use candle_nn::VarBuilder;
 use candle_transformers::object_detection::{non_maximum_suppression, Bbox, KeyPoint};
 use image::DynamicImage;
+use safetensors::SafeTensors;
+
+use crate::yolov8::{args::Which, model::Multiples};
+
+use self::{
+    args::{Task, YoloTask},
+    model::{YoloV8, YoloV8Pose},
+};
 
 // Keypoints as reported by ChatGPT :)
 // Nose
@@ -43,6 +54,87 @@ const KP_CONNECTIONS: [(usize, usize); 16] = [
 ];
 // Model architecture from https://github.com/ultralytics/ultralytics/issues/189
 // https://github.com/tinygrad/tinygrad/blob/master/examples/yolov8.py
+
+pub fn run(args: args::Args) -> anyhow::Result<()> {
+    match args.task {
+        YoloTask::Detect => run_task::<YoloV8>(args)?,
+        YoloTask::Pose => run_task::<YoloV8Pose>(args)?,
+    }
+
+    Ok(())
+}
+
+fn run_task<T: Task>(args: args::Args) -> anyhow::Result<()> {
+    let device = if args.cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0)?
+    };
+    // Create the model and load the weights from the file.
+    let multiples = match args.which {
+        Which::N => Multiples::n(),
+        Which::S => Multiples::s(),
+        Which::M => Multiples::m(),
+        Which::L => Multiples::l(),
+        Which::X => Multiples::x(),
+    };
+    let model: PathBuf = args.model()?;
+    let mmapped_file: MmapedFile = unsafe { candle_core::safetensors::MmapedFile::new(model)? };
+    let tensors: SafeTensors = mmapped_file.deserialize()?;
+    let vb = VarBuilder::from_safetensors(vec![tensors], DType::F32, &device);
+    let model = T::load(vb, multiples)?;
+    println!("model loaded");
+    for image_name in args.images.iter() {
+        println!("processing {image_name}");
+        let mut image_name = std::path::PathBuf::from(image_name);
+        let original_image = image::io::Reader::open(&image_name)?
+            .decode()
+            .map_err(Error::wrap)?;
+        let (width, height) = {
+            let w = original_image.width() as usize;
+            let h = original_image.height() as usize;
+            if w < h {
+                let w = w * 640 / h;
+                // Sizes have to be divisible by 32.
+                (w / 32 * 32, 640)
+            } else {
+                let h = h * 640 / w;
+                (640, h / 32 * 32)
+            }
+        };
+        let image_t = {
+            let img = original_image.resize_exact(
+                width as u32,
+                height as u32,
+                image::imageops::FilterType::CatmullRom,
+            );
+            let data = img.to_rgb8().into_raw();
+            Tensor::from_vec(
+                data,
+                (img.height() as usize, img.width() as usize, 3),
+                &device,
+            )?
+            .permute((2, 0, 1))?
+        };
+        let image_t = (image_t.unsqueeze(0)?.to_dtype(DType::F32)? * (1. / 255.))?;
+        let predictions = model.forward(&image_t)?.squeeze(0)?;
+        println!("generated predictions {predictions:?}");
+        let image_t = T::report(
+            &predictions,
+            original_image,
+            width,
+            height,
+            args.confidence_threshold,
+            args.nms_threshold,
+            args.legend_size,
+        )?;
+        image_name.set_extension("pp.jpg");
+        println!("writing {image_name:?}");
+        image_t.save(image_name)?
+    }
+
+    Ok(())
+}
 
 pub fn report_detect(
     pred: &Tensor,
