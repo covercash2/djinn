@@ -26,10 +26,6 @@ pub enum YoloTask {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Run on CPU rather than on GPU.
-    #[arg(long)]
-    pub cpu: bool,
-
     /// Model weights, in safetensors format.
     #[arg(long)]
     pub model: Option<String>,

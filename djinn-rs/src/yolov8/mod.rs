@@ -55,21 +55,16 @@ const KP_CONNECTIONS: [(usize, usize); 16] = [
 // Model architecture from https://github.com/ultralytics/ultralytics/issues/189
 // https://github.com/tinygrad/tinygrad/blob/master/examples/yolov8.py
 
-pub fn run(args: args::Args) -> anyhow::Result<()> {
+pub fn run(device: Device, args: args::Args) -> anyhow::Result<()> {
     match args.task {
-        YoloTask::Detect => run_task::<YoloV8>(args)?,
-        YoloTask::Pose => run_task::<YoloV8Pose>(args)?,
+        YoloTask::Detect => run_task::<YoloV8>(device, args)?,
+        YoloTask::Pose => run_task::<YoloV8Pose>(device, args)?,
     }
 
     Ok(())
 }
 
-fn run_task<T: Task>(args: args::Args) -> anyhow::Result<()> {
-    let device = if args.cpu {
-        Device::Cpu
-    } else {
-        Device::cuda_if_available(0)?
-    };
+fn run_task<T: Task>(device: Device, args: args::Args) -> anyhow::Result<()> {
     // Create the model and load the weights from the file.
     let multiples = match args.which {
         Which::N => Multiples::n(),
