@@ -140,7 +140,7 @@ pub fn run(device: Device, args: Args) -> anyhow::Result<()> {
         .to_vec();
 
     println!("starting inference loop");
-    println!("{}", &prompt);
+    println!("prompt: {}", &prompt);
 
     let mut logits_processor = LogitsProcessor::new(args.seed, args.temperature, args.top_p);
     let start_gen = std::time::Instant::now();
