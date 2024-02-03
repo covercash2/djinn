@@ -83,12 +83,34 @@ impl Variant {
 }
 
 impl Weights {
-    fn forward(&mut self, input: &Tensor, start_pos: usize) -> anyhow::Result<Tensor> {
-        let output = match self {
-            Weights::Mistral(m) => m.forward(input, start_pos)?,
-            Weights::QMistral(m) => m.forward(input, start_pos)?,
+    fn forward(
+        &mut self,
+        index: usize,
+        tokens: &[u32],
+        device: &Device,
+        repeat_penalty: f32,
+        repeat_last_n: usize,
+    ) -> anyhow::Result<Tensor> {
+        let context_size = if index > 0 { 1 } else { tokens.len() };
+        let start_pos = tokens.len().saturating_sub(context_size);
+        let context = &tokens[start_pos..];
+        let input = Tensor::new(context, device)?.unsqueeze(0)?;
+        let logits = match self {
+            Weights::Mistral(m) => m.forward(&input, start_pos)?,
+            Weights::QMistral(m) => m.forward(&input, start_pos)?,
         };
-        Ok(output)
+        let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
+        let logits = if repeat_penalty == 1. {
+            logits
+        } else {
+            let start_at = tokens.len().saturating_sub(repeat_last_n);
+            candle_transformers::utils::apply_repeat_penalty(
+                &logits,
+                repeat_penalty,
+                &tokens[start_at..],
+            )?
+        };
+        Ok(logits)
     }
 }
 
@@ -146,25 +168,13 @@ impl ModelContext {
 
         let start_gen = std::time::Instant::now();
         for index in 0..sample_len {
-            let context_size = if index > 0 { 1 } else { tokens.len() };
-            let start_pos = tokens.len().saturating_sub(context_size);
-            let context = &tokens[start_pos..];
-            let input = Tensor::new(context, &self.model.device)?.unsqueeze(0)?;
-            let logits = match &mut self.model.weights {
-                Weights::Mistral(m) => m.forward(&input, start_pos)?,
-                Weights::QMistral(m) => m.forward(&input, start_pos)?,
-            };
-            let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
-            let logits = if repeat_penalty == 1. {
-                logits
-            } else {
-                let start_at = tokens.len().saturating_sub(repeat_last_n);
-                candle_transformers::utils::apply_repeat_penalty(
-                    &logits,
-                    repeat_penalty,
-                    &tokens[start_at..],
-                )?
-            };
+            let logits = self.model.weights.forward(
+                index,
+                &tokens,
+                &self.model.device,
+                repeat_penalty,
+                repeat_last_n,
+            )?;
 
             let next_token = logits_processor.sample(&logits)?;
             tokens.push(next_token);
