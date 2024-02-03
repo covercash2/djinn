@@ -1,16 +1,39 @@
 extern crate accelerate_src;
 
+use std::{
+    net::{SocketAddr, SocketAddrV4},
+    sync::Arc,
+};
+
 use candle_core::Device;
 use clap::{Parser, Subcommand};
+use server::{Config, HttpServer};
+use tracing_chrome::ChromeLayerBuilder;
+use tracing_subscriber::prelude::*;
+
+use crate::server::Context;
 
 mod coco_classes;
 mod error;
 mod font;
 mod llama;
 mod mistral;
-mod yolov8;
+mod server;
 mod token_output_stream;
 mod util;
+mod yolov8;
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    runner: Runner,
+}
+
+#[derive(Subcommand)]
+enum Runner {
+    Server,
+    SingleRun(Args),
+}
 
 #[derive(Parser)]
 struct Args {
@@ -32,13 +55,7 @@ enum Architecture {
     Mistral(mistral::Args),
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    use tracing_chrome::ChromeLayerBuilder;
-    use tracing_subscriber::prelude::*;
-
-    let args = Args::parse();
-
+async fn run_model(args: Args) -> anyhow::Result<()> {
     let _guard = if args.tracing {
         let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
         tracing_subscriber::registry().with(chrome_layer).init();
@@ -59,4 +76,22 @@ async fn main() -> anyhow::Result<()> {
         Architecture::Mistral(mistral_args) => mistral::run(device, mistral_args).await?,
     }
     Ok(())
+}
+
+async fn run_server() -> anyhow::Result<()> {
+    let addr: SocketAddrV4 = "127.0.0.1:8090".parse()?;
+    let context = Context::new(Config::new(SocketAddr::from(addr)));
+    let server = HttpServer::new(Arc::from(context));
+
+    server.start().await
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let args = Cli::parse();
+
+    match args.runner {
+        Runner::Server => run_server().await,
+        Runner::SingleRun(args) => run_model(args).await,
+    }
 }

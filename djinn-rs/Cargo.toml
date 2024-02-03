@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 accelerate-src = "0.3.2"
 anyhow = "1.0.75"
+axum = "0.7.4"
 candle-core = { version = "0.3.3", features = ["accelerate"] }
 candle-nn = { version = "0.3.3", features = ["accelerate"] }
 candle-transformers = { version = "0.3.3", features = ["accelerate"] }
