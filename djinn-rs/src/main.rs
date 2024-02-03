@@ -20,6 +20,7 @@ mod llama;
 mod mistral;
 mod server;
 mod token_output_stream;
+mod text_generator;
 mod util;
 mod yolov8;
 
