@@ -4,9 +4,13 @@ use candle_core::Device;
 use clap::{Parser, Subcommand};
 
 mod coco_classes;
+mod error;
 mod font;
 mod llama;
+mod mistral;
 mod yolov8;
+mod token_output_stream;
+mod util;
 
 #[derive(Parser)]
 struct Args {
@@ -25,9 +29,11 @@ struct Args {
 enum Architecture {
     Yolov8(yolov8::args::Args),
     Llama(llama::Args),
+    Mistral(mistral::Args),
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     use tracing_chrome::ChromeLayerBuilder;
     use tracing_subscriber::prelude::*;
 
@@ -49,7 +55,8 @@ fn main() -> anyhow::Result<()> {
 
     match args.architecture {
         Architecture::Yolov8(yolo_args) => yolov8::run(device, yolo_args)?,
-        Architecture::Llama(llama_args) => llama::run(device, llama_args)?,
+        Architecture::Llama(llama_args) => llama::run(device, llama_args).await?,
+        Architecture::Mistral(mistral_args) => mistral::run(device, mistral_args).await?,
     }
     Ok(())
 }

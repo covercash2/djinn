@@ -1,19 +1,17 @@
 extern crate accelerate_src;
 
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::io::Write;
 
 use anyhow::bail;
-use candle_core::{safetensors::MmapedFile, DType, Device, Tensor};
+use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::{generation::LogitsProcessor, models::llama};
 use clap::{Parser, ValueEnum};
 use hf_hub::{Repo, RepoType};
 use llama::{Llama, LlamaConfig};
-use safetensors::SafeTensors;
 use tokenizers::Tokenizer;
+
+use crate::util::hub_load_safetensors;
 
 const EOS_TOKEN: &str = "</s>";
 
@@ -70,7 +68,7 @@ impl ToString for ModelVersion {
     }
 }
 
-pub fn run(device: Device, args: Args) -> anyhow::Result<()> {
+pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
     let dtype = match args.dtype.as_deref() {
         Some("f16") => DType::F16,
         Some("bf16") => DType::BF16,
@@ -79,7 +77,7 @@ pub fn run(device: Device, args: Args) -> anyhow::Result<()> {
         None => DType::F16,
     };
 
-    let api = hf_hub::api::sync::Api::new()?;
+    let api = hf_hub::api::tokio::Api::new()?;
     let model_id = args.model_version.to_string();
     println!("loading the model weights from {model_id}");
     let api = api.repo(Repo::with_revision(
@@ -90,42 +88,24 @@ pub fn run(device: Device, args: Args) -> anyhow::Result<()> {
 
     let tokenizer_filename = match &args.local_weights {
         Some(path) => (path.to_owned() + "tokenizer.json").into(),
-        _ => api.get("tokenizer.json")?,
+        _ => api.get("tokenizer.json").await?,
     };
 
     let config_filename = match &args.local_weights {
         Some(path) => (path.to_owned() + "config.json").into(),
-        _ => api.get("config.json")?,
+        _ => api.get("config.json").await?,
     };
     let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename)?)?;
     let config = config.into_config(!args.disable_flash_attention);
 
-    let mut files: Vec<PathBuf> = vec![];
-    for filename in [
-        "model-00001-of-00002.safetensors",
-        "model-00002-of-00002.safetensors",
-    ] {
-        match &args.local_weights {
-            Some(path) => {
-                files.push((path.to_owned() + filename).into());
-            }
-            None => {
-                let filename = api.get(filename)?;
-                files.push(filename);
-            }
-        };
-    }
+    let filenames = match args.model_version {
+        _ => hub_load_safetensors(&api, "model.safetensors.index.json").await?,
+    };
 
     println!("building the model");
     let cache = llama::Cache::new(!args.disable_kv_cache, dtype, &config, &device)?;
 
-    let loaded_files = load_mmaped_files(&files)?;
-
-    let mut tensors: Vec<SafeTensors> = vec![];
-    for file in loaded_files.iter() {
-        tensors.push(file.deserialize()?);
-    }
-    let vb = VarBuilder::from_safetensors(tensors, DType::F32, &device);
+    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, DType::F32, &device)? };
 
     let model = Llama::load(vb, &cache, &config)?;
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(anyhow::Error::msg)?;
@@ -191,15 +171,4 @@ pub fn run(device: Device, args: Args) -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-fn load_mmaped_files<'a, P: AsRef<Path>>(files: &[P]) -> anyhow::Result<Vec<MmapedFile>> {
-    let mut mmaped_files = vec![];
-
-    for file in files {
-        let loaded_file: MmapedFile = unsafe { candle_core::safetensors::MmapedFile::new(file)? };
-        mmaped_files.push(loaded_file);
-    }
-
-    Ok(mmaped_files)
 }

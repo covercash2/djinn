@@ -3,11 +3,10 @@ pub mod model;
 
 use std::path::PathBuf;
 
-use candle_core::{safetensors::MmapedFile, DType, Device, Error, IndexOp, Result, Tensor};
+use candle_core::{DType, Device, Error, IndexOp, Result, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::object_detection::{non_maximum_suppression, Bbox, KeyPoint};
 use image::DynamicImage;
-use safetensors::SafeTensors;
 
 use crate::yolov8::{args::Which, model::Multiples};
 
@@ -74,9 +73,7 @@ fn run_task<T: Task>(device: Device, args: args::Args) -> anyhow::Result<()> {
         Which::X => Multiples::x(),
     };
     let model: PathBuf = args.model()?;
-    let mmapped_file: MmapedFile = unsafe { candle_core::safetensors::MmapedFile::new(model)? };
-    let tensors: SafeTensors = mmapped_file.deserialize()?;
-    let vb = VarBuilder::from_safetensors(vec![tensors], DType::F32, &device);
+    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[model], DType::F32, &device)? };
     let model = T::load(vb, multiples)?;
     println!("model loaded");
     for image_name in args.images.iter() {
