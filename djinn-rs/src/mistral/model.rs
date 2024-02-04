@@ -8,6 +8,7 @@ use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
 use candle_transformers::models::mistral::{Config, Model as Mistral};
 use candle_transformers::models::quantized_mistral::Model as QMistral;
+use derive_builder::Builder;
 use derive_new::new;
 use hf_hub::api::tokio::{Api as HfApi, ApiRepo};
 use hf_hub::{Repo, RepoType};
@@ -114,15 +115,13 @@ impl Weights {
     }
 }
 
-pub struct Model {
-    weights: Weights,
+#[derive(Builder)]
+#[builder(pattern = "owned")]
+pub struct ModelContext {
+    model: Weights,
+    #[builder(setter(into))]
     tokenizer: TokenOutputStream,
     device: Device,
-}
-
-#[derive(new)]
-pub struct ModelContext {
-    model: Model,
 }
 
 impl ModelContext {
@@ -138,10 +137,9 @@ impl ModelContext {
     ) -> anyhow::Result<()> {
         let prompt = prompt.into();
 
-        self.model.tokenizer.clear();
+        self.tokenizer.clear();
 
         let mut tokens = self
-            .model
             .tokenizer
             .tokenizer()
             .encode(prompt, true)
@@ -150,13 +148,12 @@ impl ModelContext {
             .to_vec();
 
         for &t in tokens.iter() {
-            if let Some(t) = self.model.tokenizer.next_token(t)? {
+            if let Some(t) = self.tokenizer.next_token(t)? {
                 print!("{t}");
             }
         }
 
         let eos_token = self
-            .model
             .tokenizer
             .get_token("</s>")
             .ok_or(anyhow!("no EOS token found"))?;
@@ -168,10 +165,10 @@ impl ModelContext {
 
         let start_gen = std::time::Instant::now();
         for index in 0..sample_len {
-            let logits = self.model.weights.forward(
+            let logits = self.model.forward(
                 index,
                 &tokens,
-                &self.model.device,
+                &self.device,
                 repeat_penalty,
                 repeat_last_n,
             )?;
@@ -184,19 +181,15 @@ impl ModelContext {
                 break;
             }
 
-            if let Some(t) = self.model.tokenizer.next_token(next_token)? {
+            if let Some(t) = self.tokenizer.next_token(next_token)? {
+                yie
                 print!("{t}");
                 std::io::stdout().flush()?;
             }
         }
 
         let dt = start_gen.elapsed();
-        if let Some(rest) = self
-            .model
-            .tokenizer
-            .decode_rest()
-            .map_err(anyhow::Error::msg)?
-        {
+        if let Some(rest) = self.tokenizer.decode_rest().map_err(anyhow::Error::msg)? {
             print!("{rest}");
         }
         std::io::stdout().flush()?;
@@ -206,30 +199,5 @@ impl ModelContext {
             generated_tokens as f64 / dt.as_secs_f64(),
         );
         Ok(())
-    }
-}
-
-impl Model {
-    pub async fn load(
-        api: &HfApi,
-        variant: Variant,
-        revision: String,
-        device: &Device,
-        use_flash_attn: bool,
-    ) -> anyhow::Result<Model> {
-        let repo_id = variant.hf_repo_id();
-        let repo = api.repo(Repo::with_revision(repo_id, RepoType::Model, revision));
-
-        let tokenizer_file = repo.get("tokenizer.json").await?;
-        let tokenizer = Tokenizer::from_file(tokenizer_file).map_err(anyhow::Error::msg)?;
-        let tokenizer = TokenOutputStream::new(tokenizer);
-
-        let weights = variant.load_weights(&repo, device, use_flash_attn).await?;
-
-        Ok(Model {
-            weights,
-            tokenizer,
-            device: device.clone(),
-        })
     }
 }

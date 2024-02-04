@@ -1,18 +1,9 @@
-use std::io::Write;
-
-use candle::{DType, Tensor};
 use candle_core::{self as candle, Device};
-use candle_nn::VarBuilder;
-use candle_transformers::generation::LogitsProcessor;
-use candle_transformers::models::mistral::{Config, Model as Mistral};
-use candle_transformers::models::quantized_mistral::Model as QMistral;
 use clap::Parser;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
-use crate::mistral::model::{Model, ModelContext, Variant};
-use crate::token_output_stream::TokenOutputStream;
-use crate::util::hub_load_safetensors;
+use crate::mistral::model::{ModelContextBuilder, Variant};
 
 pub mod model;
 
@@ -97,12 +88,23 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
     };
 
     let api = Api::new()?;
+    let repo_id = variant.hf_repo_id();
+    let repo = api.repo(Repo::with_revision(repo_id, RepoType::Model, args.revision));
 
-    let model = Model::load(&api, variant, args.revision, &device, args.use_flash_attn).await?;
+    let weights = variant
+        .load_weights(&repo, &device, args.use_flash_attn)
+        .await?;
+
+    let tokenizer_file = repo.get("tokenizer.json").await?;
+    let tokenizer = Tokenizer::from_file(tokenizer_file).map_err(anyhow::Error::msg)?;
 
     println!("loaded the model in {:?}", start.elapsed());
 
-    let mut model_context = ModelContext::new(model);
+    let mut model_context = ModelContextBuilder::default()
+        .model(weights)
+        .tokenizer(tokenizer)
+        .device(device)
+        .build()?;
 
     model_context
         .run(

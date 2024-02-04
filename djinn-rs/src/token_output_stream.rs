@@ -1,4 +1,5 @@
 use anyhow::{Error, Result};
+use tokenizers::Tokenizer;
 
 /// This is a wrapper around a tokenizer to ensure that tokens can be returned to the user in a
 /// streaming way rather than having to wait for the full decoding.
@@ -79,5 +80,11 @@ impl TokenOutputStream {
         self.tokens.clear();
         self.prev_index = 0;
         self.current_index = 0;
+    }
+}
+
+impl From<Tokenizer> for TokenOutputStream {
+    fn from(value: Tokenizer) -> Self {
+        TokenOutputStream::new(value)
     }
 }
