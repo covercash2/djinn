@@ -1,18 +1,17 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use async_stream::stream;
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
 use candle_transformers::models::mistral::{Config, Model as Mistral};
 use candle_transformers::models::quantized_mistral::Model as QMistral;
 use derive_builder::Builder;
-use derive_new::new;
-use hf_hub::api::tokio::{Api as HfApi, ApiRepo};
-use hf_hub::{Repo, RepoType};
-use tokenizers::Tokenizer;
+use hf_hub::api::tokio::ApiRepo;
+use tokio::sync::Mutex;
+use tokio_stream::Stream;
 
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
@@ -118,86 +117,77 @@ impl Weights {
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct ModelContext {
-    model: Weights,
+    #[builder(setter(into))]
+    model: Arc<Mutex<Weights>>,
     #[builder(setter(into))]
     tokenizer: TokenOutputStream,
     device: Device,
 }
 
 impl ModelContext {
-    pub async fn run(
-        &mut self,
-        prompt: impl Into<String>,
+    pub fn run<'a>(
+        &'a mut self,
+        prompt: String,
         seed: u64,
         temperature: Option<f64>,
         top_p: Option<f64>,
         sample_len: usize,
         repeat_penalty: f32,
         repeat_last_n: usize,
-    ) -> anyhow::Result<()> {
-        let prompt = prompt.into();
+    ) -> impl Stream<Item = anyhow::Result<String>> + 'a {
+        stream! {
+            self.tokenizer.clear();
 
-        self.tokenizer.clear();
+            let mut tokens = self
+                .tokenizer
+                .tokenizer()
+                .encode(prompt, true)
+                .map_err(anyhow::Error::msg)?
+                .get_ids()
+                .to_vec();
 
-        let mut tokens = self
-            .tokenizer
-            .tokenizer()
-            .encode(prompt, true)
-            .map_err(anyhow::Error::msg)?
-            .get_ids()
-            .to_vec();
-
-        for &t in tokens.iter() {
-            if let Some(t) = self.tokenizer.next_token(t)? {
-                print!("{t}");
+            for &t in tokens.iter() {
+                if let Some(t) = self.tokenizer.next_token(t)? {
+                    yield Ok(t);
+                }
             }
-        }
+            let eos_token = self
+                .tokenizer
+                .get_token("</s>")
+                .ok_or(anyhow!("no EOS token found"))?;
 
-        let eos_token = self
-            .tokenizer
-            .get_token("</s>")
-            .ok_or(anyhow!("no EOS token found"))?;
+            let mut generated_tokens = 0usize;
 
-        std::io::stdout().flush()?;
-        let mut generated_tokens = 0usize;
+            let mut logits_processor = LogitsProcessor::new(seed, temperature, top_p);
 
-        let mut logits_processor = LogitsProcessor::new(seed, temperature, top_p);
+            let start_gen = std::time::Instant::now();
+            let mut model = self.model.lock().await;
+            for index in 0..sample_len {
+                let logits =
+                    (*model)
+                        .forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
 
-        let start_gen = std::time::Instant::now();
-        for index in 0..sample_len {
-            let logits = self.model.forward(
-                index,
-                &tokens,
-                &self.device,
-                repeat_penalty,
-                repeat_last_n,
-            )?;
+                let next_token = logits_processor.sample(&logits)?;
+                tokens.push(next_token);
+                generated_tokens += 1;
 
-            let next_token = logits_processor.sample(&logits)?;
-            tokens.push(next_token);
-            generated_tokens += 1;
+                if next_token == eos_token {
+                    break;
+                }
 
-            if next_token == eos_token {
-                break;
+                if let Some(t) = self.tokenizer.next_token(next_token)? {
+                    yield Ok(t);
+                }
             }
 
-            if let Some(t) = self.tokenizer.next_token(next_token)? {
-                yie
-                print!("{t}");
-                std::io::stdout().flush()?;
+            let dt = start_gen.elapsed();
+            if let Some(rest) = self.tokenizer.decode_rest().map_err(anyhow::Error::msg)? {
+                yield Ok(rest);
             }
+            println!(
+                "\n{generated_tokens} tokens generated ({:.2} tokens/s)",
+                generated_tokens as f64 / dt.as_secs_f64(),
+            );
         }
-
-        let dt = start_gen.elapsed();
-        if let Some(rest) = self.tokenizer.decode_rest().map_err(anyhow::Error::msg)? {
-            print!("{rest}");
-        }
-        std::io::stdout().flush()?;
-
-        println!(
-            "\n{generated_tokens} tokens generated ({:.2} tokens/s)",
-            generated_tokens as f64 / dt.as_secs_f64(),
-        );
-        Ok(())
     }
 }
