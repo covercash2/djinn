@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use candle_core::{self as candle, Device};
 use clap::Parser;
+use futures_util::pin_mut;
+use futures_util::stream::StreamExt;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 use tokio::sync::Mutex;
-use futures_util::pin_mut;
-use futures_util::stream::StreamExt;
 
 use crate::mistral::model::{ModelContextBuilder, Variant};
 
@@ -101,8 +101,6 @@ pub async fn create_new_context(device: Device, args: Args) -> anyhow::Result<Mo
     let weights = variant
         .load_weights(&repo, &device, args.use_flash_attn)
         .await?;
-    let weights = Mutex::new(weights);
-    let weights = Arc::new(weights);
 
     let tokenizer_file = repo.get("tokenizer.json").await?;
     let tokenizer = Tokenizer::from_file(tokenizer_file).map_err(anyhow::Error::msg)?;

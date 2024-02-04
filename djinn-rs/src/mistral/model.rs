@@ -117,8 +117,7 @@ impl Weights {
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct ModelContext {
-    #[builder(setter(into))]
-    model: Arc<Mutex<Weights>>,
+    model: Weights,
     #[builder(setter(into))]
     tokenizer: TokenOutputStream,
     device: Device,
@@ -161,11 +160,9 @@ impl ModelContext {
             let mut logits_processor = LogitsProcessor::new(seed, temperature, top_p);
 
             let start_gen = std::time::Instant::now();
-            let mut model = self.model.lock().await;
             for index in 0..sample_len {
                 let logits =
-                    (*model)
-                        .forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
+                    self.model.forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
 
                 let next_token = logits_processor.sample(&logits)?;
                 tokens.push(next_token);
