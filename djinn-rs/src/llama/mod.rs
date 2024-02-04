@@ -98,9 +98,7 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
     let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename)?)?;
     let config = config.into_config(!args.disable_flash_attention);
 
-    let filenames = match args.model_version {
-        _ => hub_load_safetensors(&api, "model.safetensors.index.json").await?,
-    };
+    let filenames = hub_load_safetensors(&api, "model.safetensors.index.json").await?;
 
     println!("building the model");
     let cache = llama::Cache::new(!args.disable_kv_cache, dtype, &config, &device)?;

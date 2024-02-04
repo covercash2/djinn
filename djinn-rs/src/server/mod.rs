@@ -3,11 +3,7 @@ use axum::{
     Router,
 };
 use derive_new::new;
-use std::{
-    fmt::Display,
-    net::{Shutdown, SocketAddr},
-    sync::Arc,
-};
+use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
 #[derive(new)]
 pub struct Context {
@@ -44,7 +40,7 @@ enum ServiceRoutes {
 impl Display for ServiceRoutes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ServiceRoutes::HealthCheck => write!(f, "{}", "/health-check"),
+            ServiceRoutes::HealthCheck => write!(f, "/health-check"),
         }
     }
 }

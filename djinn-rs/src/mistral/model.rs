@@ -33,7 +33,7 @@ impl Variant {
         device: &Device,
         use_flash_attn: bool,
     ) -> anyhow::Result<Weights> {
-        let files = self.hf_files(&repo).await?;
+        let files = self.hf_files(repo).await?;
         let config = Config::config_7b_v0_1(use_flash_attn);
 
         self.load_weight_files(&files, config, device)
@@ -73,7 +73,7 @@ impl Variant {
             Variant::Quantized => {
                 let filename = &files[0];
                 let vb = candle_transformers::quantized_var_builder::VarBuilder::from_gguf(
-                    filename, &device,
+                    filename, device,
                 )?;
                 let model = QMistral::new(&config, vb)?;
                 Ok(Weights::QMistral(model))
@@ -124,8 +124,8 @@ pub struct ModelContext {
 }
 
 impl ModelContext {
-    pub fn run<'a>(
-        &'a mut self,
+    pub fn run(
+        &mut self,
         prompt: String,
         seed: u64,
         temperature: Option<f64>,
@@ -133,7 +133,7 @@ impl ModelContext {
         sample_len: usize,
         repeat_penalty: f32,
         repeat_last_n: usize,
-    ) -> impl Stream<Item = anyhow::Result<String>> + 'a {
+    ) -> impl Stream<Item = anyhow::Result<String>> + '_ {
         stream! {
             self.tokenizer.clear();
 
