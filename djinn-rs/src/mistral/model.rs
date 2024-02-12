@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_stream::stream;
@@ -8,19 +7,26 @@ use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
 use candle_transformers::models::mistral::{Config, Model as Mistral};
 use candle_transformers::models::quantized_mistral::Model as QMistral;
+use clap::ValueEnum;
 use derive_builder::Builder;
 use hf_hub::api::tokio::ApiRepo;
-use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
 use tokio_stream::Stream;
+use tracing::instrument;
 
+use super::config::RunConfig;
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
 pub enum Variant {
+    /// Main Mistral version
     Mistral,
+    /// Quantized Mistral
     Quantized,
 }
 
+#[derive(Debug)]
 pub enum Weights {
     Mistral(Mistral),
     QMistral(QMistral),
@@ -83,6 +89,7 @@ impl Variant {
 }
 
 impl Weights {
+    #[instrument]
     fn forward(
         &mut self,
         index: usize,
@@ -91,6 +98,7 @@ impl Weights {
         repeat_penalty: f32,
         repeat_last_n: usize,
     ) -> anyhow::Result<Tensor> {
+        tracing::info!("forward pass on index {index}");
         let context_size = if index > 0 { 1 } else { tokens.len() };
         let start_pos = tokens.len().saturating_sub(context_size);
         let context = &tokens[start_pos..];
@@ -126,15 +134,21 @@ pub struct ModelContext {
 impl ModelContext {
     pub fn run(
         &mut self,
-        prompt: String,
-        seed: u64,
-        temperature: Option<f64>,
-        top_p: Option<f64>,
-        sample_len: usize,
-        repeat_penalty: f32,
-        repeat_last_n: usize,
+        prompt: impl ToString,
+        config: RunConfig,
     ) -> impl Stream<Item = anyhow::Result<String>> + '_ {
+        let prompt = prompt.to_string();
         stream! {
+            let RunConfig {
+                seed,
+                temperature,
+                top_p,
+                sample_len,
+                repeat_penalty,
+                repeat_last_n,
+                ..
+            } = config;
+
             self.tokenizer.clear();
 
             let mut tokens = self

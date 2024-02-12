@@ -17,10 +17,11 @@ mod coco_classes;
 mod error;
 mod font;
 mod llama;
+mod lm;
 mod mistral;
 mod server;
-mod token_output_stream;
 mod text_generator;
+mod token_output_stream;
 mod util;
 mod yolov8;
 
@@ -74,7 +75,7 @@ async fn run_model(args: Args) -> anyhow::Result<()> {
     match args.architecture {
         Architecture::Yolov8(yolo_args) => yolov8::run(device, yolo_args)?,
         Architecture::Llama(llama_args) => llama::run(device, llama_args).await?,
-        Architecture::Mistral(mistral_args) => mistral::run(device, mistral_args).await?,
+        Architecture::Mistral(mistral_args) => mistral::run(mistral_args).await?,
     }
     Ok(())
 }

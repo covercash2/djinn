@@ -15,7 +15,7 @@ use crate::util::hub_load_safetensors;
 
 const EOS_TOKEN: &str = "</s>";
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 pub struct Args {
     prompt: String,
     #[arg(short = 'l', long, default_value_t = 100)]

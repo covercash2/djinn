@@ -1,17 +1,20 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 
 use candle_core::{self as candle, Device};
 use clap::Parser;
 use futures_util::pin_mut;
-use futures_util::stream::StreamExt;
+use futures_util::StreamExt;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
-use tokio::sync::Mutex;
 
 use crate::mistral::model::{ModelContextBuilder, Variant};
 
+use self::config::ModelConfig;
+use self::config::ModelSource;
+pub use self::config::RunConfig;
 use self::model::ModelContext;
 
+pub mod config;
 pub mod model;
 
 #[derive(Parser, Clone)]
@@ -19,10 +22,6 @@ pub struct Args {
     /// Run on CPU rather than on GPU.
     #[arg(long)]
     cpu: bool,
-
-    /// Enable tracing (generates a trace-timestamp.json file).
-    #[arg(long)]
-    tracing: bool,
 
     #[arg(long)]
     use_flash_attn: bool,
@@ -49,8 +48,8 @@ pub struct Args {
     #[arg(long)]
     model_id: Option<String>,
 
-    #[arg(long, default_value = "main")]
-    revision: String,
+    #[arg(long)]
+    revision: Option<String>,
 
     #[arg(long)]
     tokenizer_file: Option<String>,
@@ -58,8 +57,8 @@ pub struct Args {
     #[arg(long)]
     weight_files: Option<String>,
 
-    #[arg(long)]
-    quantized: bool,
+    #[arg(value_enum)]
+    variant: Variant,
 
     /// Penalty to be applied for repeating tokens, 1. means no penalty.
     #[arg(long, default_value_t = 1.1)]
@@ -70,36 +69,82 @@ pub struct Args {
     repeat_last_n: usize,
 }
 
-pub async fn create_new_context(device: Device, args: Args) -> anyhow::Result<ModelContext> {
-    println!(
-        "avx: {}, neon: {}, simd128: {}, f16c: {}",
-        candle::utils::with_avx(),
-        candle::utils::with_neon(),
-        candle::utils::with_simd128(),
-        candle::utils::with_f16c()
-    );
-    println!(
-        "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        args.temperature.unwrap_or(0.),
-        args.repeat_penalty,
-        args.repeat_last_n
-    );
+impl From<Args> for RunConfig {
+    fn from(value: Args) -> Self {
+        let Args {
+            seed,
+            temperature,
+            top_p,
+            sample_len,
+            repeat_penalty,
+            repeat_last_n,
+            ..
+        } = value;
+        RunConfig {
+            seed,
+            temperature,
+            top_p,
+            sample_len,
+            repeat_penalty,
+            repeat_last_n,
+        }
+    }
+}
 
+impl From<Args> for ModelConfig {
+    fn from(value: Args) -> Self {
+        let Args {
+            variant,
+            cpu,
+            use_flash_attn,
+            revision,
+            weight_files,
+            tokenizer_file,
+            ..
+        } = value;
+
+        let model_source = if let Some(revision) = revision {
+            ModelSource::HuggingFaceHub { revision }
+        } else if let Some((weight_files, tokenizer_file)) = weight_files.zip(tokenizer_file) {
+            ModelSource::Files {
+                weight_files: vec![weight_files.into()],
+                tokenizer_file: tokenizer_file.into(),
+            }
+        } else {
+            panic!("unable to find files");
+        };
+
+        ModelConfig {
+            variant,
+            cpu,
+            flash_attn: use_flash_attn,
+            model_source,
+        }
+    }
+}
+
+pub async fn create_new_context(
+    device: Device,
+    model_config: ModelConfig,
+) -> anyhow::Result<ModelContext> {
     // prep files
     let start = std::time::Instant::now();
 
-    let variant = if args.quantized {
-        Variant::Quantized
-    } else {
-        Variant::Mistral
+    let revision = match model_config.model_source {
+        ModelSource::HuggingFaceHub { revision } => revision,
+        ModelSource::Files {
+            weight_files: _,
+            tokenizer_file: _,
+        } => todo!(),
     };
 
+    let variant = model_config.variant;
     let api = Api::new()?;
     let repo_id = variant.hf_repo_id();
-    let repo = api.repo(Repo::with_revision(repo_id, RepoType::Model, args.revision));
+    let repo = api.repo(Repo::with_revision(repo_id, RepoType::Model, revision));
 
     let weights = variant
-        .load_weights(&repo, &device, args.use_flash_attn)
+        .load_weights(&repo, &device, model_config.flash_attn)
         .await?;
 
     let tokenizer_file = repo.get("tokenizer.json").await?;
@@ -114,18 +159,31 @@ pub async fn create_new_context(device: Device, args: Args) -> anyhow::Result<Mo
         .build()?)
 }
 
-pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
-    let mut model_context = create_new_context(device, args.clone()).await?;
-
-    let stream = model_context.run(
-        args.prompt,
-        args.seed,
-        args.temperature,
-        args.top_p,
-        args.sample_len,
-        args.repeat_penalty,
-        args.repeat_last_n,
+pub async fn run(args: Args) -> anyhow::Result<()> {
+    println!(
+        "avx: {}, neon: {}, simd128: {}, f16c: {}",
+        candle::utils::with_avx(),
+        candle::utils::with_neon(),
+        candle::utils::with_simd128(),
+        candle::utils::with_f16c()
     );
+    println!(
+        "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
+        args.temperature.unwrap_or(0.),
+        args.repeat_penalty,
+        args.repeat_last_n
+    );
+    let device = if args.cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0)?
+    };
+    let model_config: ModelConfig = args.clone().into();
+    let mut model_context = create_new_context(device, model_config).await?;
+
+    let run_config: RunConfig = args.clone().into();
+
+    let stream = model_context.run(&args.prompt, run_config);
 
     pin_mut!(stream);
 
