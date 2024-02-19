@@ -1,0 +1,17 @@
+prompt = """
+# an implementation of the fibonnacci sequence
+"""
+
+[model_config]
+variant = "Quantized"
+device = "Metal"
+flash_attn = false
+
+[model_config.model_source.HuggingFaceHub]
+revision = "main"
+
+[run_config]
+seed = 299792458
+sample_len = 100
+repeat_penalty = 1.100000023841858
+repeat_last_n = 64

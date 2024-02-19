@@ -2,7 +2,14 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::model::Variant;
+use super::{model::Variant, Device};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ModelRun {
+    pub prompt: String,
+    pub model_config: ModelConfig,
+    pub run_config: RunConfig,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RunConfig {
@@ -22,7 +29,7 @@ pub fn load_config_named(config_path: impl AsRef<Path>) -> anyhow::Result<RunCon
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelConfig {
     pub variant: Variant,
-    pub cpu: bool,
+    pub device: Device,
     /// Set true to use flash attention. Only supported on CUDA
     pub flash_attn: bool,
     pub model_source: ModelSource,
@@ -30,9 +37,11 @@ pub struct ModelConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ModelSource {
-    HuggingFaceHub { revision: String },
-    Files { 
-        weight_files: Vec<PathBuf> ,
+    HuggingFaceHub {
+        revision: String,
+    },
+    Files {
+        weight_files: Vec<PathBuf>,
         tokenizer_file: PathBuf,
     },
 }

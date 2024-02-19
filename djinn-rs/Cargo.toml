@@ -8,9 +8,10 @@ accelerate-src = "0.3.2"
 anyhow = "1.0.75"
 async-stream = "0.3.5"
 axum = "0.7.4"
-candle-core = { version = "0.3.3", features = ["accelerate"] }
-candle-nn = { version = "0.3.3", features = ["accelerate"] }
-candle-transformers = { version = "0.3.3", features = ["accelerate"] }
+axum-streams = { version = "0.12.0", features = ["json"] }
+candle-core = { version = "0.3.3", features = ["accelerate", "metal"] }
+candle-nn = { version = "0.3.3", features = ["accelerate", "metal"] }
+candle-transformers = { version = "0.3.3", features = ["accelerate", "metal"] }
 clap = { version = "4.4.5", features = ["derive"] }
 derive-new = "0.5.9"
 derive_builder = "0.13.0"
@@ -19,6 +20,7 @@ genawaiter = { version = "0.99.1", features = ["futures03"] }
 hf-hub = { version = "0.3.2", features = ["tokio"] }
 image = "0.24.7"
 imageproc = "0.23.0"
+metal = "0.27.0"
 project-root = "0.2.2"
 rusttype = "0.9.3"
 safetensors = "0.4.1"

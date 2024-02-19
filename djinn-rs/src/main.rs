@@ -40,6 +40,7 @@ enum Runner {
 #[derive(Parser)]
 struct Args {
     /// Run on CPU rather than on GPU.
+    #[deprecated(note = "this should be removed and moved to the specific model config")]
     #[arg(long)]
     pub cpu: bool,
     /// Enable tracing (generates a trace-timestamp.json file).
