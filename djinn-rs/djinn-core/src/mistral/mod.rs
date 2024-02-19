@@ -79,7 +79,7 @@ pub struct Args {
     /// The context size to consider for the repeat penalty.
     #[arg(long, default_value_t = 64)]
     repeat_last_n: usize,
-    /// Pass the name of the config to save
+    /// Pass the name of theconfig to save
     #[arg(long)]
     save_config: Option<String>,
 }

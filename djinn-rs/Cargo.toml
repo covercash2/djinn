@@ -1,9 +1,15 @@
-[package]
-name = "djinn-rs"
+[workspace]
+members = [ "djinn-cli","djinn-core"]
+default-members = ["djinn-core"]
+resolver = "2"
+
+[workspace.package]
+#name = "djinn-rs"
 version = "0.1.0"
 edition = "2021"
+authors = ["Chris Overcash"]
 
-[dependencies]
+[workspace.dependencies]
 accelerate-src = "0.3.2"
 anyhow = "1.0.75"
 async-stream = "0.3.5"
