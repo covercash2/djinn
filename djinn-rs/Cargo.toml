@@ -1,6 +1,6 @@
 [workspace]
 members = [ "djinn-cli","djinn-core"]
-default-members = ["djinn-core"]
+default-members = ["djinn-cli"]
 resolver = "2"
 
 [workspace.package]

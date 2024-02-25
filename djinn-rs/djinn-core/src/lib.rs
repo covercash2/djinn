@@ -14,16 +14,17 @@ use tracing_subscriber::prelude::*;
 use crate::server::Context;
 
 mod coco_classes;
+pub mod device;
 mod error;
 mod font;
-mod llama;
-mod lm;
-mod mistral;
+pub mod llama;
+pub mod lm;
+pub mod mistral;
 mod server;
 mod text_generator;
 mod token_output_stream;
 mod util;
-mod yolov8;
+pub mod yolov8;
 
 #[derive(Parser)]
 struct Cli {
@@ -87,14 +88,4 @@ async fn run_server() -> anyhow::Result<()> {
     let server = HttpServer::new(Arc::from(context));
 
     server.start().await
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let args = Cli::parse();
-
-    match args.runner {
-        Runner::Server => run_server().await,
-        Runner::SingleRun(args) => run_model(args).await,
-    }
 }

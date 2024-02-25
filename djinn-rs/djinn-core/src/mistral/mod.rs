@@ -2,16 +2,14 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use candle_core::{self as candle, Device as CandleDevice};
+use candle_core::{self as candle};
 use clap::Parser;
-use clap::ValueEnum;
 use futures_util::pin_mut;
 use futures_util::StreamExt;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
-use serde::Deserialize;
-use serde::Serialize;
 use tokenizers::Tokenizer;
 
+use crate::device::Device;
 use crate::mistral::model::{ModelContextBuilder, Variant};
 
 use self::config::ModelConfig;
@@ -22,25 +20,6 @@ use self::model::ModelContext;
 
 pub mod config;
 pub mod model;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
-pub enum Device {
-    Cpu,
-    Cuda,
-    Metal,
-}
-
-impl TryFrom<Device> for CandleDevice {
-    type Error = candle_core::Error;
-
-    fn try_from(value: Device) -> Result<Self, Self::Error> {
-        match value {
-            Device::Cpu => Ok(CandleDevice::Cpu),
-            Device::Cuda => CandleDevice::new_cuda(0),
-            Device::Metal => CandleDevice::new_metal(0),
-        }
-    }
-}
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -226,6 +205,34 @@ pub async fn run(args: Args) -> anyhow::Result<()> {
         let path = PathBuf::from(format!("./configs/mistral/{name}.toml"));
         let mut file = File::create(path)?;
         let _ = file.write_all(contents.as_bytes());
+    }
+
+    Ok(())
+}
+
+pub async fn run_model(run: ModelRun) -> anyhow::Result<()> {
+    println!(
+        "avx: {}, neon: {}, simd128: {}, f16c: {}",
+        candle::utils::with_avx(),
+        candle::utils::with_neon(),
+        candle::utils::with_simd128(),
+        candle::utils::with_f16c()
+    );
+    println!(
+        "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
+        run.run_config.temperature.unwrap_or(0.),
+        run.run_config.repeat_penalty,
+        run.run_config.repeat_last_n,
+    );
+    let mut model_context = create_new_context(&run.model_config).await?;
+    let stream = model_context.run(&run.prompt, run.run_config.clone());
+
+    pin_mut!(stream);
+
+    while let Some(value) = stream.next().await {
+        if let Ok(string_token) = value {
+            print!("{string_token}");
+        }
     }
 
     Ok(())
