@@ -171,7 +171,7 @@ impl ModelContext {
 
             let mut generated_tokens = 0usize;
 
-            let mut logits_processor = LogitsProcessor::new(seed, temperature, top_p);
+            let mut logits_processor = LogitsProcessor::new(seed, Some(temperature), top_p);
 
             let start_gen = std::time::Instant::now();
             for index in 0..sample_len {

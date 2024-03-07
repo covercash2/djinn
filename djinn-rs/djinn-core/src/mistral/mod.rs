@@ -31,8 +31,8 @@ pub struct Args {
     #[arg(long)]
     prompt: String,
     /// The temperature used to generate samples.
-    #[arg(long)]
-    temperature: Option<f64>,
+    #[arg(long, default_value_t = 1e-7)]
+    temperature: f64,
     /// Nucleus sampling probability cutoff.
     #[arg(long)]
     top_p: Option<f64>,
@@ -58,9 +58,6 @@ pub struct Args {
     /// The context size to consider for the repeat penalty.
     #[arg(long, default_value_t = 64)]
     repeat_last_n: usize,
-    /// Pass the name of theconfig to save
-    #[arg(long)]
-    save_config: Option<String>,
 }
 
 impl TryFrom<Args> for ModelRun {
@@ -173,7 +170,7 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
         .build()?)
 }
 
-pub async fn run(args: Args) -> anyhow::Result<()> {
+pub async fn run(args: Args) -> anyhow::Result<ModelRun> {
     println!(
         "avx: {}, neon: {}, simd128: {}, f16c: {}",
         candle::utils::with_avx(),
@@ -183,11 +180,8 @@ pub async fn run(args: Args) -> anyhow::Result<()> {
     );
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        args.temperature.unwrap_or(0.),
-        args.repeat_penalty,
-        args.repeat_last_n
+        args.temperature, args.repeat_penalty, args.repeat_last_n
     );
-    let save_config = args.save_config.clone();
     let run: ModelRun = args.try_into()?;
     let mut model_context = create_new_context(&run.model_config).await?;
     let stream = model_context.run(&run.prompt, run.run_config.clone());
@@ -200,14 +194,7 @@ pub async fn run(args: Args) -> anyhow::Result<()> {
         }
     }
 
-    if let Some(name) = save_config {
-        let contents = toml::to_string(&run)?;
-        let path = PathBuf::from(format!("./configs/mistral/{name}.toml"));
-        let mut file = File::create(path)?;
-        let _ = file.write_all(contents.as_bytes());
-    }
-
-    Ok(())
+    Ok(run)
 }
 
 pub async fn run_model(run: ModelRun) -> anyhow::Result<()> {
@@ -220,9 +207,7 @@ pub async fn run_model(run: ModelRun) -> anyhow::Result<()> {
     );
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        run.run_config.temperature.unwrap_or(0.),
-        run.run_config.repeat_penalty,
-        run.run_config.repeat_last_n,
+        run.run_config.temperature, run.run_config.repeat_penalty, run.run_config.repeat_last_n,
     );
     let mut model_context = create_new_context(&run.model_config).await?;
     let stream = model_context.run(&run.prompt, run.run_config.clone());

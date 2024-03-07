@@ -77,7 +77,9 @@ async fn run_model(args: Args) -> anyhow::Result<()> {
     match args.architecture {
         Architecture::Yolov8(yolo_args) => yolov8::run(device, yolo_args)?,
         Architecture::Llama(llama_args) => llama::run(device, llama_args).await?,
-        Architecture::Mistral(mistral_args) => mistral::run(mistral_args).await?,
+        Architecture::Mistral(mistral_args) => {
+            let _model_run = mistral::run(mistral_args).await?;
+        }
     }
     Ok(())
 }

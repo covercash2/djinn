@@ -9,7 +9,7 @@ authors.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["derive", "string"] }
 djinn-core = { path = "../djinn-core" }
 futures-util.workspace = true
 serde.workspace = true

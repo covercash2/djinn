@@ -2,7 +2,7 @@ use clap::Parser;
 use djinn_core::mistral::config::{ModelConfig, ModelRun, ModelSource};
 use djinn_core::mistral::model::Variant;
 use djinn_core::{device::Device, mistral::RunConfig};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -14,8 +14,8 @@ pub struct Args {
     #[arg(long)]
     prompt: String,
     /// The temperature used to generate samples.
-    #[arg(long)]
-    temperature: Option<f64>,
+    #[arg(long, default_value_t = 1e-7)]
+    temperature: f64,
     /// Nucleus sampling probability cutoff.
     #[arg(long)]
     top_p: Option<f64>,
@@ -41,9 +41,6 @@ pub struct Args {
     /// The context size to consider for the repeat penalty.
     #[arg(long, default_value_t = 64)]
     repeat_last_n: usize,
-    /// Pass the name of the config to save
-    #[arg(long)]
-    save_config: Option<String>,
 }
 
 impl TryFrom<Args> for ModelRun {
@@ -115,9 +112,4 @@ impl TryFrom<Args> for ModelConfig {
             model_source,
         })
     }
-}
-
-pub fn load_config_named(config_path: impl AsRef<Path>) -> anyhow::Result<RunConfig> {
-    let config_str = std::fs::read_to_string(config_path)?;
-    Ok(toml::from_str(&config_str)?)
 }

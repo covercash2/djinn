@@ -14,7 +14,7 @@ pub struct ModelRun {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RunConfig {
     pub seed: u64,
-    pub temperature: Option<f64>,
+    pub temperature: f64,
     pub top_p: Option<f64>,
     pub sample_len: usize,
     pub repeat_penalty: f32,
