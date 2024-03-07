@@ -12,6 +12,7 @@ revision = "main"
 
 [run_config]
 seed = 299792458
+temperature = 0.0000001
 sample_len = 100
 repeat_penalty = 1.100000023841858
 repeat_last_n = 64

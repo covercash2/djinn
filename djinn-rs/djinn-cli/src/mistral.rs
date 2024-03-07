@@ -2,7 +2,6 @@ use clap::Parser;
 use djinn_core::mistral::config::{ModelConfig, ModelRun, ModelSource};
 use djinn_core::mistral::model::Variant;
 use djinn_core::{device::Device, mistral::RunConfig};
-use std::path::Path;
 
 #[derive(Parser, Clone)]
 pub struct Args {

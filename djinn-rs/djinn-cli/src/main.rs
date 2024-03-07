@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write, path::PathBuf};
 
 use clap::{Parser, Subcommand};
-use djinn_core::mistral::{config::ModelRun, run_model};
+use djinn_core::mistral::{config::ModelRun, run, run_model};
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -50,12 +50,11 @@ enum Architecture {
 
 async fn single_run(args: SingleRunArgs) -> anyhow::Result<()> {
     let save_config = args.save_config.clone();
-    let run = match args.architecture {
-        Architecture::Mistral(mistral_args) => run_model(mistral_args.try_into()?).await?,
+    let run: ModelRun = match args.architecture {
+        Architecture::Mistral(mistral_args) => run(mistral_args.try_into()?).await?,
     };
 
     if let Some(name) = save_config {
-        dbg!(&name);
         let contents = toml::to_string(&run)?;
         let path = PathBuf::from(format!("./configs/mistral/{name}.toml"));
         let mut file = File::create(path)?;

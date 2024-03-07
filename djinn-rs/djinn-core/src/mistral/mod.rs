@@ -1,7 +1,3 @@
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
-
 use candle_core::{self as candle};
 use clap::Parser;
 use futures_util::pin_mut;
@@ -170,7 +166,7 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
         .build()?)
 }
 
-pub async fn run(args: Args) -> anyhow::Result<ModelRun> {
+pub async fn run(run: ModelRun) -> anyhow::Result<ModelRun> {
     println!(
         "avx: {}, neon: {}, simd128: {}, f16c: {}",
         candle::utils::with_avx(),
@@ -180,9 +176,8 @@ pub async fn run(args: Args) -> anyhow::Result<ModelRun> {
     );
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        args.temperature, args.repeat_penalty, args.repeat_last_n
+        run.run_config.temperature, run.run_config.repeat_penalty, run.run_config.repeat_last_n
     );
-    let run: ModelRun = args.try_into()?;
     let mut model_context = create_new_context(&run.model_config).await?;
     let stream = model_context.run(&run.prompt, run.run_config.clone());
 
