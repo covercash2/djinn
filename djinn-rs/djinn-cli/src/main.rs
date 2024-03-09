@@ -1,11 +1,15 @@
+#![feature(addr_parse_ascii)]
+
 use std::{fs::File, io::Write, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use djinn_core::mistral::{config::ModelRun, run, run_model};
+use server::ServerArgs;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod mistral;
+mod server;
 
 #[derive(Parser)]
 struct Cli {
@@ -18,7 +22,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Runner {
-    Server,
+    Server(ServerArgs),
+    ServerConfig {
+        #[arg(long)]
+        path: PathBuf,
+    },
     SingleRun(SingleRunArgs),
     Config(ConfigArgs),
 }
@@ -85,14 +93,6 @@ impl TryFrom<ConfigArgs> for ModelRun {
     }
 }
 
-//async fn run_server() -> anyhow::Result<()> {
-//    let addr: SocketAddrV4 = "127.0.0.1:8090".parse()?;
-//    let context = Context::new(Config::new(SocketAddr::from(addr)));
-//    let server = HttpServer::new(Arc::from(context));
-//
-//    server.start().await
-//}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
@@ -105,7 +105,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match args.runner {
-        Runner::Server => todo!(),
+        Runner::Server(args) => server::run(args).await,
+        Runner::ServerConfig { path } => {
+            let config = server::load_config(path).await?;
+            djinn_server::run_server(config).await
+        }
         Runner::SingleRun(args) => single_run(args).await,
         Runner::Config(args) => {
             let config: ModelRun = args.try_into()?;

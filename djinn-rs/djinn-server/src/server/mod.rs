@@ -3,6 +3,7 @@ use axum::{
     Router,
 };
 use derive_new::new;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
 #[derive(new)]
@@ -10,7 +11,7 @@ pub struct Context {
     config: Config,
 }
 
-#[derive(new)]
+#[derive(new, Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     socker_addr: SocketAddr,
 }

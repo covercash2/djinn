@@ -22,6 +22,7 @@ clap = { version = "4.4.5", features = ["derive"] }
 derive-new = "0.5.9"
 derive_builder = "0.13.0"
 djinn-core = { path = "./djinn-core" }
+djinn-server = { path = "./djinn-server" }
 futures-util = "0.3.30"
 genawaiter = { version = "0.99.1", features = ["futures03"] }
 hf-hub = { version = "0.3.2", features = ["tokio"] }
