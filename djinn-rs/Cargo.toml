@@ -1,5 +1,5 @@
 [workspace]
-members = [ "djinn-cli","djinn-core"]
+members = [ "djinn-cli","djinn-core", "djinn-server"]
 default-members = ["djinn-cli"]
 resolver = "2"
 
@@ -21,6 +21,7 @@ candle-transformers = { version = "0.3.3", features = ["accelerate", "metal"] }
 clap = { version = "4.4.5", features = ["derive"] }
 derive-new = "0.5.9"
 derive_builder = "0.13.0"
+djinn-core = { path = "./djinn-core" }
 futures-util = "0.3.30"
 genawaiter = { version = "0.99.1", features = ["futures03"] }
 hf-hub = { version = "0.3.2", features = ["tokio"] }
