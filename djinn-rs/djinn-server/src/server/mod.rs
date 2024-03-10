@@ -1,4 +1,5 @@
 use axum::{
+    extract::State,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post, IntoMakeService},
@@ -6,9 +7,22 @@ use axum::{
 };
 use derive_builder::Builder;
 use derive_new::new;
-use djinn_core::mistral::model::ModelContext;
+use djinn_core::{
+    lm::Lm,
+    mistral::{model::ModelContext, RunConfig},
+};
+use futures_util::pin_mut;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    fmt::Display,
+    future::{self, IntoFuture},
+    net::SocketAddr,
+    ops::DerefMut,
+    path::PathBuf,
+    sync::Arc,
+};
+use tokio::sync::Mutex;
 use tracing::{instrument, Instrument, Level};
 
 #[derive(new, Clone, Debug, Serialize, Deserialize)]
@@ -22,7 +36,12 @@ pub struct HttpServer {
     #[builder(setter(into))]
     config: Arc<Config>,
     #[builder(setter(into))]
-    context: Arc<ModelContext>,
+    context: Arc<Mutex<Context>>,
+}
+
+pub struct Context {
+    pub model: ModelContext,
+    pub run_config: RunConfig,
 }
 
 #[instrument]
@@ -36,13 +55,43 @@ struct CompleteRequest {
     prompt: String,
 }
 
-#[instrument]
-async fn complete(Json(payload): Json<CompleteRequest>) -> impl IntoResponse {
-    tracing::debug!("complete");
-    (StatusCode::OK, Json(payload))
+#[derive(Serialize, Deserialize, Debug)]
+struct CompleteResponse {
+    output: String,
 }
 
-fn build_service(context: Arc<ModelContext>) -> IntoMakeService<Router> {
+#[instrument(skip(model_context))]
+async fn complete(
+    State(model_context): State<Arc<Mutex<Context>>>,
+    Json(payload): Json<CompleteRequest>,
+) -> impl IntoResponse {
+    tracing::debug!("complete");
+
+    let span = tracing::info_span!("complete");
+
+    let mut lock = model_context.lock().instrument(span).await;
+
+    let context: &mut Context = lock.deref_mut();
+
+    let stream = context
+        .model
+        .run(payload.prompt, context.run_config.clone());
+
+    pin_mut!(stream);
+
+    let mut output = String::new();
+    while let Some(value) = stream.next().await {
+        if let Ok(string_token) = value {
+            output.push_str(&string_token);
+            tracing::debug!("{string_token}");
+        }
+    }
+    let response = CompleteResponse { output };
+
+    (StatusCode::OK, Json(response))
+}
+
+fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
     let router = Router::new()
         .route(
             &ServiceRoutes::HealthCheck.to_string(),

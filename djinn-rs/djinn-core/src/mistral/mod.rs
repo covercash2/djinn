@@ -158,7 +158,7 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
     let tokenizer_file = repo.get("tokenizer.json").await?;
     let tokenizer = Tokenizer::from_file(tokenizer_file).map_err(anyhow::Error::msg)?;
 
-    println!("loaded the model in {:?}", start.elapsed());
+    tracing::info!("loaded the model in {:?}", start.elapsed());
 
     Ok(ModelContextBuilder::default()
         .model(weights)
@@ -168,16 +168,18 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
 }
 
 pub async fn run(run: ModelRun) -> anyhow::Result<ModelRun> {
-    println!(
+    tracing::info!(
         "avx: {}, neon: {}, simd128: {}, f16c: {}",
         candle::utils::with_avx(),
         candle::utils::with_neon(),
         candle::utils::with_simd128(),
         candle::utils::with_f16c()
     );
-    println!(
+    tracing::info!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        run.run_config.temperature, run.run_config.repeat_penalty, run.run_config.repeat_last_n
+        run.run_config.temperature,
+        run.run_config.repeat_penalty,
+        run.run_config.repeat_last_n
     );
     let mut model_context = create_new_context(&run.model_config).await?;
     let stream = model_context.run(run.prompt.clone(), run.run_config.clone());
@@ -186,7 +188,7 @@ pub async fn run(run: ModelRun) -> anyhow::Result<ModelRun> {
 
     while let Some(value) = stream.next().await {
         if let Ok(string_token) = value {
-            print!("{string_token}");
+            tracing::info!("{string_token}");
         }
     }
 
@@ -194,16 +196,18 @@ pub async fn run(run: ModelRun) -> anyhow::Result<ModelRun> {
 }
 
 pub async fn run_model(run: ModelRun) -> anyhow::Result<()> {
-    println!(
+    tracing::info!(
         "avx: {}, neon: {}, simd128: {}, f16c: {}",
         candle::utils::with_avx(),
         candle::utils::with_neon(),
         candle::utils::with_simd128(),
         candle::utils::with_f16c()
     );
-    println!(
+    tracing::info!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        run.run_config.temperature, run.run_config.repeat_penalty, run.run_config.repeat_last_n,
+        run.run_config.temperature,
+        run.run_config.repeat_penalty,
+        run.run_config.repeat_last_n,
     );
     let mut model_context = create_new_context(&run.model_config).await?;
     let stream = model_context.run(run.prompt.clone(), run.run_config.clone());
@@ -212,7 +216,7 @@ pub async fn run_model(run: ModelRun) -> anyhow::Result<()> {
 
     while let Some(value) = stream.next().await {
         if let Ok(string_token) = value {
-            print!("{string_token}");
+            tracing::info!("{string_token}");
         }
     }
 

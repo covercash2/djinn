@@ -75,9 +75,9 @@ fn run_task<T: Task>(device: Device, args: args::Args) -> anyhow::Result<()> {
     let model: PathBuf = args.model()?;
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[model], DType::F32, &device)? };
     let model = T::load(vb, multiples)?;
-    println!("model loaded");
+    tracing::info!("model loaded");
     for image_name in args.images.iter() {
-        println!("processing {image_name}");
+        tracing::info!("processing {image_name}");
         let mut image_name = std::path::PathBuf::from(image_name);
         let original_image = image::io::Reader::open(&image_name)?
             .decode()
@@ -110,7 +110,7 @@ fn run_task<T: Task>(device: Device, args: args::Args) -> anyhow::Result<()> {
         };
         let image_t = (image_t.unsqueeze(0)?.to_dtype(DType::F32)? * (1. / 255.))?;
         let predictions = model.forward(&image_t)?.squeeze(0)?;
-        println!("generated predictions {predictions:?}");
+        tracing::info!("generated predictions {predictions:?}");
         let image_t = T::report(
             &predictions,
             original_image,
@@ -121,7 +121,7 @@ fn run_task<T: Task>(device: Device, args: args::Args) -> anyhow::Result<()> {
             args.legend_size,
         )?;
         image_name.set_extension("pp.jpg");
-        println!("writing {image_name:?}");
+        tracing::info!("writing {image_name:?}");
         image_t.save(image_name)?
     }
 
@@ -176,7 +176,7 @@ pub fn report_detect(
     let font = crate::font::get_default_font();
     for (class_index, bboxes_for_class) in bboxes.iter().enumerate() {
         for b in bboxes_for_class.iter() {
-            println!("{}: {:?}", crate::coco_classes::NAMES[class_index], b);
+            tracing::info!("{}: {:?}", crate::coco_classes::NAMES[class_index], b);
             let xmin = (b.xmin * w_ratio) as i32;
             let ymin = (b.ymin * h_ratio) as i32;
             let dx = (b.xmax - b.xmin) * w_ratio;
@@ -263,7 +263,7 @@ pub fn report_pose(
     let h_ratio = initial_h as f32 / h as f32;
     let mut img = img.to_rgb8();
     for b in bboxes.iter() {
-        println!("{b:?}");
+        tracing::info!("{b:?}");
         let xmin = (b.xmin * w_ratio) as i32;
         let ymin = (b.ymin * h_ratio) as i32;
         let dx = (b.xmax - b.xmin) * w_ratio;

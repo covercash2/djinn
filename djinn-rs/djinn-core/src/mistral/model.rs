@@ -99,7 +99,7 @@ impl Weights {
         repeat_penalty: f32,
         repeat_last_n: usize,
     ) -> anyhow::Result<Tensor> {
-        tracing::info!("forward pass on index {index}");
+        tracing::trace!("forward pass on index {index}");
         let context_size = if index > 0 { 1 } else { tokens.len() };
         let start_pos = tokens.len().saturating_sub(context_size);
         let context = &tokens[start_pos..];
@@ -198,7 +198,7 @@ impl Lm for ModelContext {
             if let Some(rest) = self.tokenizer.decode_rest().map_err(anyhow::Error::msg)? {
                 yield Ok(rest);
             }
-            println!(
+            tracing::info!(
                 "\n{generated_tokens} tokens generated ({:.2} tokens/s)",
                 generated_tokens as f64 / dt.as_secs_f64(),
             );

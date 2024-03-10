@@ -79,7 +79,7 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
 
     let api = hf_hub::api::tokio::Api::new()?;
     let model_id = args.model_version.to_string();
-    println!("loading the model weights from {model_id}");
+    tracing::info!("loading the model weights from {model_id}");
     let api = api.repo(Repo::with_revision(
         model_id,
         RepoType::Model,
@@ -100,7 +100,7 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
 
     let filenames = hub_load_safetensors(&api, "model.safetensors.index.json").await?;
 
-    println!("building the model");
+    tracing::info!("building the model");
     let cache = llama::Cache::new(!args.disable_kv_cache, dtype, &config, &device)?;
 
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, DType::F32, &device)? };
@@ -117,8 +117,8 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
         .get_ids()
         .to_vec();
 
-    println!("starting inference loop");
-    println!("prompt: {}", &prompt);
+    tracing::info!("starting inference loop");
+    tracing::info!("prompt: {}", &prompt);
 
     let mut logits_processor = LogitsProcessor::new(args.seed, args.temperature, args.top_p);
     let start_gen = std::time::Instant::now();
@@ -154,7 +154,7 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
 
         if let Some(text) = tokenizer.id_to_token(next_token) {
             let text = text.replace('_', " ").replace("<0x0A>", "\n");
-            print!("{text}");
+            tracing::info!("{text}");
             std::io::stdout().flush()?;
         }
         if Some(next_token) == eos_token_id {
@@ -162,7 +162,7 @@ pub async fn run(device: Device, args: Args) -> anyhow::Result<()> {
         }
     }
     let elapsed = start_gen.elapsed();
-    println!(
+    tracing::info!(
         "\n\n{} tokens generated ({} token/s)\n",
         token_generated,
         token_generated as f64 / elapsed.as_secs_f64(),
