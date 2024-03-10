@@ -1,0 +1,11 @@
+meta {
+  name: healthcheck
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://[::1]:8080/health-check
+  body: none
+  auth: none
+}
