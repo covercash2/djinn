@@ -49,11 +49,13 @@ impl TryFrom<ServerArgs> for Config {
 
 pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
     if let Some(ref name) = args.name {
+        tracing::info!("saving config {name}");
         save_config(name, args.clone()).await?;
     }
 
     let config = args.try_into()?;
 
+    tracing::info!("starting server: {config:?}");
     djinn_server::run_server(config).await?;
 
     Ok(())

@@ -1,12 +1,18 @@
 #![feature(addr_parse_ascii)]
 
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{
+    fmt::{Debug, Display},
+    fs::File,
+    io::Write,
+    path::PathBuf,
+};
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use djinn_core::mistral::{config::ModelRun, run, run_model};
 use server::ServerArgs;
+use tracing::{level_filters::LevelFilter, Instrument, Level};
 use tracing_chrome::ChromeLayerBuilder;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
 
 mod mistral;
 mod server;
@@ -14,8 +20,8 @@ mod server;
 #[derive(Parser)]
 struct Cli {
     /// Enable tracing (generates a trace-timestamp.json file).
-    #[arg(long)]
-    pub tracing: bool,
+    #[arg(long, default_value_t)]
+    pub tracing: TracingArgs,
     #[command(subcommand)]
     runner: Runner,
 }
@@ -93,22 +99,58 @@ impl TryFrom<ConfigArgs> for ModelRun {
     }
 }
 
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum TracingArgs {
+    Chrome,
+    #[default]
+    Stdout,
+    None,
+}
+
+impl Display for TracingArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TracingArgs::Chrome => write!(f, "chrome"),
+            TracingArgs::Stdout => write!(f, "stdout"),
+            TracingArgs::None => write!(f, "none"),
+        }
+    }
+}
+
+fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<Box<dyn Drop>>> {
+    match tracing_args {
+        TracingArgs::Chrome => {
+            let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
+            tracing_subscriber::registry().with(chrome_layer).init();
+            Ok(Some(Box::new(guard)))
+        }
+        TracingArgs::Stdout => {
+            let subscriber = tracing_subscriber::fmt()
+                .with_thread_names(true)
+                .with_max_level(Level::DEBUG)
+                .pretty()
+                .finish();
+
+            tracing::subscriber::set_global_default(subscriber)?;
+
+            tracing::info!("tracing started");
+
+            Ok(None)
+        }
+        TracingArgs::None => Ok(None),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
-    let _guard = if args.tracing {
-        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
-        tracing_subscriber::registry().with(chrome_layer).init();
-        Some(guard)
-    } else {
-        None
-    };
-
+    let _guard = setup_tracing(args.tracing)?;
     match args.runner {
         Runner::Server(args) => server::run(args).await,
         Runner::ServerConfig { path } => {
             let config = server::load_config(path).await?;
-            djinn_server::run_server(config).await
+            let span = tracing::info_span!("run_server span");
+            djinn_server::run_server(config).instrument(span).await
         }
         Runner::SingleRun(args) => single_run(args).await,
         Runner::Config(args) => {
