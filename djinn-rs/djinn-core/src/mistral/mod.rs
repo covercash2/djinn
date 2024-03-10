@@ -6,6 +6,7 @@ use hf_hub::{api::tokio::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
 use crate::device::Device;
+use crate::lm::Lm;
 use crate::mistral::model::{ModelContextBuilder, Variant};
 
 use self::config::ModelConfig;
@@ -179,7 +180,7 @@ pub async fn run(run: ModelRun) -> anyhow::Result<ModelRun> {
         run.run_config.temperature, run.run_config.repeat_penalty, run.run_config.repeat_last_n
     );
     let mut model_context = create_new_context(&run.model_config).await?;
-    let stream = model_context.run(&run.prompt, run.run_config.clone());
+    let stream = model_context.run(run.prompt.clone(), run.run_config.clone());
 
     pin_mut!(stream);
 
@@ -205,7 +206,7 @@ pub async fn run_model(run: ModelRun) -> anyhow::Result<()> {
         run.run_config.temperature, run.run_config.repeat_penalty, run.run_config.repeat_last_n,
     );
     let mut model_context = create_new_context(&run.model_config).await?;
-    let stream = model_context.run(&run.prompt, run.run_config.clone());
+    let stream = model_context.run(run.prompt.clone(), run.run_config.clone());
 
     pin_mut!(stream);
 

@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use djinn_core::mistral::{config::ModelRun, create_new_context, model::ModelContext};
 use djinn_server::Config;
 use tracing::instrument;
 
@@ -11,6 +12,7 @@ use clap::Parser;
 const DEFAULT_HOST_ADDR: &str = "::1";
 const DEFAULT_HOST_PORT: u16 = 8080;
 const DEFAULT_CONFIG_DIR: &str = "./configs/server/";
+const DEFAULT_MODEL_CONFIG: &str = "mistral/fib";
 
 #[derive(Parser, Clone, Debug)]
 pub struct ServerArgs {
@@ -22,6 +24,8 @@ pub struct ServerArgs {
     config_dir: PathBuf,
     #[arg(long)]
     name: Option<String>,
+    #[arg(long, default_value = DEFAULT_MODEL_CONFIG)]
+    model_config: String,
 }
 
 impl Default for ServerArgs {
@@ -31,6 +35,7 @@ impl Default for ServerArgs {
             port: DEFAULT_HOST_PORT,
             config_dir: PathBuf::from(DEFAULT_CONFIG_DIR),
             name: None,
+            model_config: DEFAULT_MODEL_CONFIG.to_string(),
         }
     }
 }
@@ -39,12 +44,28 @@ impl TryFrom<ServerArgs> for Config {
     type Error = anyhow::Error;
 
     fn try_from(value: ServerArgs) -> anyhow::Result<Self> {
-        let ServerArgs { ip, port, .. } = value;
+        let ServerArgs {
+            ip,
+            port,
+            model_config,
+            ..
+        } = value;
+
+        let filename = format!("{model_config}.toml");
+        let path = PathBuf::from("./configs/").join(filename);
 
         let address = IpAddr::parse_ascii(ip.as_bytes())?;
         let full_address = SocketAddr::new(address, port);
-        Ok(Config::new(full_address))
+        Ok(Config::new(full_address, path))
     }
+}
+
+#[instrument]
+async fn load_model(config_path: &PathBuf) -> anyhow::Result<ModelContext> {
+    let contents = tokio::fs::read_to_string(config_path).await?;
+    let run: ModelRun = toml::from_str(&contents)?;
+    let context: ModelContext = create_new_context(&run.model_config).await?;
+    Ok(context)
 }
 
 pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
@@ -53,7 +74,7 @@ pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
         save_config(name, args.clone()).await?;
     }
 
-    let config = args.try_into()?;
+    let config: Config = args.try_into()?;
 
     tracing::info!("starting server: {config:?}");
     djinn_server::run_server(config).await?;

@@ -1,6 +1,7 @@
 extern crate accelerate_src;
 
 mod coco_classes;
+pub mod config;
 pub mod device;
 mod error;
 mod font;

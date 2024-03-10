@@ -15,6 +15,7 @@ use tokio_stream::Stream;
 use tracing::instrument;
 
 use super::config::RunConfig;
+use crate::lm::Lm;
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
 
@@ -131,10 +132,12 @@ pub struct ModelContext {
     device: Device,
 }
 
-impl ModelContext {
-    pub fn run(
+impl Lm for ModelContext {
+    type Config = RunConfig;
+
+    fn run(
         &mut self,
-        prompt: impl ToString,
+        prompt: String,
         config: RunConfig,
     ) -> impl Stream<Item = anyhow::Result<String>> + '_ {
         let prompt = prompt.to_string();

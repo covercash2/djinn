@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use futures_util::Stream;
 
 use crate::{llama, mistral};
 
@@ -21,4 +22,14 @@ pub struct Args {
 pub enum LanguageModel {
     Llama(llama::Args),
     Mistral(mistral::Args),
+}
+
+pub trait Lm {
+    type Config;
+
+    fn run(
+        &mut self,
+        prompt: String,
+        config: Self::Config,
+    ) -> impl Stream<Item = anyhow::Result<String>> + '_;
 }

@@ -1,1 +1,2 @@
 socker_addr = "[::1]:8080"
+model_config = "./configs/mistral/fib.toml"

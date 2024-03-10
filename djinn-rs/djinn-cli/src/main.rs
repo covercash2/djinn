@@ -8,11 +8,11 @@ use std::{
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
-use djinn_core::mistral::{config::ModelRun, run, run_model};
+use djinn_core::{config::DEFAULT_CONFIG_DIR, mistral::{config::ModelRun, run, run_model}};
 use server::ServerArgs;
-use tracing::{level_filters::LevelFilter, Instrument, Level};
+use tracing::{Instrument, Level};
 use tracing_chrome::ChromeLayerBuilder;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod mistral;
 mod server;
@@ -53,7 +53,7 @@ struct ConfigArgs {
     model_name: String,
     #[arg(long)]
     config_name: String,
-    #[arg(long, default_value=PathBuf::from("./configs").into_os_string())]
+    #[arg(long, default_value=PathBuf::from(DEFAULT_CONFIG_DIR).into_os_string())]
     config_dir: PathBuf,
 }
 
