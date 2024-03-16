@@ -6,6 +6,9 @@ use tracing::instrument;
 use crate::server::{Context, HttpServerBuilder};
 
 mod server;
+mod error;
+
+pub use error::{Error, Result};
 
 #[instrument]
 pub async fn run_server(config: Config) -> anyhow::Result<()> {

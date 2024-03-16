@@ -8,14 +8,19 @@ use std::{
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
-use djinn_core::{config::DEFAULT_CONFIG_DIR, mistral::{config::ModelRun, run, run_model}};
+use djinn_core::{
+    config::DEFAULT_CONFIG_DIR,
+    mistral::{config::ModelRun, run, run_model},
+};
 use server::ServerArgs;
 use tracing::{Instrument, Level};
 use tracing_chrome::ChromeLayerBuilder;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
 mod mistral;
 mod server;
+
+const DEFAULT_LOG_ENV: &str = "djinn_server=debug,djinn_core=debug,axum=info";
 
 #[derive(Parser)]
 struct Cli {
@@ -125,13 +130,13 @@ fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<Box<dyn Dro
             Ok(Some(Box::new(guard)))
         }
         TracingArgs::Stdout => {
-            let subscriber = tracing_subscriber::fmt()
-                .with_thread_names(true)
-                .with_max_level(Level::DEBUG)
-                .pretty()
-                .finish();
-
-            tracing::subscriber::set_global_default(subscriber)?;
+            tracing_subscriber::registry()
+                .with(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| DEFAULT_LOG_ENV.into()),
+                )
+                .with(tracing_subscriber::fmt::layer().pretty())
+                .init();
 
             tracing::info!("tracing started");
 

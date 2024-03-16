@@ -1,9 +1,8 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
+    extract::{FromRequest, State},
     response::IntoResponse,
     routing::{get, post, IntoMakeService},
-    Json, Router,
+    Router,
 };
 use derive_builder::Builder;
 use derive_new::new;
@@ -15,15 +14,25 @@ use futures_util::pin_mut;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt::Display,
-    future::{self, IntoFuture},
-    net::SocketAddr,
-    ops::DerefMut,
-    path::PathBuf,
-    sync::Arc,
+    fmt::Display, future::IntoFuture, net::SocketAddr, ops::DerefMut, path::PathBuf, sync::Arc,
 };
 use tokio::sync::Mutex;
 use tracing::{instrument, Instrument, Level};
+
+use crate::{Error, Result};
+
+#[derive(FromRequest)]
+#[from_request(via(axum::Json), rejection(crate::error::Error))]
+pub struct Json<T>(pub T);
+
+impl<T> IntoResponse for Json<T>
+where
+    axum::Json<T>: IntoResponse,
+{
+    fn into_response(self) -> axum::response::Response {
+        axum::Json(self.0).into_response()
+    }
+}
 
 #[derive(new, Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -64,12 +73,11 @@ struct CompleteResponse {
 async fn complete(
     State(model_context): State<Arc<Mutex<Context>>>,
     Json(payload): Json<CompleteRequest>,
-) -> impl IntoResponse {
-    tracing::debug!("complete");
-
+) -> Result<Json<CompleteResponse>> {
     let span = tracing::info_span!("complete");
 
     let mut lock = model_context.lock().instrument(span).await;
+    tracing::info!("got model lock");
 
     let context: &mut Context = lock.deref_mut();
 
@@ -81,14 +89,18 @@ async fn complete(
 
     let mut output = String::new();
     while let Some(value) = stream.next().await {
-        if let Ok(string_token) = value {
-            output.push_str(&string_token);
-            tracing::debug!("{string_token}");
-        }
+        value
+            .map(|string_token| {
+                output.push_str(&string_token);
+                tracing::trace!("{string_token}");
+            })
+            .map_err(Error::from)?;
     }
     let response = CompleteResponse { output };
 
-    (StatusCode::OK, Json(response))
+    tracing::info!("sending response: {response:?}");
+
+    Ok(Json(response))
 }
 
 fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {

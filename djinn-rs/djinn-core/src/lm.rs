@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use futures_util::Stream;
 
 use crate::{llama, mistral};
+use crate::error::Result;
 
 #[derive(Parser)]
 pub struct Args {
@@ -31,5 +32,5 @@ pub trait Lm {
         &mut self,
         prompt: String,
         config: Self::Config,
-    ) -> impl Stream<Item = anyhow::Result<String>> + '_;
+    ) -> impl Stream<Item = Result<String>> + '_;
 }

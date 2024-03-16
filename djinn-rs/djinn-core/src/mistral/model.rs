@@ -15,6 +15,7 @@ use tokio_stream::Stream;
 use tracing::instrument;
 
 use super::config::RunConfig;
+use crate::error::{Error, Result};
 use crate::lm::Lm;
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
@@ -98,7 +99,7 @@ impl Weights {
         device: &Device,
         repeat_penalty: f32,
         repeat_last_n: usize,
-    ) -> anyhow::Result<Tensor> {
+    ) -> Result<Tensor> {
         tracing::trace!("forward pass on index {index}");
         let context_size = if index > 0 { 1 } else { tokens.len() };
         let start_pos = tokens.len().saturating_sub(context_size);
@@ -139,7 +140,7 @@ impl Lm for ModelContext {
         &mut self,
         prompt: String,
         config: RunConfig,
-    ) -> impl Stream<Item = anyhow::Result<String>> + '_ {
+    ) -> impl Stream<Item = Result<String>> + '_ {
         let prompt = prompt.to_string();
         stream! {
             let RunConfig {
@@ -157,8 +158,7 @@ impl Lm for ModelContext {
             let mut tokens = self
                 .tokenizer
                 .tokenizer()
-                .encode(prompt, true)
-                .map_err(anyhow::Error::msg)?
+                .encode(prompt, true)?
                 .get_ids()
                 .to_vec();
 
@@ -177,6 +177,7 @@ impl Lm for ModelContext {
             let mut logits_processor = LogitsProcessor::new(seed, Some(temperature), top_p);
 
             let start_gen = std::time::Instant::now();
+            tracing::info!("starting generation");
             for index in 0..sample_len {
                 let logits =
                     self.model.forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
@@ -195,7 +196,8 @@ impl Lm for ModelContext {
             }
 
             let dt = start_gen.elapsed();
-            if let Some(rest) = self.tokenizer.decode_rest().map_err(anyhow::Error::msg)? {
+            tracing::info!("finished generation");
+            if let Some(rest) = self.tokenizer.decode_rest()? {
                 yield Ok(rest);
             }
             tracing::info!(

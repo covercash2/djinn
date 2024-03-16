@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use crate::error::{Error, Result};
 use tokenizers::Tokenizer;
 
 /// This is a wrapper around a tokenizer to ensure that tokens can be returned to the user in a
@@ -26,7 +26,7 @@ impl TokenOutputStream {
     }
 
     fn decode(&self, tokens: &[u32]) -> Result<String> {
-        self.tokenizer.decode(tokens, true).map_err(Error::msg)
+        Ok(self.tokenizer.decode(tokens, true)?)
     }
 
     // https://github.com/huggingface/text-generation-inference/blob/5ba53d44a18983a4de32d122f4cb46f4a17d9ef6/server/text_generation_server/models/model.py#L68
@@ -81,6 +81,7 @@ impl TokenOutputStream {
         self.tokens.clear();
         self.prev_index = 0;
         self.current_index = 0;
+        tracing::debug!("token output cleared");
     }
 }
 
