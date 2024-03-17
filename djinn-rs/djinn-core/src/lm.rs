@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 use futures_util::Stream;
 
-use crate::{llama, mistral};
 use crate::error::Result;
+use crate::mistral;
 
 #[derive(Parser)]
 pub struct Args {
@@ -21,7 +21,6 @@ pub struct Args {
 /// Language models
 #[derive(Subcommand)]
 pub enum LanguageModel {
-    Llama(llama::Args),
     Mistral(mistral::Args),
 }
 

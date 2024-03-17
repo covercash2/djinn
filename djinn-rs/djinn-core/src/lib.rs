@@ -5,7 +5,6 @@ pub mod config;
 pub mod device;
 mod error;
 mod font;
-pub mod llama;
 pub mod lm;
 pub mod mistral;
 mod text_generator;

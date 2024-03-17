@@ -5,6 +5,7 @@ use tracing::instrument;
 
 use crate::server::{Context, HttpServerBuilder};
 
+mod handlers;
 mod server;
 mod error;
 

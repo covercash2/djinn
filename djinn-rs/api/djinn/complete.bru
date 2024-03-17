@@ -6,6 +6,12 @@ meta {
 
 post {
   url: [::1]:8080/complete
-  body: none
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "prompt": "this is a prompt"
+  }
 }

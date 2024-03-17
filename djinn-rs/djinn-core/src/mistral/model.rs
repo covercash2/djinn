@@ -12,7 +12,7 @@ use derive_builder::Builder;
 use hf_hub::api::tokio::ApiRepo;
 use serde::{Deserialize, Serialize};
 use tokio_stream::Stream;
-use tracing::instrument;
+use tracing::{instrument, Span};
 
 use super::config::RunConfig;
 use crate::error::{Error, Result};
@@ -91,7 +91,7 @@ impl Variant {
 }
 
 impl Weights {
-    #[instrument]
+    #[instrument(skip(self))]
     fn forward(
         &mut self,
         index: usize,
@@ -101,14 +101,22 @@ impl Weights {
         repeat_last_n: usize,
     ) -> Result<Tensor> {
         tracing::trace!("forward pass on index {index}");
+        tracing::debug!("tokens {:?}", &tokens);
         let context_size = if index > 0 { 1 } else { tokens.len() };
         let start_pos = tokens.len().saturating_sub(context_size);
         let context = &tokens[start_pos..];
         let input = Tensor::new(context, device)?.unsqueeze(0)?;
+        tracing::debug!(input_shape = ?input.shape(), start_pos, context_size);
         let logits = match self {
-            Weights::Mistral(m) => m.forward(&input, start_pos)?,
-            Weights::QMistral(m) => m.forward(&input, start_pos)?,
-        };
+            Weights::Mistral(m) => m.forward(&input, start_pos),
+            Weights::QMistral(m) => { 
+                m.forward(&input, start_pos) 
+            },
+        }
+        .inspect_err(|error| {
+            tracing::error!(model = ?self, ?error);
+        })?;
+        tracing::debug!("logits {:?}", logits);
         let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
         let logits = if repeat_penalty == 1. {
             logits
@@ -121,6 +129,17 @@ impl Weights {
             )?
         };
         Ok(logits)
+    }
+
+    fn clear_kv_cache(&mut self) {
+        match self {
+            Weights::Mistral(model) => {
+                model.clear_kv_cache()
+            }
+            Weights::QMistral(model) => {
+                model.clear_kv_cache()
+            }
+        }
     }
 }
 
@@ -155,6 +174,8 @@ impl Lm for ModelContext {
 
             self.tokenizer.clear();
 
+            tracing::debug!("initializing tokenizer");
+
             let mut tokens = self
                 .tokenizer
                 .tokenizer()
@@ -176,9 +197,12 @@ impl Lm for ModelContext {
 
             let mut logits_processor = LogitsProcessor::new(seed, Some(temperature), top_p);
 
+            tracing::debug!("initialized logits");
+
             let start_gen = std::time::Instant::now();
             tracing::info!("starting generation");
             for index in 0..sample_len {
+                tracing::debug!(tokens.len = tokens.len());
                 let logits =
                     self.model.forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
 
@@ -200,6 +224,8 @@ impl Lm for ModelContext {
             if let Some(rest) = self.tokenizer.decode_rest()? {
                 yield Ok(rest);
             }
+
+            self.model.clear_kv_cache();
             tracing::info!(
                 "\n{generated_tokens} tokens generated ({:.2} tokens/s)",
                 generated_tokens as f64 / dt.as_secs_f64(),

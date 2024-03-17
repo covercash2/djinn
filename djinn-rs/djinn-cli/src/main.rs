@@ -20,7 +20,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry
 mod mistral;
 mod server;
 
-const DEFAULT_LOG_ENV: &str = "djinn_server=debug,djinn_core=debug,axum=info";
+const DEFAULT_LOG_ENV: &str = "warn,djinn_server=debug,djinn_core=debug,axum=info,candle_core=info";
 
 #[derive(Parser)]
 struct Cli {
