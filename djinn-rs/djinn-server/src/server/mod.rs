@@ -1,5 +1,7 @@
+use askama_axum::Response;
 use axum::{
-    extract::{FromRequest, State},
+    extract::{FromRequest, MatchedPath},
+    http::{Request, StatusCode},
     response::IntoResponse,
     routing::{get, post, IntoMakeService},
     Router,
@@ -8,9 +10,12 @@ use derive_builder::Builder;
 use derive_new::new;
 use djinn_core::mistral::{model::ModelContext, RunConfig};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,
+};
 use tokio::sync::Mutex;
-use tracing::{instrument, Instrument, Level};
+use tower_http::trace::TraceLayer;
+use tracing::{instrument, Instrument, Level, Span};
 
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(crate::error::Error))]
@@ -60,6 +65,46 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
             &ServiceRoutes::Complete.to_string(),
             post(crate::handlers::complete),
         )
+        .route(
+            &ServiceRoutes::Index.to_string(),
+            get(crate::handlers::index),
+        )
+        .route(
+            &ServiceRoutes::CompleteForm.to_string(),
+            post(crate::handlers::complete_form),
+        )
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<_>| {
+                    let matched_path = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str);
+
+                    tracing::debug_span!(
+                        "http_request",
+                        method = ?request.method(),
+                        matched_path,
+                    )
+                })
+                .on_response(|response: &Response, _latency: Duration, span: &Span| {
+                    let status: StatusCode = response.status();
+                    tracing::debug!(?status);
+                    match status {
+                        StatusCode::UNSUPPORTED_MEDIA_TYPE => {
+                            let content_type = response
+                                .headers()
+                                .get("content-type")
+                                .map(|header| header.to_str().unwrap_or("weird decode error"))
+                                .unwrap_or("unknown content-type")
+                                .to_string();
+                            span.record("media_type", &content_type);
+                            tracing::warn!(?status, content_type, "unsupported media type");
+                        }
+                        _ => {}
+                    }
+                }),
+        )
         .with_state(context);
 
     router.into_make_service()
@@ -68,6 +113,8 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
 enum ServiceRoutes {
     HealthCheck,
     Complete,
+    CompleteForm,
+    Index,
 }
 
 impl Display for ServiceRoutes {
@@ -75,6 +122,8 @@ impl Display for ServiceRoutes {
         match self {
             ServiceRoutes::HealthCheck => write!(f, "/health-check"),
             ServiceRoutes::Complete => write!(f, "/complete"),
+            ServiceRoutes::CompleteForm => write!(f, "/complete-form"),
+            ServiceRoutes::Index => write!(f, "/"),
         }
     }
 }
