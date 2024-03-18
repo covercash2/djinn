@@ -12,6 +12,8 @@ authors = ["Chris Overcash"]
 accelerate-src = "0.3.2"
 anyhow = "1.0.75"
 async-stream = "0.3.5"
+askama = { version = "0.12.1", features = ["with-axum"]}
+askama_axum = "0.4.0"
 axum = "0.7.4"
 axum-streams = { version = "0.12.0", features = ["json"] }
 candle-core = { version = "0.5.0" }
@@ -37,6 +39,8 @@ thiserror = "1.0.56"
 tokenizers = "0.14.0"
 tokio = { version = "1.35.1", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["full"] }
+tower = { version = "0.4.13", features = ["log"] }
+tower-http = { version = "0.5.2", features = ["trace" ]}
 toml = "0.8.9"
 tracing = "0.1.37"
 tracing-chrome = "0.7.1"
