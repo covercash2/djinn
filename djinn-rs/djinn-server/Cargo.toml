@@ -15,6 +15,7 @@ derive-new.workspace = true
 derive_builder.workspace = true
 djinn-core.workspace = true
 futures-util.workspace = true
+markdown.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

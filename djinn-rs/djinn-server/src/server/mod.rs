@@ -1,6 +1,7 @@
 use askama_axum::Response;
 use axum::{
     extract::{FromRequest, MatchedPath},
+    handler::HandlerWithoutStateExt,
     http::{Request, StatusCode},
     response::IntoResponse,
     routing::{get, post, IntoMakeService},
@@ -14,7 +15,8 @@ use std::{
     fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,
 };
 use tokio::sync::Mutex;
-use tower_http::trace::TraceLayer;
+use tower::ServiceExt;
+use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{instrument, Instrument, Level, Span};
 
 #[derive(FromRequest)]
@@ -55,6 +57,10 @@ async fn health_check_handler() -> &'static str {
     "OK"
 }
 
+async fn not_found() -> (StatusCode, &'static str) {
+    (StatusCode::NOT_FOUND, "Not found")
+}
+
 fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
     let router = Router::new()
         .route(
@@ -72,6 +78,14 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
         .route(
             &ServiceRoutes::CompleteForm.to_string(),
             post(crate::handlers::complete_form),
+        )
+        .fallback_service(
+            ServeDir::new("./djinn-server/assets")
+                .not_found_service(not_found.into_service())
+                .map_request(|request: Request<_>| { 
+                    tracing::debug!(?request);
+                    request 
+                }),
         )
         .layer(
             TraceLayer::new_for_http()

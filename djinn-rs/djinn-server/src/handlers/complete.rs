@@ -56,9 +56,11 @@ pub async fn complete_form(
 
     let context: &mut Context = lock.deref_mut();
 
-    let response = run_model(context, payload).await?;
+    let response = run_model(context, payload)
+        .await
+        .map(|response| markdown::to_html(&response.output))?;
 
-    Ok(Html(response.render().unwrap()))
+    Ok(Html(response))
 }
 
 #[instrument(skip(model_context))]
