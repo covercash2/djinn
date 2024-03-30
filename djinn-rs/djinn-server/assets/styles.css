@@ -1,0 +1,33 @@
+html {
+	margin: 0px;
+	height: 100%;
+	width: 100%;
+}
+
+body {
+	min-height: 100%;
+	width: 100%;
+}
+
+#content {
+	max-width: 60%;
+	margin-left: 20%;
+	height: 100%;
+	min-height: 100%;
+}
+
+#proompt_parent {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+#prompt {
+	display: flex;
+	flex-direction: row;
+	align-self: flex-end;
+}
+
+#response {
+	height: 100%;
+}

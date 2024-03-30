@@ -1,14 +1,33 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>proompt</h1>
-<form id="prompt">
-	<input placeholder="enter your prompt here..." required type=text name="prompt">
-	<button class="btn" hx-post="/complete-form" hx-trigger="click" hx-target="#response" hx-swap="innerHTML" hx-indicator="#loading-response">
-		go
-	</button>
-</form>
-<div id="response" hx-swap="innerHTML">
-	<img id="loading-response" class="htmx-indicator" src="https://c.tenor.com/VOdWjm2zbEAAAAAC/tenor.gif"
-</div>
-{% endblock %}
+    <h1>proompt</h1>
+
+    <div id="proompt_parent">
+        <form id="prompt">
+            <input
+                placeholder="enter your prompt here..."
+                required type=text
+                name="prompt">
+
+            <button
+                class="btn"
+                hx-post="/complete-form"
+                hx-trigger="click"
+                hx-target="#response"
+                hx-swap="innerHTML"
+                hx-indicator="#loading-response">
+                go
+            </button>
+        </form>
+
+        <div id="response" hx-swap="innerHTML">
+            <img
+                id="loading-response"
+                class="htmx-indicator"
+                alt="loading",
+                src="https://c.tenor.com/VOdWjm2zbEAAAAAC/tenor.gif"></img>
+        </div>
+    </div>
+
+{% endblock content %}
