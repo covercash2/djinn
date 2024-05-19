@@ -1,5 +1,8 @@
 use clap::Parser;
-use djinn_core::mistral::config::{ModelConfig, ModelRun, ModelSource};
+use djinn_core::mistral::config::{
+    ModelConfig, ModelRun, ModelSource, DEFAULT_REPEAT_LAST_N, DEFAULT_REPEAT_PENALTY,
+    DEFAULT_SAMPLE_LEN, DEFAULT_SEED, DEFAULT_TEMPERATURE,
+};
 use djinn_core::mistral::model::Variant;
 use djinn_core::{device::Device, mistral::RunConfig};
 
@@ -9,37 +12,39 @@ pub struct Args {
     #[arg(long, value_enum)]
     device: Device,
     #[arg(long)]
-    use_flash_attn: bool,
-    #[arg(long)]
     prompt: String,
+    #[arg(long)]
+    model_id: Option<String>,
+    /// Penalty to be applied for repeating tokens, 1. means no penalty.
+    #[arg(long, default_value_t = DEFAULT_REPEAT_PENALTY)]
+    repeat_penalty: f32,
+    /// The context size to consider for the repeat penalty.
+    #[arg(long, default_value_t = DEFAULT_REPEAT_LAST_N)]
+    repeat_last_n: usize,
+    #[arg(long)]
+    revision: Option<String>,
+    /// The seed to use when generating random samples.
+    #[arg(long, default_value_t = DEFAULT_SEED)]
+    seed: u64,
+    /// The length of the sample to generate (in tokens).
+    #[arg(long, short = 'n', default_value_t = DEFAULT_SAMPLE_LEN)]
+    sample_len: usize,
     /// The temperature used to generate samples.
-    #[arg(long, default_value_t = 1e-7)]
+    #[arg(long, default_value_t = DEFAULT_TEMPERATURE)]
     temperature: f64,
     /// Nucleus sampling probability cutoff.
     #[arg(long)]
     top_p: Option<f64>,
-    /// The seed to use when generating random samples.
-    #[arg(long, default_value_t = 299792458)]
-    seed: u64,
-    /// The length of the sample to generate (in tokens).
-    #[arg(long, short = 'n', default_value_t = 100)]
-    sample_len: usize,
+    /// Only compatible with [`Device::Cuda`]
     #[arg(long)]
-    model_id: Option<String>,
-    #[arg(long)]
-    revision: Option<String>,
+    use_flash_attn: bool,
+    #[arg(value_enum)]
+    variant: Variant,
+
     #[arg(long)]
     tokenizer_file: Option<String>,
     #[arg(long)]
     weight_files: Option<String>,
-    #[arg(value_enum)]
-    variant: Variant,
-    /// Penalty to be applied for repeating tokens, 1. means no penalty.
-    #[arg(long, default_value_t = 1.1)]
-    repeat_penalty: f32,
-    /// The context size to consider for the repeat penalty.
-    #[arg(long, default_value_t = 64)]
-    repeat_last_n: usize,
 }
 
 impl TryFrom<Args> for ModelRun {

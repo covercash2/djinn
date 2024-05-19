@@ -6,9 +6,16 @@
     <div id="proompt_parent">
         <form id="prompt">
             <input
+								id="prompt-input"
                 placeholder="enter your prompt here..."
-                required type=text
+                required type="text"
                 name="prompt">
+            <input
+                type="number"
+								min="10"
+								max="500"
+								value="100"
+                name="sample_len">
 
             <button
                 class="btn"
@@ -25,6 +32,8 @@
             <img
                 id="loading-response"
                 class="htmx-indicator"
+                height=100px,
+                width=100px,
                 alt="loading",
                 src="https://c.tenor.com/VOdWjm2zbEAAAAAC/tenor.gif"></img>
         </div>
