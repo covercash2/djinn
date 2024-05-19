@@ -14,7 +14,7 @@ const DEFAULT_HOST_PORT: u16 = 8080;
 const DEFAULT_CONFIG_DIR: &str = "./configs/server/";
 const DEFAULT_MODEL_CONFIG: &str = "mistral/fib";
 
-#[derive(Parser, Clone, Debug)]
+#[derive(Parser, Clone, Debug, PartialEq)]
 pub struct ServerArgs {
     #[arg(long, default_value = DEFAULT_HOST_ADDR)]
     ip: String,
@@ -69,12 +69,14 @@ async fn load_model(config_path: &PathBuf) -> anyhow::Result<ModelContext> {
 }
 
 pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
-    if let Some(ref name) = args.name {
-        tracing::info!("saving config {name}");
-        save_config(name, args.clone()).await?;
-    }
-
-    let config: Config = args.try_into()?;
+    let config = if let Some(ref name) = args.name {
+        tracing::info!("loading config {name}");
+        let filename = format!("{name}.toml");
+        let path = args.config_dir.join(filename);
+        load_config(path).await?
+    } else {
+        args.try_into()?
+    };
 
     tracing::info!("starting server: {config:?}");
     djinn_server::run_server(config).await?;

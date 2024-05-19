@@ -1,2 +1,2 @@
-socker_addr = "[::1]:8080"
+socker_addr = "0.0.0.0:8080"
 model_config = "./configs/mistral/fib.toml"
