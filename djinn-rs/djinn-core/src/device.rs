@@ -9,6 +9,20 @@ pub enum Device {
     Metal,
 }
 
+impl Default for Device {
+    fn default() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "cuda")] {
+                Device::Cuda
+            } else if #[cfg(feature = "mac")] {
+                Device::Metal,
+            } else {
+                Device::Cpu
+            }
+        }
+    }
+}
+
 impl TryFrom<Device> for CandleDevice {
     type Error = candle_core::Error;
 

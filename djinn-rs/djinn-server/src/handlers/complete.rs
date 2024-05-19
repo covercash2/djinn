@@ -15,6 +15,8 @@ use tracing::{instrument, Instrument};
 use crate::error::{Error, Result};
 use crate::server::{Context, Json};
 
+pub const ROUTE_COMPLETE: &str = "/complete";
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CompleteRequest {
     prompt: String,

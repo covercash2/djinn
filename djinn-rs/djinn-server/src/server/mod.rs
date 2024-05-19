@@ -19,6 +19,8 @@ use tower::ServiceExt;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{instrument, Instrument, Level, Span};
 
+use crate::handlers::ROUTE_COMPLETE;
+
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(crate::error::Error))]
 pub struct Json<T>(pub T);
@@ -135,7 +137,7 @@ impl Display for ServiceRoutes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ServiceRoutes::HealthCheck => write!(f, "/health-check"),
-            ServiceRoutes::Complete => write!(f, "/complete"),
+            ServiceRoutes::Complete => write!(f, "{}", ROUTE_COMPLETE),
             ServiceRoutes::CompleteForm => write!(f, "/complete-form"),
             ServiceRoutes::Index => write!(f, "/"),
         }

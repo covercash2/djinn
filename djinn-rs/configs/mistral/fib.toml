@@ -4,7 +4,6 @@ prompt = """
 
 [model_config]
 variant = "Quantized"
-device = "Metal"
 flash_attn = false
 
 [model_config.model_source.HuggingFaceHub]

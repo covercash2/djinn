@@ -49,6 +49,7 @@ pub fn load_config_named(config_path: impl AsRef<Path>) -> anyhow::Result<RunCon
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelConfig {
     pub variant: Variant,
+    #[serde(default)]
     pub device: Device,
     /// Set true to use flash attention. Only supported on CUDA
     pub flash_attn: bool,

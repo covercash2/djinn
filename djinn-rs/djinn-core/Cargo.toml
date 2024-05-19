@@ -3,6 +3,7 @@ name = "djinn-core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+resolver = "2"
 
 
 [dependencies]
@@ -14,6 +15,7 @@ axum-streams.workspace = true
 candle-core.workspace = true
 candle-nn.workspace = true
 candle-transformers.workspace = true
+cfg-if.workspace = true
 clap.workspace = true
 derive-new.workspace = true
 derive_builder.workspace = true
@@ -39,5 +41,15 @@ tracing-subscriber.workspace = true
 
 [features]
 default = []
-cuda = []
-mac = ["dep:metal", "dep:accelerate-src"]
+cuda = [
+	"candle-core/cuda",
+	"candle-nn/cuda",
+	"candle-transformers/cuda",
+]
+mac = [
+	"dep:metal",
+	"dep:accelerate-src",
+	"candle-core/metal",
+	"candle-nn/metal",
+	"candle-transformers/metal",
+]
