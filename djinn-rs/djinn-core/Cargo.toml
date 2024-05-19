@@ -4,10 +4,9 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-accelerate-src.workspace = true
+accelerate-src = { workspace = true, optional = true }
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true
@@ -23,7 +22,7 @@ genawaiter.workspace = true
 hf-hub.workspace = true
 image.workspace = true
 imageproc.workspace = true
-metal.workspace = true
+metal = { workspace = true, optional = true }
 project-root.workspace = true
 rusttype.workspace = true
 safetensors.workspace = true
@@ -37,3 +36,8 @@ toml.workspace = true
 tracing.workspace = true
 tracing-chrome.workspace = true
 tracing-subscriber.workspace = true
+
+[features]
+default = []
+cuda = []
+mac = ["dep:metal", "dep:accelerate-src"]

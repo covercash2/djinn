@@ -14,9 +14,9 @@ anyhow = "1.0.75"
 async-stream = "0.3.5"
 axum = "0.7.4"
 axum-streams = { version = "0.12.0", features = ["json"] }
-candle-core = { version = "0.4.1", features = ["accelerate", "metal"] }
-candle-nn = { version = "0.4.1", features = ["accelerate", "metal"] }
-candle-transformers = { version = "0.4.1", features = ["accelerate", "metal"] }
+candle-core = { version = "0.5.0" }
+candle-nn = { version = "0.5.0" }
+candle-transformers = { version = "0.5.0" }
 clap = { version = "4.4.5", features = ["derive"] }
 derive-new = "0.5.9"
 derive_builder = "0.13.0"

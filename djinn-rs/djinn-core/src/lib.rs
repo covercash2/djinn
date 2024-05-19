@@ -1,3 +1,4 @@
+#[cfg(feature = "mac")]
 extern crate accelerate_src;
 
 mod coco_classes;
