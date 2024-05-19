@@ -6,6 +6,7 @@ use axum::extract::State;
 use axum::response::Html;
 use axum::Form;
 use djinn_core::lm::Lm;
+use djinn_core::mistral::RunConfig;
 use futures_util::{pin_mut, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -17,6 +18,7 @@ use crate::server::{Context, Json};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CompleteRequest {
     prompt: String,
+    sample_len: Option<usize>,
 }
 
 #[derive(Template)]
@@ -69,10 +71,17 @@ async fn run_model(
     request: CompleteRequest,
 ) -> Result<CompleteResponse> {
     let prompt = request.prompt;
+
+    let default_config = model_context.run_config.clone();
+    let config = RunConfig {
+        sample_len: request.sample_len.unwrap_or(default_config.sample_len),
+        ..default_config
+    };
+
     // setup output stream
     let stream = model_context
         .model
-        .run(prompt.clone(), model_context.run_config.clone());
+        .run(prompt.clone(), config);
 
     // consume the stream
     pin_mut!(stream);

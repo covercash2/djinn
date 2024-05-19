@@ -22,9 +22,13 @@ body {
 	height: 100%;
 }
 
+#prompt-input {
+	flex: 1;
+}
+
 #prompt {
 	display: flex;
-	flex-direction: row;
+	flex-direction: column;
 	align-self: flex-end;
 }
 
