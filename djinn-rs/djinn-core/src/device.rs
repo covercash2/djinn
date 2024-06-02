@@ -15,7 +15,7 @@ impl Default for Device {
             if #[cfg(feature = "cuda")] {
                 Device::Cuda
             } else if #[cfg(feature = "mac")] {
-                Device::Metal,
+                Device::Metal
             } else {
                 Device::Cpu
             }
