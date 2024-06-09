@@ -34,5 +34,24 @@ def "djinn run server" [
 	let djinn_args = ["server" "--name" $config]
 
 	run-external "cargo" "run" ...$cargo_args "--" ...$djinn_args
-	cargo run --release --features djinn-core/cuda -- server --name test
+}
+
+def "djinn build" [
+	--backend: string = "cuda"
+	--debug
+] {
+	let features = if $backend == "cpu" {
+		[]
+	} else {
+		["--features" $"djinn-core/($backend)"]
+	}
+	let build_mode = if $debug {
+		[]
+	} else {
+		["--release"]
+	}
+
+	let cargo_args = $build_mode ++ $features
+
+	run-external "cargo" "build" ...$cargo_args
 }
