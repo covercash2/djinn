@@ -5,6 +5,7 @@ use std::{
     fs::File,
     io::Write,
     path::PathBuf,
+    sync::Arc,
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -38,7 +39,9 @@ enum Runner {
     /// Run the server from a given path
     ServerConfig {
         #[arg(long)]
-        path: PathBuf,
+        name: Arc<str>,
+        #[arg(long, default_value = DEFAULT_CONFIG_DIR)]
+        config_dir: PathBuf,
     },
     SingleRun(SingleRunArgs),
     Config(ConfigArgs),
@@ -154,7 +157,9 @@ async fn main() -> anyhow::Result<()> {
     let _guard = setup_tracing(args.tracing)?;
     match args.runner {
         Runner::Server(args) => server::run(args).await,
-        Runner::ServerConfig { path } => {
+        Runner::ServerConfig { name, config_dir } => {
+            let filename = format!("server/{name}.toml");
+            let path = config_dir.join(filename);
             let config = server::load_config(path).await?;
             let span = tracing::info_span!("run_server span");
             djinn_server::run_server(config).instrument(span).await

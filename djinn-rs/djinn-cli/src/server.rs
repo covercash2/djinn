@@ -3,7 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use djinn_core::mistral::{config::ModelRun, create_new_context, model::ModelContext};
+use djinn_core::{
+    config::DEFAULT_CONFIG_DIR,
+    mistral::{config::ModelRun, create_new_context, model::ModelContext},
+};
 use djinn_server::Config;
 use tracing::instrument;
 
@@ -11,7 +14,6 @@ use clap::Parser;
 
 const DEFAULT_HOST_ADDR: &str = "::1";
 const DEFAULT_HOST_PORT: u16 = 8080;
-const DEFAULT_CONFIG_DIR: &str = "./configs/";
 const DEFAULT_MODEL_CONFIG: &str = "mistral/fib";
 
 #[derive(Parser, Clone, Debug, PartialEq)]
@@ -25,7 +27,7 @@ pub struct ServerArgs {
     config_dir: PathBuf,
     /// An optional name of this config to save to [`ServerArgs::config_dir`]
     #[arg(long)]
-    name: Option<String>,
+    save_config: Option<String>,
     #[arg(long, default_value = DEFAULT_MODEL_CONFIG)]
     model_config: String,
 }
@@ -36,7 +38,7 @@ impl Default for ServerArgs {
             ip: DEFAULT_HOST_ADDR.to_string(),
             port: DEFAULT_HOST_PORT,
             config_dir: PathBuf::from(DEFAULT_CONFIG_DIR),
-            name: None,
+            save_config: None,
             model_config: DEFAULT_MODEL_CONFIG.to_string(),
         }
     }
@@ -71,27 +73,26 @@ async fn load_model(config_path: &PathBuf) -> anyhow::Result<ModelContext> {
 }
 
 pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
-    let config = if let Some(ref name) = args.name {
-        tracing::info!("loading config {name}");
-        let filename = format!("server/{name}.toml");
-        let path = args.config_dir.join(filename);
-        load_config(path).await?
-    } else {
-        args.try_into()?
-    };
+    let config = args.clone().try_into()?;
 
-    tracing::info!("starting server: {config:?}");
+    tracing::info!(?config, "starting server");
     djinn_server::run_server(config).await?;
+
+    if let Some(ref name) = args.save_config {
+        tracing::info!(name, "saving config");
+        save_config(args).await?;
+    }
 
     Ok(())
 }
 
 #[instrument]
-async fn save_config(name: &str, args: ServerArgs) -> anyhow::Result<()> {
+async fn save_config(args: ServerArgs) -> anyhow::Result<()> {
     if !args.config_dir.exists() {
         std::fs::create_dir_all(&args.config_dir)?;
     }
-    let filename = format!("{name}.toml");
+    let name = args.save_config.clone().expect("no config name given!");
+    let filename = format!("server/{name}.toml");
     let path = args.config_dir.join(filename);
 
     let config: Config = args.clone().try_into()?;
