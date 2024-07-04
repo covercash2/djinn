@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::Result;
 use tokenizers::Tokenizer;
 
 /// This is a wrapper around a tokenizer to ensure that tokens can be returned to the user in a

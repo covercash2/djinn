@@ -84,9 +84,9 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
         .fallback_service(
             ServeDir::new("./djinn-server/assets")
                 .not_found_service(not_found.into_service())
-                .map_request(|request: Request<_>| { 
+                .map_request(|request: Request<_>| {
                     tracing::debug!(?request);
-                    request 
+                    request
                 }),
         )
         .layer(
