@@ -81,9 +81,7 @@ async fn run_model(
     };
 
     // setup output stream
-    let stream = model_context
-        .model
-        .run(prompt.clone(), config);
+    let stream = model_context.model.run(prompt.clone(), config);
 
     // consume the stream
     pin_mut!(stream);

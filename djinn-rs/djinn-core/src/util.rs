@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::error::Error;
-use candle_core::{self as candle, DType};
+use candle_core::{self as candle};
 use hf_hub::api::tokio::ApiError;
 use tokio_stream::StreamExt;
 
@@ -40,9 +40,4 @@ pub async fn hub_load_safetensors(
     let files: Vec<PathBuf> = files.into_iter().collect::<Result<Vec<_>, ApiError>>()?;
 
     Ok(files)
-}
-
-/// CLI args that are common to all models
-trait ModelArgs {
-    fn dtype(&self) -> anyhow::Result<DType>;
 }

@@ -13,9 +13,9 @@ use djinn_core::{
     mistral::{config::ModelRun, run, run_model},
 };
 use server::ServerArgs;
-use tracing::{Instrument, Level};
-use tracing_chrome::ChromeLayerBuilder;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+use tracing::Instrument;
+use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod mistral;
 mod server;
@@ -33,7 +33,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Runner {
+    /// Run the server with the given CLI args
     Server(ServerArgs),
+    /// Run the server from a given path
     ServerConfig {
         #[arg(long)]
         path: PathBuf,
@@ -122,12 +124,12 @@ impl Display for TracingArgs {
     }
 }
 
-fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<Box<dyn Drop>>> {
+fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<FlushGuard>> {
     match tracing_args {
         TracingArgs::Chrome => {
             let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
             tracing_subscriber::registry().with(chrome_layer).init();
-            Ok(Some(Box::new(guard)))
+            Ok(Some(guard))
         }
         TracingArgs::Stdout => {
             tracing_subscriber::registry()

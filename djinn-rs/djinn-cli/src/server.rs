@@ -11,7 +11,7 @@ use clap::Parser;
 
 const DEFAULT_HOST_ADDR: &str = "::1";
 const DEFAULT_HOST_PORT: u16 = 8080;
-const DEFAULT_CONFIG_DIR: &str = "./configs/server/";
+const DEFAULT_CONFIG_DIR: &str = "./configs/";
 const DEFAULT_MODEL_CONFIG: &str = "mistral/fib";
 
 #[derive(Parser, Clone, Debug, PartialEq)]
@@ -20,8 +20,10 @@ pub struct ServerArgs {
     ip: String,
     #[arg(long, default_value_t = DEFAULT_HOST_PORT)]
     port: u16,
+    /// Where server configs are stored
     #[arg(long, default_value = DEFAULT_CONFIG_DIR)]
     config_dir: PathBuf,
+    /// An optional name of this config to save to [`ServerArgs::config_dir`]
     #[arg(long)]
     name: Option<String>,
     #[arg(long, default_value = DEFAULT_MODEL_CONFIG)]
@@ -71,7 +73,7 @@ async fn load_model(config_path: &PathBuf) -> anyhow::Result<ModelContext> {
 pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
     let config = if let Some(ref name) = args.name {
         tracing::info!("loading config {name}");
-        let filename = format!("{name}.toml");
+        let filename = format!("server/{name}.toml");
         let path = args.config_dir.join(filename);
         load_config(path).await?
     } else {
@@ -101,6 +103,8 @@ async fn save_config(name: &str, args: ServerArgs) -> anyhow::Result<()> {
 }
 
 pub async fn load_config(path: impl AsRef<Path>) -> anyhow::Result<Config> {
+    let path = path.as_ref();
+    tracing::info!(?path, "loading config");
     let contents = tokio::fs::read_to_string(path).await?;
     Ok(toml::from_str(&contents)?)
 }

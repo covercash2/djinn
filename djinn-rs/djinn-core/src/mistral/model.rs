@@ -12,10 +12,10 @@ use derive_builder::Builder;
 use hf_hub::api::tokio::ApiRepo;
 use serde::{Deserialize, Serialize};
 use tokio_stream::Stream;
-use tracing::{instrument, Span};
+use tracing::instrument;
 
 use super::config::RunConfig;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::lm::Lm;
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
@@ -109,9 +109,7 @@ impl Weights {
         tracing::debug!(input_shape = ?input.shape(), start_pos, context_size);
         let logits = match self {
             Weights::Mistral(m) => m.forward(&input, start_pos),
-            Weights::QMistral(m) => { 
-                m.forward(&input, start_pos) 
-            },
+            Weights::QMistral(m) => m.forward(&input, start_pos),
         }
         .inspect_err(|error| {
             tracing::error!(model = ?self, ?error);
@@ -133,12 +131,8 @@ impl Weights {
 
     fn clear_kv_cache(&mut self) {
         match self {
-            Weights::Mistral(model) => {
-                model.clear_kv_cache()
-            }
-            Weights::QMistral(model) => {
-                model.clear_kv_cache()
-            }
+            Weights::Mistral(model) => model.clear_kv_cache(),
+            Weights::QMistral(model) => model.clear_kv_cache(),
         }
     }
 }
