@@ -33,6 +33,7 @@ imageproc = "0.23.0"
 markdown = "0.3.0"
 metal = "0.27.0"
 project-root = "0.2.2"
+rand = "0.8.5"
 rusttype = "0.9.3"
 safetensors = "0.4.1"
 serde = { version = "1.0.188", features = ["derive"] }
