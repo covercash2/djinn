@@ -20,7 +20,8 @@ pub const ROUTE_COMPLETE: &str = "/complete";
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CompleteRequest {
     prompt: String,
-    sample_len: Option<usize>,
+    #[serde(default, flatten)]
+    config: RunConfig,
 }
 
 #[derive(Template)]
@@ -74,11 +75,7 @@ async fn run_model(
 ) -> Result<CompleteResponse> {
     let prompt = request.prompt;
 
-    let default_config = model_context.run_config.clone();
-    let config = RunConfig {
-        sample_len: request.sample_len.unwrap_or(default_config.sample_len),
-        ..default_config
-    };
+    let config = request.config;
 
     // setup output stream
     let stream = model_context.model.run(prompt.clone(), config);

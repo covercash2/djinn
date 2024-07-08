@@ -14,9 +14,20 @@ pub const DEFAULT_TOP_P: Option<f64> = None;
 const fn default_sample_len() -> usize {
     DEFAULT_SAMPLE_LEN
 }
-const fn default_seed() -> u64 {
+
+#[cfg(feature = "fixed-seed")]
+fn default_seed() -> u64 {
     DEFAULT_SEED
 }
+#[cfg(not(feature = "fixed-seed"))]
+fn defualt_seed() -> u64 {
+    random_seed()
+}
+
+fn random_seed() -> u64 {
+    todo!("use the rand crate")
+}
+
 const fn default_repeat_last_n() -> usize {
     DEFAULT_REPEAT_LAST_N
 }
