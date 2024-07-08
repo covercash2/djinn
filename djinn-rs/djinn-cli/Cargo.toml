@@ -14,7 +14,8 @@ clap = { workspace = true, features = ["derive", "string"] }
 djinn-core.workspace = true
 djinn-server.workspace = true
 futures-util.workspace = true
-markdown = "0.3.0"
+markdown.workspace = true
+rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

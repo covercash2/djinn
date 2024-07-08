@@ -837,6 +837,7 @@ dependencies = [
  "djinn-server",
  "futures-util",
  "markdown",
+ "rand 0.8.5",
  "serde",
  "thiserror",
  "tokio",
