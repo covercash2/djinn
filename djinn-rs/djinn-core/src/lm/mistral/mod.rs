@@ -7,7 +7,6 @@ use tokenizers::Tokenizer;
 
 use crate::device::Device;
 use crate::lm::Lm;
-use crate::mistral::model::{ModelContextBuilder, Variant};
 
 use self::config::ModelConfig;
 use self::config::ModelRun;
@@ -17,6 +16,8 @@ use self::model::ModelContext;
 
 pub mod config;
 pub mod model;
+
+use model::{ModelContextBuilder, Variant};
 
 #[derive(Parser, Clone)]
 pub struct Args {

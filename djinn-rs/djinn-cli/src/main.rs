@@ -11,7 +11,7 @@ use std::{
 use clap::{Parser, Subcommand, ValueEnum};
 use djinn_core::{
     config::DEFAULT_CONFIG_DIR,
-    mistral::{config::ModelRun, run, run_model},
+    lm::mistral::{config::ModelRun, run, run_model},
 };
 use server::ServerArgs;
 use tracing::Instrument;

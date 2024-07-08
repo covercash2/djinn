@@ -1,3 +1,5 @@
+const BACKENDS = ["cuda" "cpu" "mac"]
+
 def "djinn complete" [
 	--protocol: string = "http"
 	--addr: string = "localhost"
@@ -31,8 +33,7 @@ def "djinn run server" [
 	}
 
 	let cargo_args = $build_mode ++ $features
-	let djinn_args = ["server" "--name" $config]
+	let djinn_args = ["server-config" "--name" $config]
 
 	run-external "cargo" "run" ...$cargo_args "--" ...$djinn_args
-	cargo run --release --features djinn-core/cuda -- server --name test
 }

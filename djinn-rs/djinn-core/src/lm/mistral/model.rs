@@ -20,7 +20,9 @@ use crate::lm::Lm;
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
 
+/// The variant of the model to be loaded
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Variant {
     /// Main Mistral version
     Mistral,
