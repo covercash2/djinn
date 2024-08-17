@@ -6,8 +6,6 @@ authors.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-askama.workspace = true
-askama_axum.workspace = true
 async-stream.workspace = true
 axum.workspace = true
 axum-streams.workspace = true

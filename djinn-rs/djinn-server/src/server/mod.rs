@@ -1,9 +1,8 @@
-use askama_axum::Response;
 use axum::{
     extract::{FromRequest, MatchedPath},
     handler::HandlerWithoutStateExt,
     http::{Request, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::{get, post, IntoMakeService},
     Router,
 };
@@ -73,14 +72,6 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
         .route(
             &ServiceRoutes::Complete.to_string(),
             post(crate::handlers::complete),
-        )
-        .route(
-            &ServiceRoutes::Index.to_string(),
-            get(crate::handlers::index),
-        )
-        .route(
-            &ServiceRoutes::CompleteForm.to_string(),
-            post(crate::handlers::complete_form),
         )
         .fallback_service(
             ServeDir::new("./djinn-server/assets")
