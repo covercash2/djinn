@@ -1,5 +1,4 @@
 use candle_core::{self as candle};
-use clap::Parser;
 use futures_util::pin_mut;
 use futures_util::StreamExt;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
@@ -7,17 +6,16 @@ use tokenizers::Tokenizer;
 
 use crate::device::Device;
 use crate::lm::Lm;
+use crate::lm::ModelSource;
 
 use self::config::ModelConfig;
 use self::config::ModelRun;
-use self::config::ModelSource;
 pub use self::config::RunConfig;
-use self::model::ModelContext;
 
 pub mod config;
-pub mod model;
 
-use model::{ModelContextBuilder, Variant};
+use super::model::ModelContext;
+use super::model::ModelContextBuilder;
 
 pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<ModelContext> {
     // prep files

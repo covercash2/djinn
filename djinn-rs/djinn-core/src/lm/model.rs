@@ -1,12 +1,15 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use async_stream::stream;
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
-use candle_transformers::models::mistral::{Config, Model as Mistral};
-use candle_transformers::models::quantized_mistral::Model as QMistral;
+use candle_transformers::models::{
+    mistral::{Config as MistralConfig, Model as Mistral},
+    quantized_mistral::Model as QMistral,
+    starcoder2::{Config as StarcoderConfig, Model as Starcoder},
+};
 use clap::ValueEnum;
 use derive_builder::Builder;
 use hf_hub::api::tokio::ApiRepo;
@@ -14,63 +17,101 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::Stream;
 use tracing::instrument;
 
-use super::config::RunConfig;
 use crate::error::Result;
-use crate::lm::Lm;
+use crate::lm::mistral::RunConfig;
+// use crate::lm::Lm;
 use crate::token_output_stream::TokenOutputStream;
 use crate::util::hub_load_safetensors;
 
 /// The variant of the model to be loaded
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Variant {
+pub enum ModelArchitecture {
     /// Main Mistral version
     Mistral,
     /// Quantized Mistral
-    Quantized,
+    QMistral,
+    DistilBert,
+    Starcoder,
 }
 
 #[derive(Debug)]
-pub enum Weights {
-    Mistral(Mistral),
-    QMistral(QMistral),
+pub enum Model {
+    Mistral {
+        weights: Mistral,
+        config: MistralConfig,
+    },
+    QMistral {
+        weights: QMistral,
+        config: MistralConfig,
+    },
+    Starcoder {
+        weights: Starcoder,
+        config: StarcoderConfig,
+    },
 }
 
-impl Variant {
+// impl Lm for Mistral {
+//     // type Config = candle_transformers::models::mistral::Config;
+//     type Weights = Mistral;
+//
+//     fn run(
+//         &mut self,
+//         prompt: String,
+//         config: RunConfig,
+//         model: Self::Weights,
+//     ) -> impl Stream<Item = Result<String>> + '_ {
+//         todo!()
+//     }
+// }
+
+impl ModelArchitecture {
     pub async fn load_weights(
         &self,
         repo: &ApiRepo,
         device: &Device,
         use_flash_attn: bool,
-    ) -> anyhow::Result<Weights> {
+    ) -> anyhow::Result<Model> {
         let files = self.hf_files(repo).await?;
-        let config = Config::config_7b_v0_1(use_flash_attn);
 
-        self.load_weight_files(&files, config, device)
+        self.load_model(&files, repo, device, use_flash_attn).await
     }
 
     pub fn hf_repo_id(&self) -> String {
         match self {
-            Variant::Mistral => "milstralai/Mistral-7B-v0.1".to_string(),
-            Variant::Quantized => "lmz/candle-mistral".to_string(),
+            ModelArchitecture::Mistral => "milstralai/Mistral-7B-v0.1",
+            ModelArchitecture::QMistral => "lmz/candle-mistral",
+            ModelArchitecture::DistilBert => "distilbert/distilbert-base-cased-distilled-squad",
+            ModelArchitecture::Starcoder => "bigcode/starcoder2-15b",
         }
+        .to_string()
     }
 
     pub async fn hf_files(&self, repo: &ApiRepo) -> anyhow::Result<Vec<PathBuf>> {
         match self {
-            Variant::Mistral => hub_load_safetensors(repo, "model.safetensors.index.json").await,
-            Variant::Quantized => Ok(vec![repo.get("model-q4k.gguf").await?]),
+            ModelArchitecture::Mistral => {
+                hub_load_safetensors(repo, "model.safetensors.index.json").await
+            }
+            ModelArchitecture::QMistral => Ok(vec![repo.get("model-q4k.gguf").await?]),
+            ModelArchitecture::DistilBert => todo!(),
+            ModelArchitecture::Starcoder => {
+                hub_load_safetensors(repo, "model.safetensors.index.json").await
+            }
         }
     }
 
-    pub fn load_weight_files<P: AsRef<Path>>(
+    pub async fn load_model<P: AsRef<Path>>(
         &self,
         files: &[P],
-        config: Config,
+        repo: &ApiRepo,
         device: &Device,
-    ) -> anyhow::Result<Weights> {
+        use_flash_attn: bool,
+    ) -> anyhow::Result<Model> {
         match self {
-            Variant::Mistral => {
+            ModelArchitecture::Mistral => {
+                let file = repo.get("config.json").await?;
+                let config = serde_json::from_slice(&std::fs::read(file)?)
+                    .context("unable to load Mistral config")?;
                 let dtype = if device.is_cuda() {
                     DType::BF16
                 } else {
@@ -78,21 +119,36 @@ impl Variant {
                 };
                 let vb = unsafe { VarBuilder::from_mmaped_safetensors(files, dtype, device)? };
                 let weights = Mistral::new(&config, vb)?;
-                Ok(Weights::Mistral(weights))
+                Ok(Model::Mistral { weights, config })
             }
-            Variant::Quantized => {
+            ModelArchitecture::QMistral => {
+                let config = MistralConfig::config_7b_v0_1(use_flash_attn);
                 let filename = &files[0];
                 let vb = candle_transformers::quantized_var_builder::VarBuilder::from_gguf(
                     filename, device,
                 )?;
-                let model = QMistral::new(&config, vb)?;
-                Ok(Weights::QMistral(model))
+                let weights = QMistral::new(&config, vb)?;
+                Ok(Model::QMistral { weights, config })
+            }
+            ModelArchitecture::DistilBert => todo!(),
+            ModelArchitecture::Starcoder => {
+                let file = repo.get("config.json").await?;
+                let config = serde_json::from_slice(&std::fs::read(file)?)
+                    .context("unable to load Starcoder config")?;
+                let dtype = if device.is_cuda() {
+                    DType::BF16
+                } else {
+                    DType::F32
+                };
+                let vb = unsafe { VarBuilder::from_mmaped_safetensors(files, dtype, device)? };
+                let weights = Starcoder::new(&config, vb)?;
+                Ok(Model::Starcoder { weights, config })
             }
         }
     }
 }
 
-impl Weights {
+impl Model {
     #[instrument(skip(self))]
     fn forward(
         &mut self,
@@ -110,8 +166,9 @@ impl Weights {
         let input = Tensor::new(context, device)?.unsqueeze(0)?;
         tracing::debug!(input_shape = ?input.shape(), start_pos, context_size);
         let logits = match self {
-            Weights::Mistral(m) => m.forward(&input, start_pos),
-            Weights::QMistral(m) => m.forward(&input, start_pos),
+            Model::Mistral { weights, config: _ } => weights.forward(&input, start_pos),
+            Model::QMistral { weights, config: _ } => weights.forward(&input, start_pos),
+            Model::Starcoder { weights, config: _ } => weights.forward(&input, start_pos),
         }
         .inspect_err(|error| {
             tracing::error!(model = ?self, ?error);
@@ -133,8 +190,9 @@ impl Weights {
 
     fn clear_kv_cache(&mut self) {
         match self {
-            Weights::Mistral(model) => model.clear_kv_cache(),
-            Weights::QMistral(model) => model.clear_kv_cache(),
+            Model::Mistral { weights, config: _ } => weights.clear_kv_cache(),
+            Model::QMistral { weights, config: _ } => weights.clear_kv_cache(),
+            Model::Starcoder { weights, config: _ } => weights.clear_kv_cache(),
         }
     }
 }
@@ -142,16 +200,14 @@ impl Weights {
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct ModelContext {
-    model: Weights,
+    model: Model,
     #[builder(setter(into))]
     tokenizer: TokenOutputStream,
     device: Device,
 }
 
-impl Lm for ModelContext {
-    type Config = RunConfig;
-
-    fn run(
+impl ModelContext {
+    pub fn run(
         &mut self,
         prompt: String,
         config: RunConfig,

@@ -1,8 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::{model::Variant, Device};
+use crate::lm::{model::ModelArchitecture, ModelSource};
+
+use super::Device;
 
 pub const DEFAULT_SAMPLE_LEN: usize = 100;
 pub const DEFAULT_SEED: u64 = 299792458;
@@ -94,24 +96,10 @@ pub fn load_config(config_path: impl AsRef<Path>) -> anyhow::Result<RunConfig> {
 /// Configurations that are loaded on initialization of the model.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelConfig {
-    pub variant: Variant,
+    pub variant: ModelArchitecture,
     #[serde(default)]
     pub device: Device,
     /// Set true to use flash attention. Only supported on CUDA
     pub flash_attn: bool,
     pub model_source: ModelSource,
-}
-
-/// Where to load the model from,
-/// either HuggingFaceHub or from the file system
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelSource {
-    HuggingFaceHub {
-        revision: String,
-    },
-    Files {
-        weight_files: Vec<PathBuf>,
-        tokenizer_file: PathBuf,
-    },
 }

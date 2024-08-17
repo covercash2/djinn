@@ -9,7 +9,8 @@ use axum::{
 };
 use derive_builder::Builder;
 use derive_new::new;
-use djinn_core::lm::mistral::{model::ModelContext, RunConfig};
+use djinn_core::lm::mistral::RunConfig;
+use djinn_core::lm::model::ModelContext;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,

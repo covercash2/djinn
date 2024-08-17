@@ -3,7 +3,7 @@ prompt = """
 """
 
 [model_config]
-variant = "quantized"
+variant = "q_mistral"
 flash_attn = false
 
 [model_config.model_source.hugging_face_hub]

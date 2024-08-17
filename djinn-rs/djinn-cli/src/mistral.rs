@@ -1,9 +1,10 @@
 use clap::Parser;
 use djinn_core::lm::mistral::config::{
-    ModelConfig, ModelRun, ModelSource, DEFAULT_REPEAT_LAST_N, DEFAULT_REPEAT_PENALTY,
-    DEFAULT_SAMPLE_LEN, DEFAULT_SEED, DEFAULT_TEMPERATURE,
+    ModelConfig, ModelRun, DEFAULT_REPEAT_LAST_N, DEFAULT_REPEAT_PENALTY, DEFAULT_SAMPLE_LEN,
+    DEFAULT_SEED, DEFAULT_TEMPERATURE,
 };
-use djinn_core::lm::mistral::model::Variant;
+use djinn_core::lm::model::ModelArchitecture;
+use djinn_core::lm::ModelSource;
 use djinn_core::{device::Device, lm::mistral::RunConfig};
 
 #[derive(Parser, Clone)]
@@ -39,7 +40,7 @@ pub struct Args {
     #[arg(long)]
     use_flash_attn: bool,
     #[arg(value_enum)]
-    variant: Variant,
+    variant: ModelArchitecture,
 
     #[arg(long)]
     tokenizer_file: Option<String>,
