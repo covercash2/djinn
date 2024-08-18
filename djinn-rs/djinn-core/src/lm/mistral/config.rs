@@ -51,13 +51,6 @@ pub struct ModelRun {
     pub run_config: RunConfig,
 }
 
-impl ModelRun {
-    async fn from_toml(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let contents = tokio::fs::read_to_string(path).await?;
-        Ok(toml::from_str::<ModelRun>(&contents)?)
-    }
-}
-
 /// Parameters to the model
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RunConfig {

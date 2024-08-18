@@ -19,9 +19,8 @@ pub async fn run_server(config: Config) -> anyhow::Result<()> {
     let model_run = toml::from_str::<ModelRun>(&contents)?;
     let model_config = model_run.model_config;
     let model = create_new_context(&model_config).await?;
-    let run_config = model_run.run_config;
 
-    let context = Context { model, run_config };
+    let context = Context { model };
 
     tracing::debug!("starting server with config: {config:?}");
 

@@ -1,12 +1,9 @@
 use std::ops::DerefMut;
 use std::sync::Arc;
 
-use axum::debug_handler;
 use axum::extract::State;
-use axum::response::Html;
 use djinn_core::lm::mistral::RunConfig;
-use djinn_core::lm::Lm;
-use futures_util::{pin_mut, StreamExt};
+use futures::{pin_mut, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{instrument, Instrument};

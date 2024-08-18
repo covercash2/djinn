@@ -1,11 +1,10 @@
 use candle_core::{self as candle};
-use futures_util::pin_mut;
-use futures_util::StreamExt;
+use futures::pin_mut;
+use futures::StreamExt;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
 use crate::device::Device;
-use crate::lm::Lm;
 use crate::lm::ModelSource;
 
 use self::config::ModelConfig;

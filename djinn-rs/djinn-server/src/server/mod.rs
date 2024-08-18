@@ -8,7 +8,6 @@ use axum::{
 };
 use derive_builder::Builder;
 use derive_new::new;
-use djinn_core::lm::mistral::RunConfig;
 use djinn_core::lm::model::ModelContext;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -50,7 +49,6 @@ pub struct HttpServer {
 
 pub struct Context {
     pub model: ModelContext,
-    pub run_config: RunConfig,
 }
 
 #[instrument]
@@ -98,18 +96,15 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
                 .on_response(|response: &Response, _latency: Duration, span: &Span| {
                     let status: StatusCode = response.status();
                     tracing::debug!(?status);
-                    match status {
-                        StatusCode::UNSUPPORTED_MEDIA_TYPE => {
-                            let content_type = response
-                                .headers()
-                                .get("content-type")
-                                .map(|header| header.to_str().unwrap_or("weird decode error"))
-                                .unwrap_or("unknown content-type")
-                                .to_string();
-                            span.record("media_type", &content_type);
-                            tracing::warn!(?status, content_type, "unsupported media type");
-                        }
-                        _ => {}
+                    if let StatusCode::UNSUPPORTED_MEDIA_TYPE = status {
+                        let content_type = response
+                            .headers()
+                            .get("content-type")
+                            .map(|header| header.to_str().unwrap_or("weird decode error"))
+                            .unwrap_or("unknown content-type")
+                            .to_string();
+                        span.record("media_type", &content_type);
+                        tracing::warn!(?status, content_type, "unsupported media type");
                     }
                 }),
         )
@@ -121,8 +116,6 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
 enum ServiceRoutes {
     HealthCheck,
     Complete,
-    CompleteForm,
-    Index,
 }
 
 impl Display for ServiceRoutes {
@@ -130,8 +123,6 @@ impl Display for ServiceRoutes {
         match self {
             ServiceRoutes::HealthCheck => write!(f, "/health-check"),
             ServiceRoutes::Complete => write!(f, "{}", ROUTE_COMPLETE),
-            ServiceRoutes::CompleteForm => write!(f, "/complete-form"),
-            ServiceRoutes::Index => write!(f, "/"),
         }
     }
 }
