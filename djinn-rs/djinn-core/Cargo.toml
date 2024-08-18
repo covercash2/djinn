@@ -26,6 +26,7 @@ image.workspace = true
 imageproc.workspace = true
 metal = { workspace = true, optional = true }
 project-root.workspace = true
+rand.workspace = true
 rusttype.workspace = true
 safetensors.workspace = true
 serde.workspace = true
@@ -40,7 +41,7 @@ tracing-chrome.workspace = true
 tracing-subscriber.workspace = true
 
 [features]
-default = ["fixed-seed"]
+default = []
 fixed-seed = []
 cuda = [
 	"candle-core/cuda",

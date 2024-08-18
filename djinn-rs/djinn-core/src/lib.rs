@@ -6,9 +6,9 @@ pub mod config;
 pub mod device;
 mod error;
 mod font;
+mod hf_hub_ext;
 pub mod lm;
 mod token_output_stream;
-mod util;
 pub mod yolov8;
 
 pub use error::Error;

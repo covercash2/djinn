@@ -1,10 +1,13 @@
 use std::path::Path;
 
+#[cfg(not(feature = "fixed-seed"))]
+use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::lm::{model::ModelArchitecture, ModelSource};
-
-use super::Device;
+use crate::{
+    device::Device,
+    lm::{model::ModelArchitecture, ModelSource},
+};
 
 pub const DEFAULT_SAMPLE_LEN: usize = 100;
 pub const DEFAULT_SEED: u64 = 299792458;
@@ -17,17 +20,19 @@ const fn default_sample_len() -> usize {
     DEFAULT_SAMPLE_LEN
 }
 
-#[cfg(feature = "fixed-seed")]
 fn default_seed() -> u64 {
-    DEFAULT_SEED
-}
-#[cfg(not(feature = "fixed-seed"))]
-fn defualt_seed() -> u64 {
-    random_seed()
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "fixed-seed")] {
+            DEFAULT_SEED
+        } else {
+            random_seed()
+        }
+    }
 }
 
+#[cfg(not(feature = "fixed-seed"))]
 fn random_seed() -> u64 {
-    todo!("use the rand crate")
+    thread_rng().gen::<u64>()
 }
 
 const fn default_repeat_last_n() -> usize {

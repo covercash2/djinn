@@ -1,13 +1,13 @@
 //! Language Models and configurations
 use std::path::PathBuf;
 
+use config::RunConfig;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
-use self::mistral::RunConfig;
-
+pub mod config;
 pub mod mistral;
 pub mod model;
 

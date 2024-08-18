@@ -1,4 +1,5 @@
-use djinn_core::lm::mistral::{config::ModelRun, create_new_context};
+use djinn_core::lm::config::ModelRun;
+use djinn_core::lm::mistral::create_new_context;
 pub use server::{Config, HttpServer};
 use tokio::sync::Mutex;
 use tracing::instrument;

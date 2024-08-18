@@ -4,15 +4,10 @@ use futures::StreamExt;
 use hf_hub::{api::tokio::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
-use crate::device::Device;
 use crate::lm::ModelSource;
 
-use self::config::ModelConfig;
-use self::config::ModelRun;
-pub use self::config::RunConfig;
-
-pub mod config;
-
+use super::config::ModelConfig;
+use super::config::ModelRun;
 use super::model::ModelContext;
 use super::model::ModelContextBuilder;
 
