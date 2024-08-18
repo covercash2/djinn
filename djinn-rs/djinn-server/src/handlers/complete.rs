@@ -2,7 +2,7 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 
 use axum::extract::State;
-use djinn_core::lm::mistral::RunConfig;
+use djinn_core::lm::config::RunConfig;
 use futures::{pin_mut, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;

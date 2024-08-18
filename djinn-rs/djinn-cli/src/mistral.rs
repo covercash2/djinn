@@ -1,11 +1,12 @@
 use clap::Parser;
-use djinn_core::lm::mistral::config::{
+use djinn_core::device::Device;
+use djinn_core::lm::config::RunConfig;
+use djinn_core::lm::config::{
     ModelConfig, ModelRun, DEFAULT_REPEAT_LAST_N, DEFAULT_REPEAT_PENALTY, DEFAULT_SAMPLE_LEN,
     DEFAULT_SEED, DEFAULT_TEMPERATURE,
 };
 use djinn_core::lm::model::ModelArchitecture;
 use djinn_core::lm::ModelSource;
-use djinn_core::{device::Device, lm::mistral::RunConfig};
 
 #[derive(Parser, Clone)]
 pub struct Args {

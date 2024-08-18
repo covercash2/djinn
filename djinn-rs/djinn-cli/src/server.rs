@@ -5,7 +5,8 @@ use std::{
 
 use djinn_core::{
     config::DEFAULT_CONFIG_DIR,
-    lm::{mistral::{config::ModelRun, create_new_context}, model::ModelContext},
+    lm::config::ModelRun,
+    lm::{mistral::create_new_context, model::ModelContext},
 };
 use djinn_server::Config;
 use tracing::instrument;

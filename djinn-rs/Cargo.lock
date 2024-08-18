@@ -818,6 +818,7 @@ dependencies = [
  "imageproc",
  "metal",
  "project-root",
+ "rand 0.8.5",
  "rusttype",
  "safetensors",
  "serde",

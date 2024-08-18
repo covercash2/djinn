@@ -11,12 +11,13 @@ use std::{
 use clap::{Parser, Subcommand, ValueEnum};
 use djinn_core::{
     config::DEFAULT_CONFIG_DIR,
-    lm::mistral::{config::ModelRun, run, run_model},
+    lm::config::ModelRun,
+    lm::mistral::{run, run_model},
 };
 use server::ServerArgs;
 use tracing::Instrument;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod mistral;
 mod server;
@@ -141,6 +142,7 @@ fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<FlushGuard>
                         .unwrap_or_else(|_| DEFAULT_LOG_ENV.into()),
                 )
                 .with(tracing_subscriber::fmt::layer().pretty())
+                .with(EnvFilter::from_default_env())
                 .init();
 
             tracing::info!("tracing started");

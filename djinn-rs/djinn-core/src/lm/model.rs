@@ -18,10 +18,10 @@ use tokio_stream::Stream;
 use tracing::instrument;
 
 use crate::error::Result;
-use crate::lm::mistral::RunConfig;
-// use crate::lm::Lm;
+use crate::hf_hub_ext::hub_load_safetensors;
 use crate::token_output_stream::TokenOutputStream;
-use crate::util::hub_load_safetensors;
+
+use super::config::RunConfig;
 
 /// The variant of the model to be loaded
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
@@ -254,7 +254,6 @@ impl ModelContext {
             let start_gen = std::time::Instant::now();
             tracing::info!("starting generation");
             for index in 0..sample_len {
-                tracing::debug!(tokens.len = tokens.len());
                 let logits =
                     self.model.forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
 
