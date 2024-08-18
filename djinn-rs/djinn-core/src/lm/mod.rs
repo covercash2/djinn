@@ -1,7 +1,7 @@
 //! Language Models and configurations
 use std::path::PathBuf;
 
-use futures_util::Stream;
+use futures::Stream;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;

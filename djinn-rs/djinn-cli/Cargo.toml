@@ -13,7 +13,7 @@ axum = { workspace = true, features = ["macros"] }
 clap = { workspace = true, features = ["derive", "string"] }
 djinn-core.workspace = true
 djinn-server.workspace = true
-futures-util.workspace = true
+futures.workspace = true
 markdown.workspace = true
 rand.workspace = true
 serde.workspace = true

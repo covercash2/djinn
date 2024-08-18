@@ -23,7 +23,7 @@ derive-new = "0.5.9"
 derive_builder = "0.13.0"
 djinn-core = { path = "./djinn-core" }
 djinn-server = { path = "./djinn-server" }
-futures-util = "0.3.30"
+futures = "0.3.30"
 genawaiter = { version = "0.99.1", features = ["futures03"] }
 hf-hub = { version = "0.3.2", features = ["tokio"] }
 image = "0.24.7"

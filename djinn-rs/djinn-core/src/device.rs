@@ -10,6 +10,7 @@ pub enum Device {
     Metal,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for Device {
     fn default() -> Self {
         cfg_if::cfg_if! {
