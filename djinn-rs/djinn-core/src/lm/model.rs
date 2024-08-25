@@ -51,6 +51,17 @@ pub enum Model {
     },
 }
 
+impl Model {
+    /// Get the End of Sequence token for a given model
+    pub fn eos_token(&self) -> &'static str {
+        match self {
+            Model::Mistral { .. } => "</s>",
+            Model::QMistral { .. } => "</s>",
+            Model::Starcoder { .. } => "<|endoftext|>",
+        }
+    }
+}
+
 // impl Lm for Mistral {
 //     // type Config = candle_transformers::models::mistral::Config;
 //     type Weights = Mistral;
@@ -82,7 +93,7 @@ impl ModelArchitecture {
             ModelArchitecture::Mistral => "milstralai/Mistral-7B-v0.1",
             ModelArchitecture::QMistral => "lmz/candle-mistral",
             ModelArchitecture::DistilBert => "distilbert/distilbert-base-cased-distilled-squad",
-            ModelArchitecture::Starcoder => "bigcode/starcoder2-15b",
+            ModelArchitecture::Starcoder => "bigcode/starcoder2-3b",
         }
         .to_string()
     }
@@ -138,7 +149,8 @@ impl ModelArchitecture {
                 let dtype = if device.is_cuda() {
                     DType::BF16
                 } else {
-                    DType::F32
+                    // DType::F32
+                    DType::F16
                 };
                 let vb = unsafe { VarBuilder::from_mmaped_safetensors(files, dtype, device)? };
                 let weights = Starcoder::new(&config, vb)?;
@@ -240,9 +252,11 @@ impl ModelContext {
                     yield Ok(t);
                 }
             }
+
             let eos_token = self
                 .tokenizer
-                .get_token("</s>")
+                .get_token(self.model.eos_token())
+                // startcoder -> "<|endoftext|>"
                 .ok_or(anyhow!("no EOS token found"))?;
 
             let mut generated_tokens = 0usize;
