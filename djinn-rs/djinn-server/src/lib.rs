@@ -6,8 +6,8 @@ use tracing::instrument;
 
 use crate::server::{Context, HttpServerBuilder};
 
+mod complete;
 mod error;
-mod handlers;
 mod server;
 
 pub use error::{Error, Result};

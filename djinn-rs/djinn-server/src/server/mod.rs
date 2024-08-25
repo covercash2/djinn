@@ -18,7 +18,7 @@ use tower::ServiceExt;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{instrument, Instrument, Level, Span};
 
-use crate::handlers::ROUTE_COMPLETE;
+use crate::complete::ROUTE_COMPLETE;
 
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(crate::error::Error))]
@@ -69,7 +69,7 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
         )
         .route(
             &ServiceRoutes::Complete.to_string(),
-            post(crate::handlers::complete),
+            post(crate::complete::complete),
         )
         .fallback_service(
             ServeDir::new("./djinn-server/assets")
