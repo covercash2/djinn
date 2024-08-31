@@ -1,0 +1,19 @@
+meta {
+  name: chat
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:11434/v1/chat/completions
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  { "model": "llama2", "messages": [ { "role": "system", "content": "You are a helpful assistant." }, { "role": "user", "content": "Hello!" } ] }
+}

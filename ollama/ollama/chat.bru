@@ -5,7 +5,20 @@ meta {
 }
 
 post {
-  url: http://localhost:11434/api/chat
-  body: none
+  url: {{baseUrl}}/api/chat
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "model": "llama3.1",
+    "messages": [
+      {
+        "role": "user",
+        "content": "why is the sky blue?"
+      }
+    ],
+    "stream": false
+  }
 }
