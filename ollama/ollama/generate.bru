@@ -5,7 +5,14 @@ meta {
 }
 
 post {
-  url: http://localhost:11434/api/generate
-  body: none
+  url: {{baseUrl}}/api/generate
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "model": "llama3.1",
+    "prompt":"Why is the sky blue?"
+  }
 }
