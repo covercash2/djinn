@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use input_context::{InputContext, InputMode};
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{Constraint, Layout, Position},
@@ -11,24 +12,12 @@ use ratatui::{
 
 use crate::ollama;
 
+mod input_context;
+
 pub struct AppContext {
     client: ollama::Client,
     input_context: InputContext,
     messages: Vec<Arc<str>>,
-}
-
-#[derive(Default)]
-pub struct InputContext {
-    input: String,
-    cursor_position: usize,
-    mode: InputMode,
-}
-
-#[derive(Default)]
-enum InputMode {
-    #[default]
-    Normal,
-    Edit,
 }
 
 impl AppContext {
@@ -110,82 +99,22 @@ impl AppContext {
             terminal.draw(|frame| self.draw(frame))?;
 
             if let Event::Key(key) = event::read()? {
-                match self.input_context.mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('i') => {
-                            self.input_context.mode = InputMode::Edit;
-                        }
-                        KeyCode::Char('q') => return Ok(()),
-                        _ => {}
-                    },
-                    InputMode::Edit if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => self.submit_message(),
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Esc => self.input_context.mode = InputMode::Normal,
-                        _ => {}
-                    },
-                    _ => {}
+                if let Some(app_event) = self.input_context.handle_key_event(key) {
+                    match app_event {
+                        AppEvent::Submit(message) => self.submit_message(message),
+                        AppEvent::Quit => return Ok(()),
+                    }
                 }
             }
         }
     }
 
-    fn submit_message(&mut self) {
-        self.messages.push(self.input_context.input.clone().into());
-        self.input_context.input.clear();
-        self.reset_cursor();
+    fn submit_message(&mut self, message: Arc<str>) {
+        self.messages.push(message);
     }
+}
 
-    fn reset_cursor(&mut self) {
-        self.input_context.cursor_position = 0;
-    }
-
-    fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input_context.input.chars().count())
-    }
-
-    fn move_cursor_left(&mut self) {
-        let cursor_moved_left = self.input_context.cursor_position.saturating_sub(1);
-        self.input_context.cursor_position = self.clamp_cursor(cursor_moved_left);
-    }
-
-    fn move_cursor_right(&mut self) {
-        let cursor_moved_right = self.input_context.cursor_position.saturating_add(1);
-        self.input_context.cursor_position = self.clamp_cursor(cursor_moved_right);
-    }
-
-    fn byte_index(&self) -> usize {
-        self.input_context
-            .input
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(self.input_context.cursor_position)
-            .unwrap_or(self.input_context.input.len())
-    }
-
-    fn enter_char(&mut self, new_char: char) {
-        let index = self.byte_index();
-        self.input_context.input.insert(index, new_char);
-        self.move_cursor_right();
-    }
-
-    fn delete_char(&mut self) {
-        let is_not_cursor_leftmost = self.input_context.cursor_position != 0;
-
-        if is_not_cursor_leftmost {
-            let current_index = self.input_context.cursor_position;
-            let from_left_to_current_index = current_index - 1;
-
-            let before_char_to_delete = self
-                .input_context
-                .input
-                .chars()
-                .take(from_left_to_current_index);
-            let after_char_to_delete = self.input_context.input.chars().skip(current_index);
-
-            self.input_context.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.move_cursor_left();
-        }
-    }
+pub enum AppEvent {
+    Submit(Arc<str>),
+    Quit,
 }
