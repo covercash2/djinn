@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use ollama_rs::Ollama;
 use url::Url;
 
+pub mod embeddings;
 pub mod generate;
 
 pub const DEFAULT_MODEL: &str = "mistral-nemo";
