@@ -1,9 +1,12 @@
 use clap::{Parser, Subcommand};
+use ollama::ModelHost;
 
 mod ollama;
 
 #[derive(Parser)]
 pub struct Cli {
+    #[arg(default_value_t)]
+    address: ModelHost,
     #[command(subcommand)]
     command: Command,
 }
@@ -17,7 +20,7 @@ enum Command {
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let client = ollama::Client::new("http://hoss:11434".parse()?).await?;
+    let client = ollama::Client::new(args.address.url()).await?;
 
     match args.command {
         Command::Generate(request) => {

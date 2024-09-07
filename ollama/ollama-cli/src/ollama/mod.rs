@@ -7,6 +7,7 @@ use url::Url;
 pub mod generate;
 
 pub const DEFAULT_MODEL: &str = "mistral-nemo";
+pub const DEFAULT_DOMAIN: &str = "hoss";
 pub const DEFAULT_PORT: u16 = 11434;
 
 pub struct Client {
@@ -14,7 +15,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(address: Url) -> anyhow::Result<Self> {
+    pub async fn new(address: &Url) -> anyhow::Result<Self> {
         let (host, port) = match address.origin() {
             url::Origin::Opaque(origin) => Err(anyhow!("can't parse URL: {origin:?}"))?,
             url::Origin::Tuple(scheme, domain, port) => (format!("{scheme}://{domain}"), port),
@@ -29,7 +30,7 @@ impl Client {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModelName(pub Arc<str>);
 
 impl Default for ModelName {
@@ -49,5 +50,37 @@ impl FromStr for ModelName {
 impl Display for ModelName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.as_ref())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ModelHost(Url);
+
+impl ModelHost {
+    pub fn url(&self) -> &Url {
+        &self.0
+    }
+}
+
+impl Default for ModelHost {
+    fn default() -> Self {
+        let url: Url = format!("http://{DEFAULT_DOMAIN}:{DEFAULT_PORT}")
+            .parse()
+            .expect("should be able to parse default URL");
+        ModelHost(url)
+    }
+}
+
+impl FromStr for ModelHost {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(ModelHost(s.parse()?))
+    }
+}
+
+impl Display for ModelHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.as_str())
     }
 }
