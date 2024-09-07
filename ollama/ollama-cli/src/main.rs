@@ -14,6 +14,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 enum Command {
     Generate(ollama::generate::Request),
+    Embed(ollama::generate::Request),
 }
 
 #[tokio::main]
@@ -25,6 +26,10 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Command::Generate(request) => {
             client.generate(request).await?;
+        }
+        Command::Embed(request) => {
+            let embedding = client.embed(request).await?;
+            println!("{embedding:?}");
         }
     }
 
