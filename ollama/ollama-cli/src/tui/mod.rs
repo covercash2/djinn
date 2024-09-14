@@ -12,7 +12,13 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 
-use crate::ollama;
+use crate::{
+    lm::Prompt,
+    ollama::{
+        self,
+        chat::{ChatRequest, Message},
+    },
+};
 
 mod input_context;
 mod model_context;
@@ -21,7 +27,7 @@ pub struct AppContext {
     input_context: InputContext,
     model_context: ModelContext,
     stream: String,
-    messages: VecDeque<Arc<str>>,
+    messages: VecDeque<Message>,
 }
 
 impl AppContext {
@@ -87,7 +93,11 @@ impl AppContext {
         }
 
         let messages: Vec<ListItem> = std::iter::once(self.stream.clone().into())
-            .chain(self.messages.iter().map(Clone::clone))
+            .chain(self.messages.iter().map(|message| match message {
+                Message::User(message) => message.clone(),
+                Message::System(message) => message.clone(),
+                Message::Assistant(message) => message.clone(),
+            }))
             .enumerate()
             .map(|(i, m)| {
                 let content = Line::from(Span::raw(format!("{i}: {m}")));
@@ -116,15 +126,19 @@ impl AppContext {
                 Some(response) = self.model_context.response_receiver.recv() => {
                     match response {
                         crate::lm::Response::Eos => {
-                            self.messages.push_front(self.stream.clone().into());
+                            let message = Message::Assistant(self.stream.clone().into());
+                            self.messages.push_front(message);
                             self.stream.clear();
                         }
                         crate::lm::Response::Error(error_str) => {
                             if !self.stream.is_empty() {
-                                self.messages.push_front(self.stream.clone().into());
+                                let message = Message::Assistant(self.stream.clone().into());
+                                self.messages.push_front(message);
                                 self.stream.clear();
                             }
-                            self.messages.push_front(error_str);
+                            // TODO: make an error state
+                            let message = Message::User(error_str);
+                            self.messages.push_front(message);
                         }
                         crate::lm::Response::Token(str) => {
                             self.stream.push_str(str.as_ref());
@@ -135,10 +149,15 @@ impl AppContext {
         }
     }
 
-    async fn submit_message(&mut self, message: Arc<str>) {
+    async fn submit_message(&mut self, prompt: Arc<str>) {
+        let chat = Prompt::Chat(ChatRequest {
+            prompt,
+            model: Default::default(),
+            history: self.messages.clone().into(),
+        });
         self.model_context
             .prompt_sender
-            .send(message)
+            .send(chat)
             .await
             .expect("unable to send message")
     }

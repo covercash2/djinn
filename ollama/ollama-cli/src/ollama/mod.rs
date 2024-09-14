@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use ollama_rs::Ollama;
 use url::Url;
 
+pub mod chat;
 pub mod embeddings;
 pub mod generate;
 
