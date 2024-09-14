@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand};
 use ollama::ModelHost;
 use tui::AppContext;
 
+mod error;
+mod lm;
 mod ollama;
 mod tui;
 
@@ -37,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     match args.mode {
         Mode::OneShot { command } => match command {
             Command::Generate(request) => {
-                client.generate(request).await?;
+                client.generate_stdout(request).await?;
             }
             Command::Embed(request) => {
                 let embedding = client.embed(request).await?;
@@ -48,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             color_eyre::install().expect("unable to install color_eyre");
             let app_context = AppContext::new(client);
             let terminal = ratatui::init();
-            app_context.run(terminal)?;
+            app_context.run(terminal).await?;
             ratatui::restore();
         }
     }
