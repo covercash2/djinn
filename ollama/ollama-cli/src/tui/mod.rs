@@ -1,8 +1,10 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
+use futures::StreamExt as _;
 use input_context::{InputContext, InputMode};
+use model_context::ModelContext;
 use ratatui::{
-    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    crossterm::event::Event,
     layout::{Constraint, Layout, Position},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
@@ -13,19 +15,22 @@ use ratatui::{
 use crate::ollama;
 
 mod input_context;
+mod model_context;
 
 pub struct AppContext {
-    client: ollama::Client,
     input_context: InputContext,
-    messages: Vec<Arc<str>>,
+    model_context: ModelContext,
+    stream: String,
+    messages: VecDeque<Arc<str>>,
 }
 
 impl AppContext {
     pub fn new(client: ollama::Client) -> Self {
         Self {
-            client,
-            messages: Vec::new(),
+            messages: Default::default(),
             input_context: Default::default(),
+            stream: Default::default(),
+            model_context: ModelContext::spawn(client),
         }
     }
 
@@ -81,9 +86,8 @@ impl AppContext {
             )),
         }
 
-        let messages: Vec<ListItem> = self
-            .messages
-            .iter()
+        let messages: Vec<ListItem> = std::iter::once(self.stream.clone().into())
+            .chain(self.messages.iter().map(Clone::clone))
             .enumerate()
             .map(|(i, m)| {
                 let content = Line::from(Span::raw(format!("{i}: {m}")));
@@ -94,23 +98,49 @@ impl AppContext {
         frame.render_widget(messages, messages_area);
     }
 
-    pub fn run(mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
+    pub async fn run(mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
+        let period = Duration::from_secs_f32(1.0 / 15.0);
+        let mut interval = tokio::time::interval(period);
+        let mut events = ratatui::crossterm::event::EventStream::new();
         loop {
-            terminal.draw(|frame| self.draw(frame))?;
-
-            if let Event::Key(key) = event::read()? {
-                if let Some(app_event) = self.input_context.handle_key_event(key) {
-                    match app_event {
-                        AppEvent::Submit(message) => self.submit_message(message),
-                        AppEvent::Quit => return Ok(()),
+            tokio::select! {
+                _ = interval.tick() => { terminal.draw(|frame| self.draw(frame))?; },
+                Some(Ok(Event::Key(key))) = events.next() => {
+                    if let Some(app_event) = self.input_context.handle_key_event(key) {
+                        match app_event {
+                            AppEvent::Submit(message) => self.submit_message(message).await,
+                            AppEvent::Quit => return Ok(()),
+                        }
+                    }
+                },
+                Some(response) = self.model_context.response_receiver.recv() => {
+                    match response {
+                        crate::lm::Response::Eos => {
+                            self.messages.push_front(self.stream.clone().into());
+                            self.stream.clear();
+                        }
+                        crate::lm::Response::Error(error_str) => {
+                            if !self.stream.is_empty() {
+                                self.messages.push_front(self.stream.clone().into());
+                                self.stream.clear();
+                            }
+                            self.messages.push_front(error_str);
+                        }
+                        crate::lm::Response::Token(str) => {
+                            self.stream.push_str(str.as_ref());
+                        }
                     }
                 }
             }
         }
     }
 
-    fn submit_message(&mut self, message: Arc<str>) {
-        self.messages.push(message);
+    async fn submit_message(&mut self, message: Arc<str>) {
+        self.model_context
+            .prompt_sender
+            .send(message)
+            .await
+            .expect("unable to send message")
     }
 }
 

@@ -4,7 +4,7 @@ use super::{generate::Request, Client};
 
 impl From<Request> for GenerateEmbeddingsRequest {
     fn from(value: Request) -> Self {
-        GenerateEmbeddingsRequest::new(value.model.to_string(), value.prompt.into())
+        GenerateEmbeddingsRequest::new(value.model.to_string(), value.prompt.to_string().into())
     }
 }
 
