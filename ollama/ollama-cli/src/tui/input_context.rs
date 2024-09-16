@@ -22,7 +22,7 @@ impl InputContext {
     pub fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppEvent> {
         match self.mode {
             InputMode::Normal => match key.code {
-                KeyCode::Char('i') => {
+                KeyCode::Char('i') | KeyCode::Char('a') => {
                     self.mode = InputMode::Edit;
                 }
                 KeyCode::Char('q') => return Some(AppEvent::Quit),

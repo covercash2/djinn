@@ -1,19 +1,20 @@
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
+use extend::ext;
 use futures::StreamExt as _;
 use input_context::{InputContext, InputMode};
 use model_context::ModelContext;
 use ratatui::{
     crossterm::event::Event,
-    layout::{Constraint, Layout, Position},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span, Text},
+    text::{Line, Text},
     widgets::{Block, List, ListItem, Paragraph},
     DefaultTerminal, Frame,
 };
 
 use crate::{
-    lm::Prompt,
+    lm::{Prompt, Response},
     ollama::{
         self,
         chat::{ChatRequest, Message},
@@ -26,17 +27,15 @@ mod model_context;
 pub struct AppContext {
     input_context: InputContext,
     model_context: ModelContext,
-    stream: String,
-    messages: VecDeque<Message>,
+    messages_view_model: MessagesViewModel,
 }
 
 impl AppContext {
     pub fn new(client: ollama::Client) -> Self {
         Self {
-            messages: Default::default(),
             input_context: Default::default(),
-            stream: Default::default(),
             model_context: ModelContext::spawn(client),
+            messages_view_model: Default::default(),
         }
     }
 
@@ -92,20 +91,7 @@ impl AppContext {
             )),
         }
 
-        let messages: Vec<ListItem> = std::iter::once(self.stream.clone().into())
-            .chain(self.messages.iter().map(|message| match message {
-                Message::User(message) => message.clone(),
-                Message::System(message) => message.clone(),
-                Message::Assistant(message) => message.clone(),
-            }))
-            .enumerate()
-            .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{i}: {m}")));
-                ListItem::new(content)
-            })
-            .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
-        frame.render_widget(messages, messages_area);
+        frame.message_view(messages_area, &self.messages_view_model);
     }
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
@@ -124,36 +110,20 @@ impl AppContext {
                     }
                 },
                 Some(response) = self.model_context.response_receiver.recv() => {
-                    match response {
-                        crate::lm::Response::Eos => {
-                            let message = Message::Assistant(self.stream.clone().into());
-                            self.messages.push_front(message);
-                            self.stream.clear();
-                        }
-                        crate::lm::Response::Error(error_str) => {
-                            if !self.stream.is_empty() {
-                                let message = Message::Assistant(self.stream.clone().into());
-                                self.messages.push_front(message);
-                                self.stream.clear();
-                            }
-                            // TODO: make an error state
-                            let message = Message::User(error_str);
-                            self.messages.push_front(message);
-                        }
-                        crate::lm::Response::Token(str) => {
-                            self.stream.push_str(str.as_ref());
-                        }
-                    }
+                    self.messages_view_model.handle_response(response);
                 }
             }
         }
     }
 
     async fn submit_message(&mut self, prompt: Arc<str>) {
+        self.messages_view_model
+            .push_message(Message::User(prompt.clone()));
+
         let chat = Prompt::Chat(ChatRequest {
             prompt,
             model: Default::default(),
-            history: self.messages.clone().into(),
+            history: self.messages_view_model.history(),
         });
         self.model_context
             .prompt_sender
@@ -166,4 +136,84 @@ impl AppContext {
 pub enum AppEvent {
     Submit(Arc<str>),
     Quit,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct MessagesViewModel {
+    /// Streaming response from the model before it's finished.
+    model_stream: String,
+    /// A list of [`Message`]s that constitute the history
+    /// of the conversation.
+    messages: VecDeque<Message>,
+}
+
+impl MessagesViewModel {
+    /// Get a list of text lines that are wrapped
+    /// around the given `view_width`.
+    fn get_message_list(&self) -> Vec<String> {
+        std::iter::once(self.model_stream.clone())
+            .chain(self.messages.iter().map(|message| message.to_string()))
+            .collect()
+    }
+
+    fn handle_response(&mut self, response: Response) {
+        match response {
+            Response::Eos => {
+                let message = Message::Assistant(self.model_stream.clone().into());
+                self.push_message(message);
+                self.clear_stream();
+            }
+            Response::Error(error_str) => {
+                if !self.is_stream_empty() {
+                    let message = Message::Assistant(self.model_stream.clone().into());
+                    self.push_message(message);
+                    self.clear_stream();
+                }
+                // TODO: make an error state
+                let message = Message::User(error_str);
+                self.push_message(message);
+            }
+            Response::Token(str) => {
+                self.model_stream.push_str(str.as_ref());
+            }
+        }
+    }
+
+    fn push_message(&mut self, message: Message) {
+        self.messages.push_front(message);
+    }
+
+    fn history(&self) -> Vec<Message> {
+        self.messages.clone().into()
+    }
+
+    fn is_stream_empty(&self) -> bool {
+        self.model_stream.is_empty()
+    }
+
+    fn clear_stream(&mut self) {
+        self.model_stream.clear();
+    }
+}
+
+#[ext]
+pub impl<'a> Frame<'a> {
+    fn message_view(&mut self, parent: Rect, view_model: &MessagesViewModel) {
+        let max_message_width = parent.width - 2;
+        let wrap = textwrap::Options::new(max_message_width.into());
+
+        let messages = view_model.get_message_list();
+
+        let messages: Vec<ListItem> = messages
+            .iter()
+            .flat_map(|message| {
+                textwrap::wrap(message, wrap.clone())
+                    .into_iter()
+                    .map(|line| ListItem::from(Text::from(line)))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let messages = List::new(messages).block(Block::bordered().title("Messages"));
+        self.render_widget(messages, parent);
+    }
 }

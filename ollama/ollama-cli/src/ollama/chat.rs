@@ -13,10 +13,13 @@ pub struct ChatRequest {
     pub history: Vec<Message>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, strum::Display)]
 pub enum Message {
+    #[strum(serialize = "assistant: {0}")]
     Assistant(Arc<str>),
+    #[strum(serialize = "user: {0}")]
     User(Arc<str>),
+    #[strum(serialize = "system: {0}")]
     System(Arc<str>),
 }
 
