@@ -1,31 +1,33 @@
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use extend::ext;
 use futures::StreamExt as _;
-use input_context::{InputContext, InputMode};
+use input::{InputMode, InputViewModel};
+use messages::MessagesViewModel;
 use model_context::ModelContext;
 use ratatui::{
     crossterm::event::Event,
-    layout::{Constraint, Layout, Position, Rect},
+    layout::{Constraint, Layout, Position},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, List, ListItem, Paragraph},
+    widgets::{Block, Paragraph},
     DefaultTerminal, Frame,
 };
 
 use crate::{
-    lm::{Prompt, Response},
+    lm::Prompt,
     ollama::{
         self,
         chat::{ChatRequest, Message},
     },
+    tui::messages::MessagesView as _,
 };
 
-mod input_context;
+mod input;
+mod messages;
 mod model_context;
 
 pub struct AppContext {
-    input_context: InputContext,
+    input_context: InputViewModel,
     model_context: ModelContext,
     messages_view_model: MessagesViewModel,
 }
@@ -136,84 +138,4 @@ impl AppContext {
 pub enum AppEvent {
     Submit(Arc<str>),
     Quit,
-}
-
-#[derive(Default, Clone, Debug)]
-pub struct MessagesViewModel {
-    /// Streaming response from the model before it's finished.
-    model_stream: String,
-    /// A list of [`Message`]s that constitute the history
-    /// of the conversation.
-    messages: VecDeque<Message>,
-}
-
-impl MessagesViewModel {
-    /// Get a list of text lines that are wrapped
-    /// around the given `view_width`.
-    fn get_message_list(&self) -> Vec<String> {
-        std::iter::once(self.model_stream.clone())
-            .chain(self.messages.iter().map(|message| message.to_string()))
-            .collect()
-    }
-
-    fn handle_response(&mut self, response: Response) {
-        match response {
-            Response::Eos => {
-                let message = Message::Assistant(self.model_stream.clone().into());
-                self.push_message(message);
-                self.clear_stream();
-            }
-            Response::Error(error_str) => {
-                if !self.is_stream_empty() {
-                    let message = Message::Assistant(self.model_stream.clone().into());
-                    self.push_message(message);
-                    self.clear_stream();
-                }
-                // TODO: make an error state
-                let message = Message::User(error_str);
-                self.push_message(message);
-            }
-            Response::Token(str) => {
-                self.model_stream.push_str(str.as_ref());
-            }
-        }
-    }
-
-    fn push_message(&mut self, message: Message) {
-        self.messages.push_front(message);
-    }
-
-    fn history(&self) -> Vec<Message> {
-        self.messages.clone().into()
-    }
-
-    fn is_stream_empty(&self) -> bool {
-        self.model_stream.is_empty()
-    }
-
-    fn clear_stream(&mut self) {
-        self.model_stream.clear();
-    }
-}
-
-#[ext]
-pub impl<'a> Frame<'a> {
-    fn message_view(&mut self, parent: Rect, view_model: &MessagesViewModel) {
-        let max_message_width = parent.width - 2;
-        let wrap = textwrap::Options::new(max_message_width.into());
-
-        let messages = view_model.get_message_list();
-
-        let messages: Vec<ListItem> = messages
-            .iter()
-            .flat_map(|message| {
-                textwrap::wrap(message, wrap.clone())
-                    .into_iter()
-                    .map(|line| ListItem::from(Text::from(line)))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
-        self.render_widget(messages, parent);
-    }
 }
