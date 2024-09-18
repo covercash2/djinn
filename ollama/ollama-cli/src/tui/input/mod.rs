@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+use crossterm::event::KeyModifiers;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 
 use super::AppEvent;
 
 #[derive(Default)]
-pub struct InputContext {
+pub struct InputViewModel {
     pub input: String,
     pub cursor_position: usize,
     pub mode: InputMode,
@@ -18,7 +19,7 @@ pub enum InputMode {
     Edit,
 }
 
-impl InputContext {
+impl InputViewModel {
     pub fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppEvent> {
         match self.mode {
             InputMode::Normal => match key.code {
@@ -30,9 +31,12 @@ impl InputContext {
             },
             InputMode::Edit if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Enter => return Some(self.submit_message()),
-                KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                KeyCode::Backspace => self.delete_char(),
                 KeyCode::Esc => self.mode = InputMode::Normal,
+                KeyCode::Char('\\') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.mode = InputMode::Normal
+                }
+                KeyCode::Backspace => self.delete_char(),
+                KeyCode::Char(to_insert) => self.enter_char(to_insert),
                 _ => {}
             },
             _ => {}
