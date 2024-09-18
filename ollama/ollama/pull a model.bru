@@ -6,6 +6,13 @@ meta {
 
 post {
   url: {{baseUrl}}/api/pull
-  body: none
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "name": "starcoder2",
+    "stream": false
+  }
 }
