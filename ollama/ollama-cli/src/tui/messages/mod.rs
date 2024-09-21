@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque};
 
 use ratatui::{
     layout::Rect,
@@ -8,6 +8,7 @@ use ratatui::{
 };
 
 use crate::{lm::Response, ollama::chat::Message};
+use crate::tui::widgets_ext::RectExt;
 
 #[derive(Default, Clone, Debug)]
 pub struct MessagesViewModel {
@@ -70,15 +71,12 @@ impl MessagesViewModel {
 #[extend::ext(name = MessagesView)]
 pub impl<'a> Frame<'a> {
     fn message_view(&mut self, parent: Rect, view_model: &MessagesViewModel) {
-        let max_message_width = parent.width - 2;
-        let wrap = textwrap::Options::new(max_message_width.into());
-
         let messages = view_model.get_message_list();
 
         let messages: Vec<ListItem> = messages
             .iter()
             .flat_map(|message| {
-                textwrap::wrap(message, wrap.clone())
+                parent.wrap_inside(message)
                     .into_iter()
                     .map(|line| ListItem::from(Text::from(line)))
                     .collect::<Vec<_>>()

@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt as _;
-use input::{InputMode, InputViewModel};
+use input::{InputMode, InputView, InputViewModel};
 use messages::MessagesViewModel;
 use model_context::ModelContext;
 use ratatui::{
@@ -25,6 +25,7 @@ use crate::{
 mod input;
 mod messages;
 mod model_context;
+mod widgets_ext;
 
 pub struct AppContext {
     input_context: InputViewModel,
@@ -34,8 +35,14 @@ pub struct AppContext {
 
 impl AppContext {
     pub fn new(client: ollama::Client) -> Self {
+        let input_context = InputViewModel {
+            input: "hello, my mom is trying to kill me. i'm locked in my bedroom closet, and she's patrolling the house with a kitchen knife talking about how the devil has possessed me and how my sins have condemned me to the depths of hell. she isn't able to open the door to the closet because she is blind and deaf and doesn't know the door is there. but i'm scared, and the police don't know how to get to my house because it's not available on Google Maps.".into(),
+            cursor_position: Default::default(),
+            mode: Default::default(),
+        };
+
         Self {
-            input_context: Default::default(),
+            input_context,
             model_context: ModelContext::spawn(client),
             messages_view_model: Default::default(),
         }
@@ -44,7 +51,7 @@ impl AppContext {
     fn draw(&self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
-            Constraint::Length(3),
+            Constraint::Max(5),
             Constraint::Min(1),
         ]);
 
@@ -77,22 +84,7 @@ impl AppContext {
         let help_message = Paragraph::new(text);
         frame.render_widget(help_message, help_area);
 
-        let input = Paragraph::new(self.input_context.input.as_str())
-            .style(match self.input_context.mode {
-                InputMode::Normal => Style::default(),
-                InputMode::Edit => Style::default().fg(Color::Yellow),
-            })
-            .block(Block::bordered().title("Input"));
-        frame.render_widget(input, input_area);
-
-        match self.input_context.mode {
-            InputMode::Normal => {}
-            InputMode::Edit => frame.set_cursor_position(Position::new(
-                input_area.x + self.input_context.cursor_position as u16 + 1,
-                input_area.y + 1,
-            )),
-        }
-
+        frame.input_view(input_area, &self.input_context);
         frame.message_view(messages_area, &self.messages_view_model);
     }
 
