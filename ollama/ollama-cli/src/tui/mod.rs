@@ -1,15 +1,24 @@
+use std::io::{stdout, Stdout};
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt as _;
 use input::{InputMode, InputView, InputViewModel};
 use messages::MessagesViewModel;
+use modalkit::actions::Action;
+use modalkit::{
+    editing::{application::EmptyInfo, context::EditContext, key::KeyManager, store::Store},
+    env::vim::keybindings::default_vim_keys,
+};
+use modalkit_ratatui::textbox::TextBoxState;
 use model_context::ModelContext;
+use ratatui::prelude::CrosstermBackend;
+use ratatui::Terminal;
 use ratatui::{
     crossterm::event::Event,
-    layout::{Constraint, Layout, Position},
-    style::{Color, Modifier, Style, Stylize},
+    layout::{Constraint, Layout},
+    style::{Modifier, Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, Paragraph},
+    widgets::Paragraph,
     DefaultTerminal, Frame,
 };
 
@@ -21,6 +30,9 @@ use crate::{
     },
     tui::messages::MessagesView as _,
 };
+
+use modalkit::crossterm::terminal::EnterAlternateScreen;
+use modalkit_ratatui::TerminalExtOps;
 
 mod input;
 mod messages;
@@ -35,10 +47,17 @@ pub struct AppContext {
 
 impl AppContext {
     pub fn new(client: ollama::Client) -> Self {
+        let mut store: Store<EmptyInfo> = Store::default();
+        let bindings = KeyManager::new(default_vim_keys::<EmptyInfo>());
+        let text_box_state = TextBoxState::new(store.load_buffer(String::from("")));
+
         let input_context = InputViewModel {
-            input: "hello, my mom is trying to kill me. i'm locked in my bedroom closet, and she's patrolling the house with a kitchen knife talking about how the devil has possessed me and how my sins have condemned me to the depths of hell. she isn't able to open the door to the closet because she is blind and deaf and doesn't know the door is there. but i'm scared, and the police don't know how to get to my house because it's not available on Google Maps.".into(),
+            input: "".into(),
             cursor_position: Default::default(),
             mode: Default::default(),
+            text_box_state,
+            bindings,
+            store,
         };
 
         Self {
@@ -48,7 +67,7 @@ impl AppContext {
         }
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
             Constraint::Max(5),
@@ -84,21 +103,37 @@ impl AppContext {
         let help_message = Paragraph::new(text);
         frame.render_widget(help_message, help_area);
 
-        frame.input_view(input_area, &self.input_context);
+        frame.input_view(input_area, &mut self.input_context);
         frame.message_view(messages_area, &self.messages_view_model);
     }
 
-    pub async fn run(mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
+    pub async fn run(
+        mut self,
+        mut terminal: Terminal<CrosstermBackend<Stdout>>,
+    ) -> anyhow::Result<()> {
+        let mut stdout = stdout();
+
+        crossterm::terminal::enable_raw_mode()?;
+        crossterm::execute!(stdout, EnterAlternateScreen)?;
+
         let period = Duration::from_secs_f32(1.0 / 15.0);
         let mut interval = tokio::time::interval(period);
         let mut events = ratatui::crossterm::event::EventStream::new();
+
+        terminal.clear()?;
+
         loop {
             tokio::select! {
                 _ = interval.tick() => { terminal.draw(|frame| self.draw(frame))?; },
                 Some(Ok(Event::Key(key))) = events.next() => {
-                    if let Some(app_event) = self.input_context.handle_key_event(key) {
+                    if let Some(app_event) = self.input_context.handle_key_event(key)
+                        .expect("should be able to handle key events, i guess. these errors aren't designed very well")
+                    {
                         match app_event {
                             AppEvent::Submit(message) => self.submit_message(message).await,
+                            AppEvent::Suspend => {
+                                terminal.program_suspend().expect("could not suspend program");
+                            },
                             AppEvent::Quit => return Ok(()),
                         }
                     }
@@ -129,5 +164,6 @@ impl AppContext {
 
 pub enum AppEvent {
     Submit(Arc<str>),
+    Suspend,
     Quit,
 }

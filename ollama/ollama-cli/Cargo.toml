@@ -11,6 +11,10 @@ color-eyre = "0.6.3"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 extend = "1.2.0"
 futures = "0.3.30"
+# modalkit = "0.0.20"
+modalkit.path = "/Users/chrash/github/covercash2/modalkit/crates/modalkit/"
+# modalkit-ratatui = "0.0.20"
+modalkit-ratatui.path = "/Users/chrash/github/covercash2/modalkit/crates/modalkit-ratatui/"
 ollama-rs = { version = "0.2.1", features = ["stream"] }
 ratatui = "0.28.1"
 serde = { version = "1.0.210", features = ["derive", "rc"] }
