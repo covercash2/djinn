@@ -13,7 +13,7 @@ use ratatui::{
 use super::{widgets_ext::RectExt, AppEvent};
 
 #[derive(Default)]
-pub struct InputViewModel {
+pub struct TextInputViewModel {
     pub input: String,
     pub cursor_position: usize,
     pub mode: InputMode,
@@ -26,14 +26,20 @@ pub enum InputMode {
     Edit,
 }
 
-impl InputViewModel {
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppEvent> {
+#[derive(Debug, Clone)]
+pub enum TextInputEvent {
+    Submit(Arc<str>),
+    Quit,
+}
+
+impl TextInputViewModel {
+    pub fn handle_key_event(&mut self, key: KeyEvent) -> Option<TextInputEvent> {
         match self.mode {
             InputMode::Normal => match key.code {
                 KeyCode::Char('i') | KeyCode::Char('a') => {
                     self.mode = InputMode::Edit;
                 }
-                KeyCode::Char('q') => return Some(AppEvent::Quit),
+                KeyCode::Char('q') => return Some(TextInputEvent::Quit),
                 KeyCode::Char('l') => self.move_cursor_right(),
                 KeyCode::Char('h') => self.move_cursor_left(),
                 KeyCode::Char('0') => self.move_cursor_to_beginning(),
@@ -58,12 +64,12 @@ impl InputViewModel {
         None
     }
 
-    fn submit_message(&mut self) -> AppEvent {
+    fn submit_message(&mut self) -> TextInputEvent {
         let message: Arc<str> = self.input.clone().into();
         self.input.clear();
         self.reset_cursor();
 
-        AppEvent::Submit(message)
+        TextInputEvent::Submit(message)
     }
 
     fn reset_cursor(&mut self) {
@@ -224,7 +230,6 @@ impl<'a> EditLinesBuilder<'a> {
 
 fn parse_edit_lines(input: &str, cursor_position: usize, parent_view: Rect) -> Vec<EditLine<'_>> {
     let lines = parent_view.wrap_inside(input);
-    let num_lines = lines.len();
     let builder = EditLinesBuilder::new(&lines);
     lines
         .into_iter()
@@ -239,7 +244,7 @@ fn parse_edit_lines(input: &str, cursor_position: usize, parent_view: Rect) -> V
 
             let line = if cursor_position >= previous_consumed && cursor_position < consumed_chars {
                 let cursor_position = cursor_position - previous_consumed;
-                tracing::info!(
+                tracing::debug!(
                     previous_consumed,
                     consumed_chars,
                     line.len = line.len(),
@@ -290,7 +295,7 @@ impl Vec<EditLine<'_>> {
 
 #[extend::ext(name = InputView)]
 pub impl<'a> Frame<'a> {
-    fn input_view(&mut self, parent: Rect, view_model: &InputViewModel) {
+    fn input_view(&mut self, parent: Rect, style: Style, view_model: &TextInputViewModel) {
         let width = parent.width;
         let cursor_position: u16 = view_model
             .cursor_position
@@ -309,8 +314,8 @@ pub impl<'a> Frame<'a> {
         let input = Paragraph::new(lines.render())
             .scroll((y, 0))
             .style(match view_model.mode {
-                InputMode::Normal => Style::default(),
-                InputMode::Edit => Style::default().fg(Color::Yellow),
+                InputMode::Normal => style,
+                InputMode::Edit => style.fg(Color::Yellow),
             })
             .block(
                 Block::bordered().title(format!("cursor position: {}", view_model.cursor_position)),

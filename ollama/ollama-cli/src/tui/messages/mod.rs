@@ -1,14 +1,16 @@
-use std::{collections::VecDeque};
+use std::collections::VecDeque;
 
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
+    style::Style,
     text::Text,
     widgets::{Block, List, ListItem},
     Frame,
 };
 
-use crate::{lm::Response, ollama::chat::Message};
 use crate::tui::widgets_ext::RectExt;
+use crate::{lm::Response, ollama::chat::Message};
 
 #[derive(Default, Clone, Debug)]
 pub struct MessagesViewModel {
@@ -17,6 +19,11 @@ pub struct MessagesViewModel {
     /// A list of [`Message`]s that constitute the history
     /// of the conversation.
     messages: VecDeque<Message>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MessagesEvent {
+    Quit,
 }
 
 impl MessagesViewModel {
@@ -51,6 +58,13 @@ impl MessagesViewModel {
         }
     }
 
+    pub fn handle_key_event(&mut self, key_event: KeyEvent) -> Option<MessagesEvent> {
+        match key_event.code {
+            KeyCode::Char('q') => Some(MessagesEvent::Quit),
+            _ => None,
+        }
+    }
+
     pub fn push_message(&mut self, message: Message) {
         self.messages.push_front(message);
     }
@@ -70,19 +84,22 @@ impl MessagesViewModel {
 
 #[extend::ext(name = MessagesView)]
 pub impl<'a> Frame<'a> {
-    fn message_view(&mut self, parent: Rect, view_model: &MessagesViewModel) {
+    fn message_view(&mut self, parent: Rect, style: Style, view_model: &MessagesViewModel) {
         let messages = view_model.get_message_list();
 
         let messages: Vec<ListItem> = messages
             .iter()
             .flat_map(|message| {
-                parent.wrap_inside(message)
+                parent
+                    .wrap_inside(message)
                     .into_iter()
                     .map(|line| ListItem::from(Text::from(line)))
                     .collect::<Vec<_>>()
             })
             .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
+        let messages = List::new(messages)
+            .block(Block::bordered().title("Messages"))
+            .style(style);
         self.render_widget(messages, parent);
     }
 }
