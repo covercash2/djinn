@@ -1,5 +1,8 @@
+use std::{fs::File, path::PathBuf};
+
 use clap::{Parser, Subcommand};
 use ollama::ModelHost;
+use tracing_subscriber::layer::SubscriberExt;
 use tui::AppContext;
 
 mod error;
@@ -30,8 +33,16 @@ enum Command {
     Embed(ollama::generate::Request),
 }
 
+fn setup_tracing() {
+    tracing_subscriber::fmt()
+        .json()
+        .with_writer(File::create("logs.log").unwrap())
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    setup_tracing();
     let args = Cli::parse();
 
     let client = ollama::Client::new(args.address.url()).await?;
@@ -43,11 +54,12 @@ async fn main() -> anyhow::Result<()> {
             }
             Command::Embed(request) => {
                 let embedding = client.embed(request).await?;
-                println!("{embedding:?}");
+                tracing::info!("{embedding:?}");
             }
         },
         Mode::Tui => {
             color_eyre::install().expect("unable to install color_eyre");
+            tracing::info!("starting TUI");
             let app_context = AppContext::new(client);
             let terminal = ratatui::init();
             app_context.run(terminal).await?;
