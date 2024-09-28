@@ -1,12 +1,12 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use crossterm::event::KeyModifiers;
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
     layout::Rect,
-    style::{Color, Modifier, Style, Stylize as _},
-    text::{Line, Span, Text},
-    widgets::{Block, Paragraph, Wrap},
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Block, Paragraph},
     Frame,
 };
 
@@ -38,6 +38,8 @@ impl InputViewModel {
                 KeyCode::Char('h') => self.move_cursor_left(),
                 KeyCode::Char('0') => self.move_cursor_to_beginning(),
                 KeyCode::Char('$') => self.move_cursor_to_end(),
+                KeyCode::Char('w') => self.move_cursor_word(),
+                KeyCode::Char('b') => self.move_cursor_back(),
                 _ => {}
             },
             InputMode::Edit if key.kind == KeyEventKind::Press => match key.code {
@@ -82,6 +84,14 @@ impl InputViewModel {
         self.cursor_position = self.clamp_cursor(cursor_moved_right);
     }
 
+    fn move_cursor_word(&mut self) {
+        self.move_cursor_to(move_cursor_word(&self.input, self.cursor_position));
+    }
+
+    fn move_cursor_back(&mut self) {
+        self.move_cursor_to(move_cursor_back(&self.input, self.cursor_position))
+    }
+
     fn move_cursor_to(&mut self, new_position: usize) {
         self.cursor_position = self.clamp_cursor(new_position);
     }
@@ -124,37 +134,157 @@ impl InputViewModel {
     }
 }
 
-#[derive(Debug, PartialEq)]
+fn move_cursor_word(input: &str, cursor_position: usize) -> usize {
+    let (before, after) = input.split_at(cursor_position);
+    after
+        .find(' ')
+        .map(|space_pos| before.len() + space_pos + 1)
+        .unwrap_or(input.len())
+}
+
+fn move_cursor_back(input: &str, cursor_position: usize) -> usize {
+    let (before, _after) = input.split_at(cursor_position);
+    before
+        .rfind(' ')
+        .map(|space_pos| space_pos - 1)
+        .unwrap_or(0)
+}
+
+#[derive(Debug, PartialEq, Clone)]
 struct CursorLine<'a> {
     cursor_char: char,
-    left: &'a str,
-    right: &'a str,
+    left: Cow<'a, str>,
+    right: Cow<'a, str>,
 }
 
 #[extend::ext]
-impl str {
+impl<T: AsRef<str>> T {
+    /// Single out the cursor in a line of text.
+    /// This function is meant to locate the cursor
+    /// and the character under it
+    /// for highlighting.
     fn single_out(&self, cursor_position: usize) -> CursorLine<'_> {
-        if let Some((left, right)) = self.split_at_checked(cursor_position) {
+        if let Some((left, right)) = self.as_ref().split_at_checked(cursor_position) {
             if let Some((cursor, right)) = right.split_at_checked(1) {
                 CursorLine {
                     cursor_char: cursor.chars().nth(0).unwrap_or(' '),
-                    left,
-                    right,
+                    left: left.into(),
+                    right: right.into(),
                 }
             } else {
                 CursorLine {
                     cursor_char: right.chars().nth(0).unwrap_or(' '),
-                    left,
-                    right: "",
+                    left: left.into(),
+                    right: "".into(),
                 }
             }
         } else {
             CursorLine {
                 cursor_char: ' ',
-                left: "",
-                right: "",
+                left: "".into(),
+                right: "".into(),
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum EditLine<'a> {
+    Normal(Cow<'a, str>),
+    WithCursor {
+        string: Cow<'a, str>,
+        cursor_position: usize,
+    },
+}
+
+impl<'a> From<Cow<'a, str>> for EditLine<'a> {
+    fn from(value: Cow<'a, str>) -> Self {
+        EditLine::Normal(value)
+    }
+}
+
+#[derive(Debug)]
+struct EditLinesBuilder<'a> {
+    consumed_chars: usize,
+    lines: Vec<EditLine<'a>>,
+}
+
+impl<'a> EditLinesBuilder<'a> {
+    fn new<TLine: AsRef<str>>(lines: &[TLine]) -> Self {
+        EditLinesBuilder {
+            consumed_chars: 0,
+            lines: Vec::with_capacity(lines.len()),
+        }
+    }
+
+    fn build(self) -> Vec<EditLine<'a>> {
+        self.lines
+    }
+}
+
+fn parse_edit_lines(input: &str, cursor_position: usize, parent_view: Rect) -> Vec<EditLine<'_>> {
+    let lines = parent_view.wrap_inside(input);
+    let num_lines = lines.len();
+    let builder = EditLinesBuilder::new(&lines);
+    lines
+        .into_iter()
+        .fold(builder, |acc, line| {
+            let EditLinesBuilder {
+                consumed_chars,
+                lines: mut lines_builder,
+            } = acc;
+
+            let previous_consumed = consumed_chars;
+            let consumed_chars = consumed_chars + line.len() + 1;
+
+            let line = if cursor_position >= previous_consumed && cursor_position < consumed_chars {
+                let cursor_position = cursor_position - previous_consumed;
+                tracing::info!(
+                    previous_consumed,
+                    consumed_chars,
+                    line.len = line.len(),
+                    cursor_position,
+                    input.len = input.len(),
+                );
+                EditLine::WithCursor {
+                    string: line,
+                    cursor_position,
+                }
+            } else {
+                EditLine::Normal(line)
+            };
+
+            lines_builder.push(line);
+
+            EditLinesBuilder {
+                consumed_chars,
+                lines: lines_builder,
+            }
+        })
+        .build()
+}
+
+#[extend::ext]
+impl Vec<EditLine<'_>> {
+    fn render(&self) -> Vec<Line> {
+        let style = Style::default().bg(Color::White).fg(Color::Black);
+
+        self.iter()
+            .map(|line| match line {
+                EditLine::Normal(line) => Line::from(line.to_string()),
+                EditLine::WithCursor {
+                    string,
+                    cursor_position,
+                } => {
+                    let cursor_line = string.single_out(*cursor_position);
+                    Line::from(vec![
+                        Span::from(cursor_line.left.to_string()),
+                        Span::from(cursor_line.cursor_char.to_string()).style(style),
+                        Span::from(cursor_line.right.to_string()),
+                    ])
+                }
+            })
+            .collect()
     }
 }
 
@@ -167,37 +297,24 @@ pub impl<'a> Frame<'a> {
             .try_into()
             .inspect_err(|err| tracing::warn!(%err, "unable to convert cursor position to u16"))
             .unwrap_or(0);
-        let x = cursor_position % width;
+
         let y = cursor_position / width;
 
-        let style = Style::default().bg(Color::White).fg(Color::Black);
+        let lines = parse_edit_lines(
+            view_model.input.as_str(),
+            view_model.cursor_position,
+            parent,
+        );
 
-        let text_lines = parent
-            .wrap_inside(&view_model.input)
-            .into_iter()
-            .enumerate()
-            .map(|(i, line)| {
-                if i == (y as usize) {
-                    let cursor_line = line.single_out((x as usize).clamp(0, line.len()));
-                    Line::from(vec![
-                        Span::from(cursor_line.left.to_string()),
-                        Span::from(cursor_line.cursor_char.to_string()).style(style),
-                        Span::from(cursor_line.right.to_string()),
-                    ])
-                } else {
-                    Line::from(line.to_string())
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let input = Paragraph::new(text_lines)
-            .scroll((0, y))
-            .wrap(Wrap { trim: false })
+        let input = Paragraph::new(lines.render())
+            .scroll((y, 0))
             .style(match view_model.mode {
                 InputMode::Normal => Style::default(),
                 InputMode::Edit => Style::default().fg(Color::Yellow),
             })
-            .block(Block::bordered().title("Input"));
+            .block(
+                Block::bordered().title(format!("cursor position: {}", view_model.cursor_position)),
+            );
 
         self.render_widget(input, parent);
     }
@@ -214,8 +331,8 @@ mod tests {
 
         let expected = CursorLine {
             cursor_char: 't',
-            left: "let ",
-            right: "here be light!",
+            left: "let ".into(),
+            right: "here be light!".into(),
         };
 
         let result = line.single_out(cursor_position);
@@ -230,8 +347,8 @@ mod tests {
 
         let expected = CursorLine {
             cursor_char: ' ',
-            left: "",
-            right: "",
+            left: "".into(),
+            right: "".into(),
         };
 
         let result = line.single_out(cursor_position);
@@ -246,11 +363,31 @@ mod tests {
 
         let expected = CursorLine {
             cursor_char: ' ',
-            left: line,
-            right: "",
+            left: line.into(),
+            right: "".into(),
         };
 
         let result = line.single_out(cursor_position);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_move_word() {
+        let line = "hello, world! i am here.";
+        let cursor_position = 0;
+
+        let expected = 7;
+
+        let result = move_cursor_word(line, cursor_position);
+
+        assert_eq!(result, expected);
+
+        let cursor_position = expected;
+
+        let expected = 14;
+
+        let result = move_cursor_word(line, cursor_position);
 
         assert_eq!(result, expected);
     }
