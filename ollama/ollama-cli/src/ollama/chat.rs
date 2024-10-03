@@ -23,6 +23,22 @@ pub enum Message {
     System(Arc<str>),
 }
 
+impl Message {
+    pub fn role(&self) -> &'static str {
+        match self {
+            Message::Assistant(_) => "assistant",
+            Message::User(_) => "user",
+            Message::System(_) => "system",
+        }
+    }
+
+    pub fn content(&self) -> Arc<str> {
+        match self {
+            Message::Assistant(arc) | Message::User(arc) | Message::System(arc) => arc.clone(),
+        }
+    }
+}
+
 impl From<ChatRequest> for ChatMessageRequest {
     fn from(value: ChatRequest) -> Self {
         let ChatRequest {

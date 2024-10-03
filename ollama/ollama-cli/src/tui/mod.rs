@@ -32,22 +32,22 @@ pub struct AppContext {
     input_context: TextInputViewModel,
     model_context: ModelContext,
     messages_view_model: MessagesViewModel,
-    active_view: Option<View>,
-    focused_view: View,
+    active_view: Option<ChatPanes>,
+    focused_view: ChatPanes,
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
-pub enum View {
+pub enum ChatPanes {
     #[default]
     Input,
     Messages,
 }
 
-impl View {
-    fn next(self) -> View {
+impl ChatPanes {
+    fn next(self) -> ChatPanes {
         match self {
-            View::Input => View::Messages,
-            View::Messages => View::Input,
+            ChatPanes::Input => ChatPanes::Messages,
+            ChatPanes::Messages => ChatPanes::Input,
         }
     }
 }
@@ -74,7 +74,7 @@ impl AppContext {
         }
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
             Constraint::Max(5),
@@ -110,8 +110,8 @@ impl AppContext {
         let help_message = Paragraph::new(text);
         frame.render_widget(help_message, help_area);
 
-        let input_style = if self.focused_view == View::Input {
-            if let Some(View::Input) = self.active_view {
+        let input_style = if self.focused_view == ChatPanes::Input {
+            if let Some(ChatPanes::Input) = self.active_view {
                 Style::active()
             } else {
                 Style::focused()
@@ -121,8 +121,8 @@ impl AppContext {
         };
         frame.input_view(input_area, input_style, &self.input_context);
 
-        let messages_style = if self.focused_view == View::Messages {
-            if let Some(View::Messages) = self.active_view {
+        let messages_style = if self.focused_view == ChatPanes::Messages {
+            if let Some(ChatPanes::Messages) = self.active_view {
                 Style::active()
             } else {
                 Style::focused()
@@ -130,7 +130,7 @@ impl AppContext {
         } else {
             Style::default()
         };
-        frame.message_view(messages_area, messages_style, &self.messages_view_model);
+        frame.messages_view(messages_area, messages_style, &mut self.messages_view_model);
     }
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> anyhow::Result<()> {
@@ -172,7 +172,7 @@ impl AppContext {
     async fn handle_key_event(&mut self, event: KeyEvent) -> anyhow::Result<Option<AppEvent>> {
         if let Some(active_view) = self.active_view {
             match active_view {
-                View::Input => {
+                ChatPanes::Input => {
                     let app_event: Option<AppEvent> = self
                         .input_context
                         .handle_key_event(event)
@@ -182,7 +182,7 @@ impl AppContext {
                         });
                     Ok(app_event)
                 }
-                View::Messages => {
+                ChatPanes::Messages => {
                     let app_event: Option<AppEvent> = self.messages_view_model.handle_key_event(event)
                         .map(Into::into);
 
@@ -222,7 +222,7 @@ impl AppContext {
 }
 
 pub enum AppEvent {
-    Activate(View),
+    Activate(ChatPanes),
     Deactivate,
     NextView,
     Submit(Arc<str>),
