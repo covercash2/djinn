@@ -9,6 +9,11 @@ use ratatui::{
     Frame,
 };
 
+use crate::{
+    lm::{Prompt, Response},
+    ollama::chat::{ChatRequest, Message},
+};
+
 use super::{
     input::{InputMode, InputView as _, TextInputEvent, TextInputViewModel},
     messages::{MessagesEvent, MessagesView as _, MessagesViewModel},
@@ -66,6 +71,10 @@ impl From<TextInputEvent> for ChatEvent {
 }
 
 impl ChatViewModel {
+    pub fn handle_response(&mut self, response: Response) {
+        self.messages.handle_response(response);
+    }
+
     pub async fn handle_event(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
         let chat_event: Option<ChatEvent> = match event {
             Event::FocusGained
@@ -93,7 +102,15 @@ impl ChatViewModel {
                 self.focused_view = self.focused_view.next();
                 None
             }
-            ChatEvent::Submit(prompt) => Some(AppEvent::Submit(prompt)),
+            ChatEvent::Submit(prompt) => {
+                self.messages.push_message(Message::User(prompt.clone()));
+                let prompt = Prompt::Chat(ChatRequest {
+                    prompt,
+                    model: Default::default(),
+                    history: self.messages.history(),
+                });
+                Some(AppEvent::Submit(prompt))
+            }
             ChatEvent::Quit => Some(AppEvent::Quit),
         }
     }
