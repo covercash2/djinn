@@ -88,7 +88,7 @@ impl MessagesViewModel {
             KeyCode::Char('q') => {
                 self.state.select(None);
                 Some(MessagesEvent::Quit)
-            },
+            }
             KeyCode::Char('j') => {
                 self.state.select_next();
                 None
@@ -124,6 +124,50 @@ impl MessagesViewModel {
     }
 }
 
+#[derive(Default)]
+struct MessageViewBuilder<'a> {
+    consumed_lines: u16,
+    rows: Vec<Row<'a>>,
+}
+
+fn fit_messages(
+    messages: &[Message],
+    max_height: u16,
+    width: u16,
+) -> impl Iterator<Item = Row<'_>> {
+    messages.iter().map(move |message| {
+        let role = message.role();
+        let content = message.content().clone();
+        tracing::info!(role, %content, "creating message row");
+        let role = Cell::from(Span::from(role).bold());
+
+        let content_lines = textwrap::wrap(&content, usize::from(width));
+        let num_lines: u16 = content_lines
+            .iter()
+            .take(max_height.into())
+            .count()
+            .try_into()
+            .expect("unexpected overflow trying to coerce usize into u16");
+
+        let mut content: String = content_lines.iter().take((max_height - 1).into()).fold(
+            String::new(),
+            |mut acc, line| {
+                acc.push_str(line);
+                acc.push_str(" \n");
+                acc
+            },
+        );
+
+        if (max_height as usize) <= content_lines.len() {
+            content.push_str(ELIPSIS);
+        }
+
+        let content_cell = Cell::from(content);
+
+        Row::from_iter([role, content_cell]).height(num_lines)
+    })
+}
+
 #[extend::ext(name = MessagesView)]
 pub impl<'a> Frame<'a> {
     fn messages_view(&mut self, parent: Rect, style: Style, view_model: &mut MessagesViewModel) {
@@ -133,37 +177,7 @@ pub impl<'a> Frame<'a> {
         let max_height = parent.height - 3;
         let message_cell_width = parent.width - 3 - role_cell_width;
 
-        let messages = messages.iter().map(|message| {
-            let role = message.role();
-            let content = message.content().clone();
-            tracing::info!(role, %content, "creating message row");
-            let role = Cell::from(Span::from(role).bold());
-
-            let content_lines = textwrap::wrap(&content, usize::from(message_cell_width));
-            let num_lines: u16 = content_lines
-                .iter()
-                .take(max_height.into())
-                .count()
-                .try_into()
-                .expect("unexpected overflow trying to coerce usize into u16");
-
-            let mut content: String = content_lines.iter().take((max_height - 1).into()).fold(
-                String::new(),
-                |mut acc, line| {
-                    acc.push_str(line);
-                    acc.push_str(" \n");
-                    acc
-                },
-            );
-
-            if (max_height as usize) <= content_lines.len() {
-                content.push_str(ELIPSIS);
-            }
-
-            let content_cell = Cell::from(content);
-
-            Row::from_iter([role, content_cell]).height(num_lines)
-        });
+        let messages = fit_messages(&messages, max_height, message_cell_width);
 
         let widths = [Constraint::Length(10), Constraint::Max(message_cell_width)];
 
