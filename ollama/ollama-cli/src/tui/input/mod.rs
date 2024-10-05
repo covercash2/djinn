@@ -10,16 +10,16 @@ use ratatui::{
     Frame,
 };
 
-use super::{widgets_ext::RectExt, AppEvent};
+use super::widgets_ext::RectExt;
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct TextInputViewModel {
     pub input: String,
     pub cursor_position: usize,
     pub mode: InputMode,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone, Copy)]
 pub enum InputMode {
     #[default]
     Normal,
