@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     input::{InputMode, InputView as _, TextInputEvent, TextInputViewModel},
-    messages::{MessagesEvent, MessagesView as _, MessagesViewModel},
+    messages::{view::MessagesView as _, MessagesEvent, MessagesViewModel},
     AppEvent, StyleExt as _,
 };
 
