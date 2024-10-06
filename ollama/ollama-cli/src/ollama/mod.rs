@@ -12,6 +12,7 @@ pub const DEFAULT_MODEL: &str = "mistral-nemo";
 pub const DEFAULT_DOMAIN: &str = "hoss";
 pub const DEFAULT_PORT: u16 = 11434;
 
+#[derive(Debug)]
 pub struct Client {
     client: Ollama,
 }

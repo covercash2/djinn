@@ -5,6 +5,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
+use tracing::instrument;
 
 use crate::{
     error::Result,
@@ -12,6 +13,7 @@ use crate::{
     ollama::{self, chat::ChatRequest, generate::Request},
 };
 
+#[derive(Debug)]
 pub struct ModelContext {
     _handle: JoinHandle<Result<()>>,
     pub prompt_sender: Sender<Prompt>,
@@ -48,6 +50,7 @@ impl ModelContext {
     }
 }
 
+#[derive(Debug)]
 pub struct ModeContext {
     pub client: ollama::Client,
     pub response_sender: Sender<Response>,
@@ -93,6 +96,7 @@ impl ModeContext {
         Ok(())
     }
 
+    #[instrument]
     async fn handle_chat_mode(&self, prompt: ChatRequest) -> Result<()> {
         let result = self.client.chat(prompt).await;
 
