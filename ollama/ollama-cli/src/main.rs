@@ -1,8 +1,8 @@
-use std::{fs::File, path::PathBuf};
+use std::fs::File;
 
 use clap::{Parser, Subcommand};
 use ollama::ModelHost;
-use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt};
+use tracing_subscriber::fmt::format::FmtSpan;
 use tui::AppContext;
 
 mod error;
