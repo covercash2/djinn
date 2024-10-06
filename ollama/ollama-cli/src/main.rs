@@ -2,7 +2,7 @@ use std::{fs::File, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use ollama::ModelHost;
-use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt};
 use tui::AppContext;
 
 mod error;
@@ -36,6 +36,7 @@ enum Command {
 fn setup_tracing() {
     tracing_subscriber::fmt()
         .json()
+        .with_span_events(FmtSpan::FULL)
         .with_writer(File::create("logs.log").unwrap())
         .init();
 }
