@@ -26,7 +26,6 @@ struct MessageViewBuilder {
 pub struct MessageContent {
     role: &'static str,
     content: Vec<Arc<str>>,
-    height: u16,
 }
 
 impl MessageContent {
@@ -34,8 +33,13 @@ impl MessageContent {
         MessageContent {
             role: "empty",
             content: Default::default(),
-            height: 0,
         }
+    }
+
+    fn height(&self) -> u16 {
+        self.content.len()
+            .try_into()
+            .expect("should be able to coerce this usize into a u16")
     }
 }
 
@@ -53,9 +57,9 @@ impl MessageViewBuilder {
         if self.remaining_lines > 0 {
             let content = self.make_message_content(message);
 
-            let consumed_lines = self.consumed_lines + content.height;
-            debug_assert!(self.remaining_lines >= content.height);
-            let remaining_lines = self.remaining_lines - content.height;
+            let consumed_lines = self.consumed_lines + content.height();
+            debug_assert!(self.remaining_lines >= content.height());
+            let remaining_lines = self.remaining_lines - content.height();
 
             debug_assert_eq!(self.max_height, consumed_lines + remaining_lines);
 
@@ -75,10 +79,6 @@ impl MessageViewBuilder {
 
         let content_lines = fit_content(&content, self.message_cell_width, self.remaining_lines);
 
-        let height = (content_lines.len())
-            .try_into()
-            .expect("should be able to coerce this usize into a u16");
-
         let content: Vec<Arc<str>> = content_lines
             .into_iter()
             .map(|line: Cow<'_, str>| line.into())
@@ -87,7 +87,6 @@ impl MessageViewBuilder {
         MessageContent {
             role,
             content,
-            height,
         }
     }
 }
@@ -117,7 +116,6 @@ fn fit_messages(messages: &[Message], max_height: u16, message_cell_width: u16) 
             let MessageContent {
                 role,
                 content,
-                height: _,
             } = content;
 
             let mut content = content.into_iter();

@@ -4,12 +4,11 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     style::{Style, Stylize},
     text::{Span, Text},
-    widgets::ListState,
 };
-use view::MessageContent;
 
 use crate::{lm::Response, ollama::chat::Message};
 
+pub mod state;
 pub mod view;
 
 const TEST_OUTPUT: &str = include_str!("../../../example_output.txt");
@@ -21,19 +20,7 @@ pub struct MessagesViewModel {
     /// A list of [`Message`]s that constitute the history
     /// of the conversation.
     messages: VecDeque<Message>,
-    state: State,
-}
-
-#[derive(Debug, Clone, Default)]
-struct Cursor {
-    position: usize,
-}
-
-#[derive(Debug, Clone, Default)]
-struct State {
-    cursor: Cursor,
-    message_view: Vec<MessageContent>,
-    list_state: ListState,
+    state: state::MessagesState,
 }
 
 impl Default for MessagesViewModel {
@@ -98,19 +85,19 @@ impl MessagesViewModel {
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> Option<MessagesEvent> {
         match key_event.code {
             KeyCode::Char('q') => {
-                self.state.list_state.select(None);
+                self.state.select(None);
                 Some(MessagesEvent::Quit)
             }
             KeyCode::Char('j') => {
-                self.state.list_state.select_next();
+                self.state.select_next();
                 None
             }
             KeyCode::Char('k') => {
-                self.state.list_state.select_previous();
+                self.state.select_previous();
                 None
             }
             KeyCode::Enter => {
-                if self.state.list_state.selected().is_some() {
+                if self.state.selected().is_some() {
                     // TODO: enter fullscreen
                 }
                 None
