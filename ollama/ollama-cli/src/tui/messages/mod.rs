@@ -11,6 +11,12 @@ use crate::{lm::Response, ollama::chat::Message};
 pub mod state;
 pub mod view;
 
+pub mod highlight_spacing;
+pub mod widget;
+pub mod widget_item;
+pub mod widget_rendering;
+pub mod widget_state;
+
 const TEST_OUTPUT: &str = include_str!("../../../example_output.txt");
 
 #[derive(Clone, Debug)]
