@@ -2,9 +2,9 @@ use crossterm::{event::Event, style::Stylize as _};
 use ollama_rs::models::{LocalModel, ModelInfo};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::Style,
+    style::{Color, Style},
     text::{Line, Span},
-    widgets::Block,
+    widgets::{Block, Row, Table, TableState},
     Frame,
 };
 
@@ -23,7 +23,7 @@ use super::{
 pub struct ModelsViewModel {
     models: Vec<LocalModel>,
     active_pane: Option<Pane>,
-    list_state: ListState,
+    widget_state: TableState,
 }
 
 impl ModelsViewModel {
@@ -31,7 +31,7 @@ impl ModelsViewModel {
         ModelsViewModel {
             models,
             active_pane: None,
-            list_state: ListState::default(),
+            widget_state: Default::default(),
         }
     }
 
@@ -49,15 +49,15 @@ impl ModelsViewModel {
             Action::Refresh => Ok(Some(AppEvent::Submit(Prompt::LocalModels))),
             Action::Quit => Ok(Some(AppEvent::Quit)),
             Action::Enter => {
-                self.list_state.select(Some(0));
+                self.widget_state.select(Some(0));
                 Ok(None)
             }
             Action::Down => {
-                self.list_state.select_next();
+                self.widget_state.select_next();
                 Ok(None)
             }
             Action::Up => {
-                self.list_state.select_previous();
+                self.widget_state.select_previous();
                 Ok(None)
             }
             _ => Ok(None),
@@ -77,22 +77,28 @@ pub impl<'a> Frame<'a> {
 
         let [model_info_area] = vertical.areas(parent);
 
-        let models: List = view_model
+        let models: Table = view_model
             .models
             .iter()
             .map(|info| {
                 let name = Span::from(info.name.as_str());
                 let size = Span::from(info.size.fit_to_bytesize());
-                ListItem::from(Line::from_iter([name, size]))
+                let last_modified = Span::from(info.modified_at.as_str());
+                Row::from_iter([name, size, last_modified])
             })
             .collect();
 
         let list = models
             .block(Block::bordered())
             .style(style)
+            .highlight_style(
+                style
+                    .fg(style.bg.unwrap_or(Color::Black))
+                    .bg(style.fg.unwrap_or(Color::White)),
+            )
             .highlight_symbol(">>");
 
-        self.render_stateful_widget(list, model_info_area, &mut view_model.list_state);
+        self.render_stateful_widget(list, model_info_area, &mut view_model.widget_state);
     }
 }
 
