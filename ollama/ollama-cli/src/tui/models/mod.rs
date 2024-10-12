@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use crossterm::{event::Event, style::Stylize as _};
 use ollama_rs::models::{LocalModel, ModelInfo};
 use ratatui::{
@@ -83,7 +84,11 @@ pub impl<'a> Frame<'a> {
             .map(|info| {
                 let name = Span::from(info.name.as_str());
                 let size = Span::from(info.size.fit_to_bytesize());
-                let last_modified = Span::from(info.modified_at.as_str());
+                let last_modified: DateTime<Utc> = info
+                    .modified_at
+                    .parse()
+                    .expect("could not parse datetime from ollama");
+                let last_modified = Span::from(last_modified.format("%a %v %T").to_string());
                 Row::from_iter([name, size, last_modified])
             })
             .collect();
