@@ -10,6 +10,7 @@ use ratatui::{
 };
 
 use crate::{
+    error::Result,
     lm::{Prompt, Response},
     ollama::chat::{ChatRequest, Message},
 };
@@ -71,8 +72,8 @@ impl From<TextInputEvent> for ChatEvent {
 }
 
 impl ChatViewModel {
-    pub fn handle_response(&mut self, response: Response) {
-        self.messages.handle_response(response);
+    pub fn handle_response(&mut self, response: Response) -> Result<()> {
+        self.messages.handle_response(response)
     }
 
     pub async fn handle_event(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {

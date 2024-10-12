@@ -13,4 +13,7 @@ pub enum Error {
 
     #[error("error sending Response over channel")]
     SendResponse(#[from] SendError<Response>),
+
+    #[error("got an unexpected response: {0:?}")]
+    UnexpectedResponse(Response),
 }
