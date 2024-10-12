@@ -3,6 +3,7 @@ use std::time::Duration;
 use chat::ChatViewModel;
 use futures::StreamExt as _;
 use model_context::ModelContext;
+use models::{ModelsView, ModelsViewModel};
 use ratatui::{
     crossterm::event::Event,
     style::{Color, Style},
@@ -16,9 +17,11 @@ use crate::{
 };
 
 pub mod chat;
+pub mod event;
 pub mod input;
 pub mod messages;
 mod model_context;
+pub mod models;
 mod widgets_ext;
 
 pub struct AppContext {
@@ -29,18 +32,27 @@ pub struct AppContext {
 #[derive(Clone)]
 enum View {
     Chat(ChatViewModel),
+    Models(ModelsViewModel),
 }
 
 impl Default for View {
     fn default() -> Self {
-        View::Chat(ChatViewModel::default())
+        View::Models(ModelsViewModel::default())
     }
 }
 
 impl View {
     pub fn handle_response(&mut self, response: Response) {
-        match self {
+        let result = match self {
             View::Chat(ref mut chat_view_model) => chat_view_model.handle_response(response),
+            View::Models(ref mut models_view_model) => models_view_model.handle_response(response),
+        };
+
+        if let Err(error) = result {
+            tracing::error!(
+                %error,
+                "error handling response"
+            );
         }
     }
 }
@@ -68,6 +80,9 @@ impl AppContext {
         match &mut self.view {
             View::Chat(ref mut chat_view_model) => {
                 frame.chat_view(frame.area(), Style::default(), chat_view_model);
+            }
+            View::Models(models_view_model) => {
+                frame.models_view(frame.area(), Style::default(), models_view_model)
             }
         }
     }
@@ -97,6 +112,7 @@ impl AppContext {
     async fn handle_input(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
         let app_event = match &mut self.view {
             View::Chat(ref mut chat_view_model) => chat_view_model.handle_event(event).await?,
+            View::Models(models_view_model) => models_view_model.handle_event(event.into()).await?,
         };
         Ok(app_event)
     }

@@ -1,8 +1,10 @@
 use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use anyhow::anyhow;
-use ollama_rs::Ollama;
+use ollama_rs::{models::LocalModel, Ollama};
 use url::Url;
+
+use crate::error::Result;
 
 pub mod chat;
 pub mod embeddings;
@@ -31,6 +33,10 @@ impl Client {
 
         Ok(Self { client })
     }
+
+    pub async fn list_local_models(&self) -> Result<Vec<LocalModel>> {
+        Ok(self.client.list_local_models().await?)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -45,7 +51,7 @@ impl Default for ModelName {
 impl FromStr for ModelName {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> anyhow::Result<Self, Self::Err> {
         Ok(ModelName(s.into()))
     }
 }
@@ -77,7 +83,7 @@ impl Default for ModelHost {
 impl FromStr for ModelHost {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> anyhow::Result<Self, Self::Err> {
         Ok(ModelHost(s.parse()?))
     }
 }

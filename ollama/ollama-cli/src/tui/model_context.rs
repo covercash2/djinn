@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
+use ollama_rs::models::LocalModel;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
@@ -36,6 +37,7 @@ impl ModelContext {
                 match prompt {
                     Prompt::Generate(string) => context.handle_generate_mode(string).await?,
                     Prompt::Chat(request) => context.handle_chat_mode(request).await?,
+                    Prompt::LocalModels => context.load_local_models().await?,
                 }
             }
 
@@ -57,6 +59,12 @@ pub struct ModeContext {
 }
 
 impl ModeContext {
+    async fn load_local_models(&self) -> Result<()> {
+        let local_models = self.client.list_local_models().await?;
+        self.response_sender.send(Response::LocalModels(local_models)).await?;
+        Ok(())
+    }
+
     async fn handle_generate_mode(&self, prompt: Arc<str>) -> Result<()> {
         let result = self
             .client
