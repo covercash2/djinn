@@ -1,7 +1,10 @@
 use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use anyhow::anyhow;
-use ollama_rs::{models::LocalModel, Ollama};
+use ollama_rs::{
+    models::{LocalModel, ModelInfo},
+    Ollama,
+};
 use url::Url;
 
 use crate::error::Result;
@@ -37,6 +40,10 @@ impl Client {
 
     pub async fn list_local_models(&self) -> Result<Vec<LocalModel>> {
         Ok(self.client.list_local_models().await?)
+    }
+
+    pub async fn model_info(&self, model_name: ModelName) -> Result<ModelInfo> {
+        Ok(self.client.show_model_info(model_name.to_string()).await?)
     }
 }
 
