@@ -27,8 +27,9 @@ impl Client {
         };
 
         let client = Ollama::new(host, port);
+        tracing::debug!("testing client connection");
         for model in client.list_local_models().await? {
-            println!("model loaded: {model:?}");
+            tracing::debug!("model loaded: {model:?}");
         }
 
         Ok(Self { client })
