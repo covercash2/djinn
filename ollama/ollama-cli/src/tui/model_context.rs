@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use ollama_rs::models::LocalModel;
+use ollama_rs::models::{LocalModel, ModelInfo};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
@@ -11,7 +11,7 @@ use tracing::instrument;
 use crate::{
     error::Result,
     lm::{Prompt, Response},
-    ollama::{self, chat::ChatRequest, generate::Request},
+    ollama::{self, chat::ChatRequest, generate::Request, ModelName},
 };
 
 #[derive(Debug)]
@@ -38,6 +38,7 @@ impl ModelContext {
                     Prompt::Generate(string) => context.handle_generate_mode(string).await?,
                     Prompt::Chat(request) => context.handle_chat_mode(request).await?,
                     Prompt::LocalModels => context.load_local_models().await?,
+                    Prompt::ModelInfo(model_info) => context.get_model_info(model_info).await?
                 }
             }
 
@@ -62,6 +63,12 @@ impl ModeContext {
     async fn load_local_models(&self) -> Result<()> {
         let local_models = self.client.list_local_models().await?;
         self.response_sender.send(Response::LocalModels(local_models)).await?;
+        Ok(())
+    }
+
+    async fn get_model_info(&self, model_name: ModelName) -> Result<()> {
+        let model_info = self.client.model_info(model_name).await?;
+        self.response_sender.send(Response::ModelInfo(model_info)).await?;
         Ok(())
     }
 

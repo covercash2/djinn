@@ -6,7 +6,11 @@ use ratatui::{
     text::{Span, Text},
 };
 
-use crate::{error::{Error, Result}, lm::Response, ollama::chat::Message};
+use crate::{
+    error::{Error, Result},
+    lm::Response,
+    ollama::chat::Message,
+};
 
 pub mod state;
 pub mod view;
@@ -67,7 +71,9 @@ impl MessagesViewModel {
 
     pub fn handle_response(&mut self, response: Response) -> Result<()> {
         match response {
-            Response::LocalModels(ref _vec) => return Err(Error::UnexpectedResponse(response)),
+            Response::ModelInfo(_) | Response::LocalModels(_) => {
+                return Err(Error::UnexpectedResponse(response))
+            }
             Response::Eos => {
                 let message = Message::Assistant(self.model_stream.clone().into());
                 self.push_message(message);

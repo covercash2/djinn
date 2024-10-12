@@ -1,109 +1,150 @@
-use chrono::{DateTime, Utc};
-use crossterm::{event::Event, style::Stylize as _};
-use ollama_rs::models::{LocalModel, ModelInfo};
+use model_info::{ModelInfoView, ModelInfoViewModel};
+use model_list::{ModelListView, ModelListViewModel};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
-    text::{Line, Span},
-    widgets::{Block, Row, Table, TableState},
+    style::Style,
     Frame,
 };
 
 use crate::{
     error::{Error, Result},
     lm::{Prompt, Response},
+    ollama::ModelName,
 };
 
-use super::{
-    event::Action,
-    messages::{widget::List, widget_item::ListItem, widget_state::ListState},
-    AppEvent,
-};
+use super::{event::Action, AppEvent, StyleExt};
+
+mod model_info;
+mod model_list;
 
 #[derive(Clone, Debug, Default)]
 pub struct ModelsViewModel {
-    models: Vec<LocalModel>,
+    model_list: ModelListViewModel,
+    model_info: ModelInfoViewModel,
     active_pane: Option<Pane>,
-    widget_state: TableState,
+    focused_pane: Pane,
 }
 
 impl ModelsViewModel {
-    pub fn new(models: Vec<LocalModel>) -> Self {
-        ModelsViewModel {
-            models,
-            active_pane: None,
-            widget_state: Default::default(),
+    pub fn handle_response(&mut self, response: Response) -> Result<()> {
+        match response {
+            Response::LocalModels(_) => self.model_list.handle_response(response),
+            Response::ModelInfo(_) => self.model_info.handle_response(response),
+            _ => Err(Error::UnexpectedResponse(response)),
         }
     }
 
-    pub fn handle_response(&mut self, response: Response) -> Result<()> {
-        let Response::LocalModels(local_models) = response else {
-            return Err(Error::UnexpectedResponse(response));
-        };
-
-        self.models = local_models;
-        Ok(())
-    }
-
     pub async fn handle_event(&mut self, action: Action) -> Result<Option<AppEvent>> {
-        match action {
-            Action::Refresh => Ok(Some(AppEvent::Submit(Prompt::LocalModels))),
-            Action::Quit => Ok(Some(AppEvent::Quit)),
-            Action::Enter => {
-                self.widget_state.select(Some(0));
+        if let Some(pane) = &self.active_pane {
+            let model_event = match pane {
+                Pane::ModelList => self.model_list.handle_event(action).await?,
+                Pane::ModelInfo => todo!(),
+            };
+
+            if let Some(model_event) = model_event {
+                match model_event {
+                    ModelEvent::Activate(pane) => {
+                        self.active_pane = Some(pane);
+                        Ok(None)
+                    }
+                    ModelEvent::Deactivate => {
+                        self.active_pane = None;
+                        Ok(None)
+                    }
+                    ModelEvent::Refresh => Ok(Some(AppEvent::Submit(Prompt::LocalModels))),
+                    ModelEvent::GetInfo(model_name) => {
+                        Ok(Some(AppEvent::Submit(Prompt::ModelInfo(model_name))))
+                    }
+                }
+            } else {
                 Ok(None)
             }
-            Action::Down => {
-                self.widget_state.select_next();
-                Ok(None)
+        } else {
+            match action {
+                Action::Up | Action::Left => {
+                    self.focused_pane = self.focused_pane.previous();
+                    Ok(None)
+                }
+                Action::Down | Action::Right => {
+                    self.focused_pane = self.focused_pane.next();
+                    Ok(None)
+                }
+                Action::Refresh => Ok(Some(AppEvent::Submit(Prompt::LocalModels))),
+                Action::Enter => {
+                    self.active_pane = Some(self.focused_pane);
+                    Ok(None)
+                }
+                Action::Quit => Ok(Some(AppEvent::Quit)),
+                Action::LeftWord | Action::RightWord | Action::Unhandled => Ok(None),
             }
-            Action::Up => {
-                self.widget_state.select_previous();
-                Ok(None)
-            }
-            _ => Ok(None),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-enum Pane {
+pub enum ModelEvent {
+    Activate(Pane),
+    Deactivate,
+    GetInfo(ModelName),
+    Refresh,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Pane {
+    #[default]
+    ModelList,
     ModelInfo,
+}
+
+impl Pane {
+    fn next(&self) -> Pane {
+        match self {
+            Pane::ModelList => Pane::ModelInfo,
+            Pane::ModelInfo => Pane::ModelList,
+        }
+    }
+
+    fn previous(&self) -> Pane {
+        match self {
+            Pane::ModelList => Pane::ModelInfo,
+            Pane::ModelInfo => Pane::ModelList,
+        }
+    }
 }
 
 #[extend::ext(name = ModelsView)]
 pub impl<'a> Frame<'a> {
     fn models_view(&mut self, parent: Rect, style: Style, view_model: &mut ModelsViewModel) {
-        let vertical = Layout::vertical([Constraint::Min(1)]);
+        let vertical = Layout::vertical([Constraint::Min(2), Constraint::Min(1)]);
 
-        let [model_info_area] = vertical.areas(parent);
+        let [model_list_area, model_info_area] = vertical.areas(parent);
 
-        let models: Table = view_model
-            .models
-            .iter()
-            .map(|info| {
-                let name = Span::from(info.name.as_str());
-                let size = Span::from(info.size.fit_to_bytesize());
-                let last_modified: DateTime<Utc> = info
-                    .modified_at
-                    .parse()
-                    .expect("could not parse datetime from ollama");
-                let last_modified = Span::from(last_modified.format("%a %v %T").to_string());
-                Row::from_iter([name, size, last_modified])
-            })
-            .collect();
+        let model_list_style = if let Some(Pane::ModelList) = view_model.active_pane {
+            Style::active()
+        } else if view_model.focused_pane == Pane::ModelList {
+            Style::focused()
+        } else {
+            style
+        };
+        self.model_list(
+            model_list_area,
+            model_list_style,
+            &mut view_model.model_list,
+        );
 
-        let list = models
-            .block(Block::bordered())
-            .style(style)
-            .highlight_style(
-                style
-                    .fg(style.bg.unwrap_or(Color::Black))
-                    .bg(style.fg.unwrap_or(Color::White)),
-            )
-            .highlight_symbol(">>");
+        let model_info_style = if let Some(Pane::ModelInfo) = view_model.active_pane {
+            Style::active()
+        } else if view_model.focused_pane == Pane::ModelInfo {
+            Style::focused()
+        } else {
+            style
+        };
 
-        self.render_stateful_widget(list, model_info_area, &mut view_model.widget_state);
+        self.model_info(
+            model_info_area,
+            model_info_style,
+            &mut view_model.model_info,
+        );
     }
 }
 
