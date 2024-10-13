@@ -120,11 +120,18 @@ impl AppContext {
         Ok(app_event)
     }
 
-    fn edit_model_file(&mut self, terminal: &mut DefaultTerminal, model_info: ModelInfo) -> anyhow::Result<()> {
+    fn edit_model_file(
+        &mut self,
+        terminal: &mut DefaultTerminal,
+        model_info: ModelInfo,
+    ) -> anyhow::Result<()> {
         stdout().execute(crossterm::terminal::LeaveAlternateScreen)?;
         crossterm::terminal::disable_raw_mode()?;
 
-        edit::edit(model_info.modelfile)?;
+        let mut edit_options = edit::Builder::default();
+        let edit_options = edit_options.suffix(".tmpl");
+
+        let edited_modelfile = edit::edit_with_builder(model_info.modelfile, edit_options)?;
 
         stdout().execute(crossterm::terminal::EnterAlternateScreen)?;
         crossterm::terminal::enable_raw_mode()?;
