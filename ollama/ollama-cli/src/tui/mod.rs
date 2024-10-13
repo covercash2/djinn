@@ -1,9 +1,11 @@
-use std::time::Duration;
+use std::{io::stdout, process::Command, time::Duration};
 
 use chat::ChatViewModel;
+use crossterm::ExecutableCommand as _;
 use futures::StreamExt as _;
 use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
+use ollama_rs::models::ModelInfo;
 use ratatui::{
     crossterm::event::Event,
     style::{Color, Style},
@@ -98,6 +100,7 @@ impl AppContext {
                     if let Some(app_event) = self.handle_input(event).await? {
                         match app_event {
                             AppEvent::Submit(message) => self.submit_message(message).await,
+                            AppEvent::EditSystemPrompt(model_info) => self.edit_model_file(&mut terminal, model_info)?,
                             AppEvent::Quit => return Ok(()),
                         }
                     }
@@ -117,6 +120,18 @@ impl AppContext {
         Ok(app_event)
     }
 
+    fn edit_model_file(&mut self, terminal: &mut DefaultTerminal, model_info: ModelInfo) -> anyhow::Result<()> {
+        stdout().execute(crossterm::terminal::LeaveAlternateScreen)?;
+        crossterm::terminal::disable_raw_mode()?;
+
+        edit::edit(model_info.modelfile)?;
+
+        stdout().execute(crossterm::terminal::EnterAlternateScreen)?;
+        crossterm::terminal::enable_raw_mode()?;
+        terminal.clear()?;
+        Ok(())
+    }
+
     async fn submit_message(&mut self, prompt: Prompt) {
         self.model_context
             .prompt_sender
@@ -128,5 +143,6 @@ impl AppContext {
 
 pub enum AppEvent {
     Submit(Prompt),
+    EditSystemPrompt(ModelInfo),
     Quit,
 }

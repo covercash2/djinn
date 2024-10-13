@@ -1,5 +1,6 @@
 use model_info::{ModelInfoView, ModelInfoViewModel};
 use model_list::{ModelListView, ModelListViewModel};
+use ollama_rs::models::ModelInfo;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
@@ -38,7 +39,7 @@ impl ModelsViewModel {
         if let Some(pane) = &self.active_pane {
             let model_event = match pane {
                 Pane::ModelList => self.model_list.handle_event(action).await?,
-                Pane::ModelInfo => todo!(),
+                Pane::ModelInfo => self.model_info.handle_action(action)?,
             };
 
             if let Some(model_event) = model_event {
@@ -54,6 +55,9 @@ impl ModelsViewModel {
                     ModelEvent::Refresh => Ok(Some(AppEvent::Submit(Prompt::LocalModels))),
                     ModelEvent::GetInfo(model_name) => {
                         Ok(Some(AppEvent::Submit(Prompt::ModelInfo(model_name))))
+                    }
+                    ModelEvent::EditInfo(model_info) => {
+                        Ok(Some(AppEvent::EditSystemPrompt(model_info)))
                     }
                 }
             } else {
@@ -85,6 +89,7 @@ impl ModelsViewModel {
 pub enum ModelEvent {
     Activate(Pane),
     Deactivate,
+    EditInfo(ModelInfo),
     GetInfo(ModelName),
     Refresh,
 }
@@ -115,7 +120,7 @@ impl Pane {
 #[extend::ext(name = ModelsView)]
 pub impl<'a> Frame<'a> {
     fn models_view(&mut self, parent: Rect, style: Style, view_model: &mut ModelsViewModel) {
-        let vertical = Layout::vertical([Constraint::Min(2), Constraint::Min(1)]);
+        let vertical = Layout::vertical([Constraint::Percentage(20), Constraint::Min(1)]);
 
         let [model_list_area, model_info_area] = vertical.areas(parent);
 
