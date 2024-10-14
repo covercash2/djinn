@@ -18,7 +18,49 @@ use super::ModelEvent;
 #[derive(Debug, Clone, Default)]
 pub struct ModelInfoViewModel {
     info: Option<ModelInfo>,
-    scroll_offset: u16,
+    /// x, y scroll offset
+    scroll_offset: Offset,
+    wrap: bool
+}
+
+#[derive(Debug, Clone, Default)]
+struct Offset {
+    x: u16,
+    y: u16,
+}
+
+impl Offset {
+    fn up(&self) -> Self {
+        Self {
+            y: self.y.saturating_sub(1),
+            x: self.x,
+        }
+    }
+
+    fn down(&self) -> Self {
+        Self {
+            y: self.y.saturating_add(1),
+            x: self.x,
+        }
+    }
+
+    fn left(&self) -> Self {
+        Self {
+            x: self.x.saturating_sub(1),
+            y: self.y,
+        }
+    }
+
+    fn right(&self) -> Self {
+        Self {
+            x: self.x.saturating_add(1),
+            y: self.y,
+        }
+    }
+
+    fn as_tuple(&self) -> (u16, u16) {
+        (self.y, self.x)
+    }
 }
 
 impl ModelInfoViewModel {
@@ -34,11 +76,11 @@ impl ModelInfoViewModel {
     pub fn handle_action(&mut self, action: Action) -> Result<Option<ModelEvent>> {
         match action {
             Action::Up => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                self.scroll_offset = self.scroll_offset.up();
                 Ok(None)
             }
             Action::Down => {
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
+                self.scroll_offset = self.scroll_offset.down();
                 Ok(None)
             }
             Action::Refresh => Ok(Some(ModelEvent::Refresh)),
@@ -51,8 +93,14 @@ impl ModelInfoViewModel {
                     Ok(None)
                 }
             }
-            Action::Left
-            | Action::Right
+            Action::Left => {
+                self.scroll_offset = self.scroll_offset.left();
+                Ok(None)
+            }
+            Action::Right => {
+                self.scroll_offset = self.scroll_offset.right();
+                Ok(None)
+            }
             | Action::LeftWord
             | Action::RightWord
             | Action::Unhandled => Ok(None),
@@ -70,10 +118,15 @@ pub impl<'a> Frame<'a> {
         };
 
         let widget = Paragraph::new(text)
-            .scroll((view_model.scroll_offset, 0))
-            .wrap(Wrap { trim: false })
+            .scroll(view_model.scroll_offset.as_tuple())
             .block(Block::bordered())
             .style(style);
+
+        let widget = if view_model.wrap {
+            widget.wrap(Wrap { trim: false })
+        } else {
+            widget
+        };
 
         self.render_widget(widget, parent);
     }
