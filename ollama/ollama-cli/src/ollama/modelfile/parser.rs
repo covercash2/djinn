@@ -1,11 +1,28 @@
 /// Parse the [`Modelfile`] according to the [Modelfile spec]
 ///
 /// [Modelfile spec]: https://github.com/ollama/ollama/blob/main/docs/modelfile.md
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use nom::{
-    bytes::streaming::{tag, take_while1}, character::{complete, streaming}, combinator::value, error::context, multi::many0, sequence::{pair, preceded}, IResult, Parser as _
+    branch::alt,
+    bytes::{
+        self,
+        streaming::{tag, take_until, take_while, take_while1},
+    },
+    character::{
+        complete::{self, space1},
+        streaming,
+    },
+    combinator::{all_consuming, value},
+    error::{context, Error, ErrorKind, ParseError},
+    multi::many0,
+    sequence::{delimited, pair, preceded, separated_pair},
+    IResult, Parser as _,
 };
+use strum::{EnumDiscriminants, EnumIter, EnumString, IntoEnumIterator as _, IntoStaticStr};
+
+const TRIPLE_QUOTES: &str = r#"""""#;
+const SINGLE_QUOTE: &str = r#"""#;
 
 /// Takes an input string and returns a `ModelName`.
 /// Parses a line that starts with `FROM`
@@ -42,14 +59,217 @@ fn comment(input: &str) -> IResult<&str, ()> {
 
 /// Consume empty lines and comments
 fn skip_lines(input: &str) -> IResult<&str, ()> {
-    context(
-        "skip_lines",
-        value(
-            (),
-            many0(comment)
-        )
+    context("skip_lines", value((), many0(comment))).parse(input)
+}
+
+/// Parse a model template.
+/// The template is preceded by the `TEMPLATE` keyword
+/// and is formatted like a go template`*`
+///
+/// `*` the docs are actually super weird about this.
+/// They say in [the spec]:
+/// > Note: syntax may be model specific
+/// Good thing the authors are geniuses,
+/// otherwise this would be totally unhinged.
+///
+/// We're not going to worry about parsing the template
+/// in this project.
+/// Leave that to the geniuses at Ollama.
+///
+/// [the spec]: https://github.com/ollama/ollama/blob/main/docs/modelfile.md#template
+fn template(input: &str) -> IResult<&str, &str> {
+    let template = tag("TEMPLATE");
+    let space = take_while(|c| c == ' ');
+    preceded(
+        pair(template, space),
+        alt((triple_quote_string, single_quoted_multiline_string)),
     )
-        .parse(input)
+    .parse(input)
+}
+
+/// A string surrounded by trippled quotes.
+/// """Like this!
+/// And they can be on multiple lines."""
+fn triple_quote_string(input: &str) -> IResult<&str, &str> {
+    delimited(
+        tag(TRIPLE_QUOTES),
+        take_until(TRIPLE_QUOTES),
+        tag(TRIPLE_QUOTES),
+    )
+    .parse(input)
+}
+
+/// A multiline string with single quotes.
+/// Why is this allowed?
+/// The inmates are running the asylum.
+fn single_quoted_multiline_string(input: &str) -> IResult<&str, &str> {
+    delimited(
+        tag(SINGLE_QUOTE),
+        take_until(SINGLE_QUOTE),
+        tag(SINGLE_QUOTE),
+    )
+    .parse(input)
+}
+
+/// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
+#[derive(EnumDiscriminants)]
+#[strum_discriminants(name(ParameterName))]
+#[strum_discriminants(derive(EnumIter, IntoStaticStr, EnumString))]
+#[strum_discriminants(strum(serialize_all = "snake_case"))]
+pub enum Parameter {
+    /// Enable Mirostat sampling for controlling perplexity.
+    /// (default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)
+    Mirostat(usize),
+    /// Influences how quickly the algorithm responds
+    /// to feedback from the generated text.
+    /// A lower learning rate will result in slower adjustments,
+    /// while a higher learning rate will make the algorithm more responsive.
+    /// (Default: 0.1)
+    MirostatEta(f32),
+    /// Controls the balance between coherence and diversity of the output.
+    /// A lower value will result in more focused and coherent text.
+    /// (Default: 5.0)
+    MirostatTau(f32),
+    /// Sets the size of the context window
+    /// used to generate the next token.
+    /// (Default: 2048)
+    NumCtx(usize),
+    /// Sets how far back for the model
+    /// to look back to prevent repetition.
+    /// (Default: 64, 0 = disabled, -1 = num_ctx)
+    RepeatLastN(usize),
+    /// Sets how strongly to penalize repetitions.
+    /// A higher value (e.g., 1.5) will penalize repetitions more strongly,
+    /// while a lower value (e.g., 0.9) will be more lenient.
+    /// (Default: 1.1)
+    RepeatPenalty(f32),
+    /// The temperature of the model.
+    /// Increasing the temperature will make the model answer more creatively.
+    /// (Default: 0.8)
+    Temperature(f32),
+    /// Sets the random number seed to use for generation.
+    /// Setting this to a specific number will make the model generate the same text
+    /// for the same prompt.
+    /// (Default: 0)
+    Seed(usize),
+    /// Sets the stop sequences to use.
+    /// When this pattern is encountered the LLM will stop generating text and return.
+    /// Multiple stop patterns may be set by specifying multiple separate stop parameters
+    /// in a modelfile.
+    Stop(String),
+    /// Tail free sampling is used to reduce the impact
+    /// of less probable tokens from the output.
+    /// A higher value (e.g., 2.0) will reduce the impact more,
+    /// while a value of 1.0 disables this setting.
+    /// (default: 1)
+    TfsZ(f32),
+    /// Maximum number of tokens to predict when generating text.
+    /// (Default: 128, -1 = infinite generation, -2 = fill context)
+    NumPredict(usize),
+    /// Works together with top-k.
+    /// A higher value (e.g., 0.95) will lead to more diverse text,
+    /// while a lower value (e.g., 0.5) will generate more focused and conservative text.
+    /// (Default: 0.9)
+    TopP(f32),
+    /// Alternative to the top_p,
+    /// and aims to ensure a balance of quality and variety.
+    /// The parameter p represents the minimum probability for a token to be considered,
+    /// relative to the probability of the most likely token.
+    /// For example, with p=0.05 and the most likely token having a probability of 0.9,
+    /// logits with a value less than 0.045 are filtered out.
+    /// (Default: 0.0)
+    MinP(f32),
+}
+
+fn parameter_name(input: &str) -> IResult<&str, ParameterName> {
+    for name in ParameterName::iter() {
+        let name: &'static str = name.into();
+        let result = nom::bytes::complete::tag::<&str, &str, nom::error::Error<&str>>(name)(input);
+        if let Ok((rest, name)) = result {
+            let name: ParameterName = name
+                .parse()
+                .expect("should be able to parse parameter name from parsed parameter name");
+            return Ok((rest, name));
+        }
+    }
+
+    Err(nom::Err::Error(nom::error::Error::new(
+        input,
+        ErrorKind::Tag,
+    )))
+}
+
+fn float_parameter_value(input: &str) -> IResult<&str, f32> {
+    nom::number::complete::float(input)
+}
+
+fn int_parameter_value(input: &str) -> IResult<&str, usize> {
+    nom::character::complete::digit1(input).map(|(s, int)| {
+        (
+            s,
+            int.parse().expect("should be able to parse int from input"),
+        )
+    })
+}
+
+fn string_parameter_value(input: &str) -> IResult<&str, &str> {
+    complete::not_line_ending(input)
+}
+
+fn parameter(name: ParameterName, input: &str) -> IResult<&str, Parameter> {
+    match name {
+        ParameterName::Mirostat => {
+            int_parameter_value(input).map(|(rest, int)| (rest, Parameter::Mirostat(int)))
+        }
+        ParameterName::MirostatEta => {
+            float_parameter_value(input).map(|(rest, value)| (rest, Parameter::MirostatEta(value)))
+        }
+        ParameterName::MirostatTau => {
+            float_parameter_value(input).map(|(rest, value)| (rest, Parameter::MirostatTau(value)))
+        }
+        ParameterName::NumCtx => {
+            int_parameter_value(input).map(|(rest, value)| (rest, Parameter::NumCtx(value)))
+        }
+        ParameterName::RepeatLastN => {
+            int_parameter_value(input).map(|(rest, value)| (rest, Parameter::RepeatLastN(value)))
+        }
+        ParameterName::RepeatPenalty => float_parameter_value(input)
+            .map(|(rest, value)| (rest, Parameter::RepeatPenalty(value))),
+        ParameterName::Temperature => {
+            float_parameter_value(input).map(|(rest, value)| (rest, Parameter::Temperature(value)))
+        }
+        ParameterName::Seed => {
+            int_parameter_value(input).map(|(rest, value)| (rest, Parameter::Seed(value)))
+        }
+        ParameterName::Stop => string_parameter_value(input)
+            .map(|(rest, value)| (rest, Parameter::Stop(value.to_string()))),
+        ParameterName::TfsZ => {
+            float_parameter_value(input).map(|(rest, value)| (rest, Parameter::TfsZ(value)))
+        }
+        ParameterName::NumPredict => {
+            int_parameter_value(input).map(|(rest, value)| (rest, Parameter::NumPredict(value)))
+        }
+        ParameterName::TopP => {
+            float_parameter_value(input).map(|(rest, value)| (rest, Parameter::TopP(value)))
+        }
+        ParameterName::MinP => {
+            float_parameter_value(input).map(|(rest, value)| (rest, Parameter::MinP(value)))
+        }
+    }
+}
+
+/// Parameters are key value pairs
+/// of a name from a set of predefined keys
+/// to an arbitrary string value
+///
+/// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
+fn parameter_line(input: &str) -> IResult<&str, (&str, &str)> {
+    // let parameter_tag = tag("PARAMETER");
+    // let parameter_names = ParameterName::iter().map(|name| tag(name.into())).collect()?;
+
+    // preceded(parameter_tag, );
+
+    todo!()
 }
 
 #[cfg(test)]
@@ -110,16 +330,74 @@ mod tests {
             comment(comment_string).expect("could not parse comments");
         }
 
-        let long_comment = TEST_COMMENTS.iter()
-            .fold(String::new(), |mut acc, line| {
-                acc.push_str(line);
-                acc.push('\n');
-                acc.push('\n');
-                acc
-            });
+        let long_comment = TEST_COMMENTS.iter().fold(String::new(), |mut acc, line| {
+            acc.push_str(line);
+            acc.push('\n');
+            acc.push('\n');
+            acc
+        });
 
         dbg!(&long_comment);
 
         skip_lines(long_comment.as_str()).expect("should skip all comment lines");
     }
+
+    const TEST_TRIPLE_QUOTES: &[&str] = &[r#""""here's some text
+            in triple quotes
+            we just need to consume it all
+            and return it back
+            """"#];
+
+    #[test]
+    fn triple_quotes_are_parsed() {
+        for quote in TEST_TRIPLE_QUOTES {
+            triple_quote_string(quote).expect("should be able to parse triple quoted strings");
+        }
+    }
+
+    const TEST_SINGLE_QUOTE_MULTILINE: &[&str] = &[r#""here's some text
+            in triple quotes
+            we just need to consume it all
+            and return it back
+            ""#];
+
+    #[test]
+    fn single_quote_multiline_string_is_parsed() {
+        for quote in TEST_SINGLE_QUOTE_MULTILINE {
+            single_quoted_multiline_string(quote)
+                .expect("should be able to parse triple quoted strings");
+        }
+    }
+
+    const TEMPLATE_PREFIX: &str = "TEMPLATE ";
+
+    #[test]
+    fn test_template() {
+        let test_cases: Vec<String> = TEST_TRIPLE_QUOTES
+            .iter()
+            .chain(TEST_SINGLE_QUOTE_MULTILINE)
+            .map(|test_case| format!("{TEMPLATE_PREFIX}{test_case}"))
+            .collect();
+
+        for test_case in test_cases {
+            dbg!(&test_case);
+            template(test_case.as_str()).expect("should be able to parse template");
+        }
+    }
+
+    #[test]
+    fn parameter_names_are_parsed() {
+        let names: Vec<&'static str> = ParameterName::iter().map(|s| s.into()).collect();
+
+        for name in names {
+            dbg!(name);
+            parameter_name(name).expect("should be able to parse parameter names");
+        }
+    }
+
+    #[test]
+    fn parameters_are_parsed() {
+        todo!()
+    }
+
 }
