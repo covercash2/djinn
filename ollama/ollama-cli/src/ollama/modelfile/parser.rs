@@ -1,6 +1,18 @@
-/// Parse the [`Modelfile`] according to the [Modelfile spec]
-///
-/// [Modelfile spec]: https://github.com/ollama/ollama/blob/main/docs/modelfile.md
+//! Parse the [`Modelfile`] according to the [Modelfile spec].
+//!
+//!
+//! TODO:
+//! - [x] comments [`comment`]
+//! - [x] FROM [`from`]
+//! - [ ] PARAMETER
+//! - [x] TEMPLATE [`template`]
+//! - [ ] SYSTEM
+//! - [ ] ADAPTER
+//! - [ ] LICENSE
+//! - [ ] MESSAGE
+//! - [ ] case insensitivity
+//!
+//! [Modelfile spec]: https://github.com/ollama/ollama/blob/main/docs/modelfile.md
 use std::{path::PathBuf, str::FromStr};
 
 use nom::{
@@ -10,16 +22,18 @@ use nom::{
         streaming::{tag, take_until, take_while, take_while1},
     },
     character::{
-        complete::{self, space1},
+        complete::{self, multispace1, space1},
         streaming,
     },
     combinator::{all_consuming, value},
     error::{context, Error, ErrorKind, ParseError},
     multi::many0,
-    sequence::{delimited, pair, preceded, separated_pair},
+    sequence::{delimited, pair, preceded, separated_pair, terminated},
     IResult, Parser as _,
 };
-use strum::{EnumDiscriminants, EnumIter, EnumString, IntoEnumIterator as _, IntoStaticStr};
+use strum::{
+    EnumDiscriminants, EnumIter, EnumString, IntoEnumIterator as _, IntoStaticStr, VariantArray,
+};
 
 const TRIPLE_QUOTES: &str = r#"""""#;
 const SINGLE_QUOTE: &str = r#"""#;
@@ -114,7 +128,7 @@ fn single_quoted_multiline_string(input: &str) -> IResult<&str, &str> {
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
 #[derive(EnumDiscriminants)]
 #[strum_discriminants(name(ParameterName))]
-#[strum_discriminants(derive(EnumIter, IntoStaticStr, EnumString))]
+#[strum_discriminants(derive(EnumIter, IntoStaticStr, EnumString, VariantArray))]
 #[strum_discriminants(strum(serialize_all = "snake_case"))]
 pub enum Parameter {
     /// Enable Mirostat sampling for controlling perplexity.
@@ -166,6 +180,11 @@ pub enum Parameter {
     /// Maximum number of tokens to predict when generating text.
     /// (Default: 128, -1 = infinite generation, -2 = fill context)
     NumPredict(usize),
+    /// Reduces the probability of generating nonsense.
+    /// A higher value (e.g. 100) will give more diverse answers,
+    /// while a lower value (e.g. 10) will be more conservative.
+    /// (Default: 40)
+    TopK(usize),
     /// Works together with top-k.
     /// A higher value (e.g., 0.95) will lead to more diverse text,
     /// while a lower value (e.g., 0.5) will generate more focused and conservative text.
@@ -182,21 +201,72 @@ pub enum Parameter {
 }
 
 fn parameter_name(input: &str) -> IResult<&str, ParameterName> {
-    for name in ParameterName::iter() {
-        let name: &'static str = name.into();
-        let result = nom::bytes::complete::tag::<&str, &str, nom::error::Error<&str>>(name)(input);
-        if let Ok((rest, name)) = result {
-            let name: ParameterName = name
-                .parse()
-                .expect("should be able to parse parameter name from parsed parameter name");
-            return Ok((rest, name));
-        }
-    }
-
-    Err(nom::Err::Error(nom::error::Error::new(
-        input,
-        ErrorKind::Tag,
-    )))
+    dbg!(input);
+    alt((
+        terminated(
+            tag::<&str, &str, _>(ParameterName::Mirostat.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::MirostatEta.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::MirostatTau.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::NumCtx.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::RepeatLastN.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::RepeatPenalty.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::Seed.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::Temperature.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::Stop.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::TfsZ.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::NumPredict.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::TopK.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::TopP.into()),
+            multispace1,
+        ),
+        terminated(
+            tag::<&str, &str, _>(ParameterName::MinP.into()),
+            multispace1,
+        ),
+    ))(input)
+    .map(|(rest, name)| {
+        (
+            rest,
+            name.parse::<ParameterName>()
+                .expect("should be able to parse parameter name from parse parameter name"),
+        )
+    })
 }
 
 fn float_parameter_value(input: &str) -> IResult<&str, f32> {
@@ -216,7 +286,10 @@ fn string_parameter_value(input: &str) -> IResult<&str, &str> {
     complete::not_line_ending(input)
 }
 
-fn parameter(name: ParameterName, input: &str) -> IResult<&str, Parameter> {
+fn parameter(input: &str) -> IResult<&str, Parameter> {
+    dbg!(&input);
+    let (input, name) = parameter_name(input)?;
+    dbg!(name);
     match name {
         ParameterName::Mirostat => {
             int_parameter_value(input).map(|(rest, int)| (rest, Parameter::Mirostat(int)))
@@ -249,6 +322,9 @@ fn parameter(name: ParameterName, input: &str) -> IResult<&str, Parameter> {
         ParameterName::NumPredict => {
             int_parameter_value(input).map(|(rest, value)| (rest, Parameter::NumPredict(value)))
         }
+        ParameterName::TopK => {
+            int_parameter_value(input).map(|(rest, value)| (rest, Parameter::TopK(value)))
+        }
         ParameterName::TopP => {
             float_parameter_value(input).map(|(rest, value)| (rest, Parameter::TopP(value)))
         }
@@ -263,13 +339,12 @@ fn parameter(name: ParameterName, input: &str) -> IResult<&str, Parameter> {
 /// to an arbitrary string value
 ///
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
-fn parameter_line(input: &str) -> IResult<&str, (&str, &str)> {
-    // let parameter_tag = tag("PARAMETER");
-    // let parameter_names = ParameterName::iter().map(|name| tag(name.into())).collect()?;
+fn parameter_line(input: &str) -> IResult<&str, Parameter> {
+    let parameter_tag = tag("PARAMETER");
 
-    // preceded(parameter_tag, );
+    dbg!(&input);
 
-    todo!()
+    preceded(pair(parameter_tag, multispace1), parameter).parse(input)
 }
 
 #[cfg(test)]
@@ -387,17 +462,25 @@ mod tests {
 
     #[test]
     fn parameter_names_are_parsed() {
-        let names: Vec<&'static str> = ParameterName::iter().map(|s| s.into()).collect();
+        let names: Vec<String> = ParameterName::iter()
+            .map(|s| {
+                let s: &str = s.into();
+                format!("{s} ")
+            })
+            .collect();
 
         for name in names {
-            dbg!(name);
-            parameter_name(name).expect("should be able to parse parameter names");
+            dbg!(&name);
+            parameter_name(&name).expect("should be able to parse parameter names");
         }
     }
 
     #[test]
     fn parameters_are_parsed() {
-        todo!()
+        let test_data = include_str!("./testdata/parameters.txt");
+        for line in test_data.lines() {
+            dbg!(&line);
+            parameter_line(line).expect("should be able to parse parameter line");
+        }
     }
-
 }

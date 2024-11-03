@@ -13,6 +13,7 @@ crossterm = { version = "0.28.1", features = ["event-stream"] }
 edit = "0.1.5"
 extend = "1.2.0"
 futures = "0.3.30"
+itertools = "0.13.0"
 nom = "7.1.3"
 ollama-rs = { version = "0.2.1", features = ["stream"] }
 ratatui = { version = "0.28.1", features = ["unstable-widget-ref"] }
