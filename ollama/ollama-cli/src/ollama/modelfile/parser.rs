@@ -4,35 +4,32 @@
 //! TODO:
 //! - [x] comments [`comment`]
 //! - [x] FROM [`from`]
-//! - [ ] PARAMETER
+//! - [x] PARAMETER
 //! - [x] TEMPLATE [`template`]
-//! - [ ] SYSTEM
+//! - [x] SYSTEM
 //! - [ ] ADAPTER
 //! - [ ] LICENSE
 //! - [ ] MESSAGE
-//! - [ ] case insensitivity
+//! - [x] case insensitivity
 //!
 //! [Modelfile spec]: https://github.com/ollama/ollama/blob/main/docs/modelfile.md
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 use nom::{
     branch::alt,
     bytes::{
-        self,
+        complete::tag_no_case,
         streaming::{tag, take_until, take_while, take_while1},
     },
-    character::{
-        complete::{self, multispace1, space1},
-        streaming,
-    },
-    combinator::{all_consuming, value},
-    error::{context, Error, ErrorKind, ParseError},
+    character::complete::{self, multispace1},
+    combinator::value,
+    error::context,
     multi::many0,
-    sequence::{delimited, pair, preceded, separated_pair, terminated},
+    sequence::{delimited, pair, preceded, terminated},
     IResult, Parser as _,
 };
 use strum::{
-    EnumDiscriminants, EnumIter, EnumString, IntoEnumIterator as _, IntoStaticStr, VariantArray,
+    EnumDiscriminants, EnumIter, EnumString, IntoStaticStr, VariantArray,
 };
 
 const TRIPLE_QUOTES: &str = r#"""""#;
@@ -42,7 +39,7 @@ const SINGLE_QUOTE: &str = r#"""#;
 /// Parses a line that starts with `FROM`
 /// that specifies the [`ModelId`]
 pub fn from(input: &str) -> IResult<&str, &str> {
-    let from_tag = tag("FROM");
+    let from_tag = tag_no_case("FROM");
     let space = take_while1(|c| c == ' ');
 
     context("FROM", preceded(pair(from_tag, space), model_id)).parse(input)
@@ -92,7 +89,7 @@ fn skip_lines(input: &str) -> IResult<&str, ()> {
 ///
 /// [the spec]: https://github.com/ollama/ollama/blob/main/docs/modelfile.md#template
 fn template(input: &str) -> IResult<&str, &str> {
-    let template = tag("TEMPLATE");
+    let template = tag_no_case("TEMPLATE");
     let space = take_while(|c| c == ' ');
     preceded(
         pair(template, space),
@@ -340,11 +337,27 @@ fn parameter(input: &str) -> IResult<&str, Parameter> {
 ///
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
 fn parameter_line(input: &str) -> IResult<&str, Parameter> {
-    let parameter_tag = tag("PARAMETER");
+    let parameter_tag = tag_no_case("PARAMETER");
 
     dbg!(&input);
 
     preceded(pair(parameter_tag, multispace1), parameter).parse(input)
+}
+
+/// The system message to be used in the template, if applicable
+///
+/// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#system
+fn system(input: &str) -> IResult<&str, &str> {
+    let template = tag_no_case("system");
+    preceded(
+        pair(template, multispace1),
+        alt((
+            triple_quote_string,
+            single_quoted_multiline_string,
+            complete::not_line_ending,
+        )),
+    )
+    .parse(input)
 }
 
 #[cfg(test)]
@@ -481,6 +494,15 @@ mod tests {
         for line in test_data.lines() {
             dbg!(&line);
             parameter_line(line).expect("should be able to parse parameter line");
+        }
+    }
+
+    #[test]
+    fn system_messages_are_parsed() {
+        let test_data = include_str!("./testdata/systems.txt");
+        for message in test_data.split(":endcase\n").filter(|s| !s.is_empty()) {
+            dbg!(&message);
+            system(message).expect("should be able to parse system message");
         }
     }
 }
