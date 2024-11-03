@@ -954,6 +954,7 @@ dependencies = [
  "edit",
  "extend",
  "futures",
+ "itertools",
  "nom",
  "ollama-rs",
  "pretty_assertions",
