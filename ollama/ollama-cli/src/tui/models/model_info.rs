@@ -20,7 +20,7 @@ pub struct ModelInfoViewModel {
     info: Option<ModelInfo>,
     /// x, y scroll offset
     scroll_offset: Offset,
-    wrap: bool
+    wrap: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -101,9 +101,7 @@ impl ModelInfoViewModel {
                 self.scroll_offset = self.scroll_offset.right();
                 Ok(None)
             }
-            | Action::LeftWord
-            | Action::RightWord
-            | Action::Unhandled => Ok(None),
+            Action::LeftWord | Action::RightWord | Action::Unhandled => Ok(None),
         }
     }
 }

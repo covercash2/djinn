@@ -4,9 +4,6 @@
 //! Thus, it was necessary for them to create a bespoke file format
 //! to define a derived model.
 //! This is an attempt to parse that genius file format in Rust.
-//!
-//! TODO:
-//! - [ ] gather samples
 
 use std::path::PathBuf;
 
