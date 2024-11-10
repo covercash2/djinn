@@ -5,8 +5,8 @@ use ollama::ModelHost;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tui::AppContext;
 
-mod error;
 pub mod bytes_size;
+mod error;
 mod lm;
 mod ollama;
 mod tui;

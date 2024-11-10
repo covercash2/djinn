@@ -38,7 +38,7 @@ impl ModelContext {
                     Prompt::Generate(string) => context.handle_generate_mode(string).await?,
                     Prompt::Chat(request) => context.handle_chat_mode(request).await?,
                     Prompt::LocalModels => context.load_local_models().await?,
-                    Prompt::ModelInfo(model_info) => context.get_model_info(model_info).await?
+                    Prompt::ModelInfo(model_info) => context.get_model_info(model_info).await?,
                 }
             }
 
@@ -62,13 +62,17 @@ pub struct ModeContext {
 impl ModeContext {
     async fn load_local_models(&self) -> Result<()> {
         let local_models = self.client.list_local_models().await?;
-        self.response_sender.send(Response::LocalModels(local_models)).await?;
+        self.response_sender
+            .send(Response::LocalModels(local_models))
+            .await?;
         Ok(())
     }
 
     async fn get_model_info(&self, model_name: ModelName) -> Result<()> {
         let model_info = self.client.model_info(model_name).await?;
-        self.response_sender.send(Response::ModelInfo(model_info)).await?;
+        self.response_sender
+            .send(Response::ModelInfo(model_info))
+            .await?;
         Ok(())
     }
 

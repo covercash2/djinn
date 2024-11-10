@@ -7,8 +7,8 @@
 //! - [x] PARAMETER
 //! - [x] TEMPLATE [`template`]
 //! - [x] SYSTEM
-//! - [ ] ADAPTER
-//! - [ ] LICENSE
+//! - [x] ADAPTER
+//! - [x] LICENSE
 //! - [ ] MESSAGE
 //! - [x] case insensitivity
 //!
@@ -21,13 +21,10 @@ use nom::{
         complete::tag_no_case,
         streaming::{tag, take_until, take_while, take_while1},
     },
-    character::{
-        complete::{self, multispace1},
-        is_alphanumeric,
-    },
-    combinator::{not, value},
+    character::complete::{self, multispace1, newline},
+    combinator::{eof, value},
     error::context,
-    multi::{many0, many1},
+    multi::many0,
     sequence::{delimited, pair, preceded, terminated},
     IResult, Parser as _,
 };
@@ -36,6 +33,7 @@ use super::{Parameter, ParameterName, TensorFile};
 
 const TRIPLE_QUOTES: &str = r#"""""#;
 const SINGLE_QUOTE: &str = r#"""#;
+const SINGLE_QUOTE_NEWLINE: &str = r#""\n"#;
 
 /// Takes an input string and returns a `ModelName`.
 /// Parses a line that starts with `FROM`
@@ -271,20 +269,21 @@ pub fn parameter_line(input: &str) -> IResult<&str, Parameter> {
     preceded(pair(parameter_tag, multispace1), parameter).parse(input)
 }
 
+pub fn multiline(input: &str) -> IResult<&str, &str> {
+    alt((
+        triple_quote_string,
+        single_quoted_multiline_string,
+        complete::not_line_ending,
+    ))
+    .parse(input)
+}
+
 /// The system message to be used in the template, if applicable
 ///
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#system
 pub fn system(input: &str) -> IResult<&str, &str> {
     let template = tag_no_case("system");
-    preceded(
-        pair(template, multispace1),
-        alt((
-            triple_quote_string,
-            single_quoted_multiline_string,
-            complete::not_line_ending,
-        )),
-    )
-    .parse(input)
+    preceded(pair(template, multispace1), multiline).parse(input)
 }
 
 /// Takes an input string and returns a `ModelName`.
@@ -320,6 +319,11 @@ pub fn filename(input: &str) -> IResult<&str, &str> {
 
 pub fn is_file_char(c: char) -> bool {
     c.is_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_'
+}
+
+pub fn license(input: &str) -> IResult<&str, &str> {
+    let license_tag = tag_no_case("license");
+    preceded(pair(license_tag, multispace1), multiline)(input)
 }
 
 #[cfg(test)]
@@ -424,7 +428,7 @@ mod tests {
     const TEMPLATE_PREFIX: &str = "TEMPLATE ";
 
     #[test]
-    fn test_template() {
+    fn templates_are_parsed() {
         let test_cases: Vec<String> = TEST_TRIPLE_QUOTES
             .iter()
             .chain(TEST_SINGLE_QUOTE_MULTILINE)
@@ -476,6 +480,15 @@ mod tests {
         for test_case in test_data.lines() {
             dbg!(test_case);
             adapter(test_case).expect("should be able to parse adapter");
+        }
+    }
+
+    #[test]
+    fn licenses_are_parsed() {
+        let test_data = include_str!("./testdata/licenses.txt");
+        for test_case in test_data.split(":endcase\n").filter(|s| !s.is_empty()) {
+            dbg!(&test_case);
+            license(test_case).expect("should be able to parse license");
         }
     }
 }

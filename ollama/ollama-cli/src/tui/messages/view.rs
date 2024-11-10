@@ -37,7 +37,8 @@ impl MessageContent {
     }
 
     fn height(&self) -> u16 {
-        self.content.len()
+        self.content
+            .len()
             .try_into()
             .expect("should be able to coerce this usize into a u16")
     }
@@ -84,10 +85,7 @@ impl MessageViewBuilder {
             .map(|line: Cow<'_, str>| line.into())
             .collect();
 
-        MessageContent {
-            role,
-            content,
-        }
+        MessageContent { role, content }
     }
 }
 
@@ -113,10 +111,7 @@ fn fit_messages(messages: &[Message], max_height: u16, message_cell_width: u16) 
             move |builder, message| Some(builder.make_row(message)),
         )
         .map(|content| {
-            let MessageContent {
-                role,
-                content,
-            } = content;
+            let MessageContent { role, content } = content;
 
             let mut content = content.into_iter();
             let first = Line::from_iter([
