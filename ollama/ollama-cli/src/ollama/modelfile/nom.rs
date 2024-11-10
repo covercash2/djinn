@@ -21,16 +21,18 @@ use nom::{
         complete::tag_no_case,
         streaming::{tag, take_until, take_while, take_while1},
     },
-    character::complete::{self, multispace1},
-    combinator::value,
+    character::{
+        complete::{self, multispace1},
+        is_alphanumeric,
+    },
+    combinator::{not, value},
     error::context,
-    multi::many0,
+    multi::{many0, many1},
     sequence::{delimited, pair, preceded, terminated},
     IResult, Parser as _,
 };
-use strum::{
-    EnumDiscriminants, EnumIter, EnumString, IntoStaticStr, VariantArray,
-};
+
+use super::{Parameter, ParameterName, TensorFile};
 
 const TRIPLE_QUOTES: &str = r#"""""#;
 const SINGLE_QUOTE: &str = r#"""#;
@@ -45,7 +47,7 @@ pub fn from(input: &str) -> IResult<&str, &str> {
     context("FROM", preceded(pair(from_tag, space), model_id)).parse(input)
 }
 
-fn model_id(input: &str) -> IResult<&str, &str> {
+pub fn model_id(input: &str) -> IResult<&str, &str> {
     complete::not_line_ending(input)
 }
 
@@ -58,7 +60,7 @@ pub enum ModelId {
 
 /// Parse a comment line.
 /// Comments start with a `#` and take a single line.
-fn comment(input: &str) -> IResult<&str, ()> {
+pub fn comment(input: &str) -> IResult<&str, ()> {
     let comment_delimeter = tag("#");
 
     context(
@@ -69,7 +71,7 @@ fn comment(input: &str) -> IResult<&str, ()> {
 }
 
 /// Consume empty lines and comments
-fn skip_lines(input: &str) -> IResult<&str, ()> {
+pub fn skip_lines(input: &str) -> IResult<&str, ()> {
     context("skip_lines", value((), many0(comment))).parse(input)
 }
 
@@ -101,7 +103,7 @@ fn template(input: &str) -> IResult<&str, &str> {
 /// A string surrounded by trippled quotes.
 /// """Like this!
 /// And they can be on multiple lines."""
-fn triple_quote_string(input: &str) -> IResult<&str, &str> {
+pub fn triple_quote_string(input: &str) -> IResult<&str, &str> {
     delimited(
         tag(TRIPLE_QUOTES),
         take_until(TRIPLE_QUOTES),
@@ -113,7 +115,7 @@ fn triple_quote_string(input: &str) -> IResult<&str, &str> {
 /// A multiline string with single quotes.
 /// Why is this allowed?
 /// The inmates are running the asylum.
-fn single_quoted_multiline_string(input: &str) -> IResult<&str, &str> {
+pub fn single_quoted_multiline_string(input: &str) -> IResult<&str, &str> {
     delimited(
         tag(SINGLE_QUOTE),
         take_until(SINGLE_QUOTE),
@@ -122,82 +124,7 @@ fn single_quoted_multiline_string(input: &str) -> IResult<&str, &str> {
     .parse(input)
 }
 
-/// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
-#[derive(EnumDiscriminants)]
-#[strum_discriminants(name(ParameterName))]
-#[strum_discriminants(derive(EnumIter, IntoStaticStr, EnumString, VariantArray))]
-#[strum_discriminants(strum(serialize_all = "snake_case"))]
-pub enum Parameter {
-    /// Enable Mirostat sampling for controlling perplexity.
-    /// (default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)
-    Mirostat(usize),
-    /// Influences how quickly the algorithm responds
-    /// to feedback from the generated text.
-    /// A lower learning rate will result in slower adjustments,
-    /// while a higher learning rate will make the algorithm more responsive.
-    /// (Default: 0.1)
-    MirostatEta(f32),
-    /// Controls the balance between coherence and diversity of the output.
-    /// A lower value will result in more focused and coherent text.
-    /// (Default: 5.0)
-    MirostatTau(f32),
-    /// Sets the size of the context window
-    /// used to generate the next token.
-    /// (Default: 2048)
-    NumCtx(usize),
-    /// Sets how far back for the model
-    /// to look back to prevent repetition.
-    /// (Default: 64, 0 = disabled, -1 = num_ctx)
-    RepeatLastN(usize),
-    /// Sets how strongly to penalize repetitions.
-    /// A higher value (e.g., 1.5) will penalize repetitions more strongly,
-    /// while a lower value (e.g., 0.9) will be more lenient.
-    /// (Default: 1.1)
-    RepeatPenalty(f32),
-    /// The temperature of the model.
-    /// Increasing the temperature will make the model answer more creatively.
-    /// (Default: 0.8)
-    Temperature(f32),
-    /// Sets the random number seed to use for generation.
-    /// Setting this to a specific number will make the model generate the same text
-    /// for the same prompt.
-    /// (Default: 0)
-    Seed(usize),
-    /// Sets the stop sequences to use.
-    /// When this pattern is encountered the LLM will stop generating text and return.
-    /// Multiple stop patterns may be set by specifying multiple separate stop parameters
-    /// in a modelfile.
-    Stop(String),
-    /// Tail free sampling is used to reduce the impact
-    /// of less probable tokens from the output.
-    /// A higher value (e.g., 2.0) will reduce the impact more,
-    /// while a value of 1.0 disables this setting.
-    /// (default: 1)
-    TfsZ(f32),
-    /// Maximum number of tokens to predict when generating text.
-    /// (Default: 128, -1 = infinite generation, -2 = fill context)
-    NumPredict(usize),
-    /// Reduces the probability of generating nonsense.
-    /// A higher value (e.g. 100) will give more diverse answers,
-    /// while a lower value (e.g. 10) will be more conservative.
-    /// (Default: 40)
-    TopK(usize),
-    /// Works together with top-k.
-    /// A higher value (e.g., 0.95) will lead to more diverse text,
-    /// while a lower value (e.g., 0.5) will generate more focused and conservative text.
-    /// (Default: 0.9)
-    TopP(f32),
-    /// Alternative to the top_p,
-    /// and aims to ensure a balance of quality and variety.
-    /// The parameter p represents the minimum probability for a token to be considered,
-    /// relative to the probability of the most likely token.
-    /// For example, with p=0.05 and the most likely token having a probability of 0.9,
-    /// logits with a value less than 0.045 are filtered out.
-    /// (Default: 0.0)
-    MinP(f32),
-}
-
-fn parameter_name(input: &str) -> IResult<&str, ParameterName> {
+pub fn parameter_name(input: &str) -> IResult<&str, ParameterName> {
     dbg!(input);
     alt((
         terminated(
@@ -266,11 +193,11 @@ fn parameter_name(input: &str) -> IResult<&str, ParameterName> {
     })
 }
 
-fn float_parameter_value(input: &str) -> IResult<&str, f32> {
+pub fn float_parameter_value(input: &str) -> IResult<&str, f32> {
     nom::number::complete::float(input)
 }
 
-fn int_parameter_value(input: &str) -> IResult<&str, usize> {
+pub fn int_parameter_value(input: &str) -> IResult<&str, usize> {
     nom::character::complete::digit1(input).map(|(s, int)| {
         (
             s,
@@ -279,11 +206,11 @@ fn int_parameter_value(input: &str) -> IResult<&str, usize> {
     })
 }
 
-fn string_parameter_value(input: &str) -> IResult<&str, &str> {
+pub fn string_parameter_value(input: &str) -> IResult<&str, &str> {
     complete::not_line_ending(input)
 }
 
-fn parameter(input: &str) -> IResult<&str, Parameter> {
+pub fn parameter(input: &str) -> IResult<&str, Parameter> {
     dbg!(&input);
     let (input, name) = parameter_name(input)?;
     dbg!(name);
@@ -336,7 +263,7 @@ fn parameter(input: &str) -> IResult<&str, Parameter> {
 /// to an arbitrary string value
 ///
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
-fn parameter_line(input: &str) -> IResult<&str, Parameter> {
+pub fn parameter_line(input: &str) -> IResult<&str, Parameter> {
     let parameter_tag = tag_no_case("PARAMETER");
 
     dbg!(&input);
@@ -347,7 +274,7 @@ fn parameter_line(input: &str) -> IResult<&str, Parameter> {
 /// The system message to be used in the template, if applicable
 ///
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#system
-fn system(input: &str) -> IResult<&str, &str> {
+pub fn system(input: &str) -> IResult<&str, &str> {
     let template = tag_no_case("system");
     preceded(
         pair(template, multispace1),
@@ -360,9 +287,46 @@ fn system(input: &str) -> IResult<&str, &str> {
     .parse(input)
 }
 
+/// Takes an input string and returns a `ModelName`.
+/// Parses a line that starts with `FROM`
+/// that specifies the [`ModelId`]
+pub fn adapter(input: &str) -> IResult<&str, TensorFile> {
+    let adapter_tag = tag_no_case("adapter");
+
+    context(
+        "ADAPTER",
+        preceded(pair(adapter_tag, multispace1), tensor_file),
+    )
+    .parse(input)
+}
+
+pub fn tensor_file(input: &str) -> IResult<&str, TensorFile> {
+    filename
+        .map(|filename| {
+            if filename.ends_with(".gguf") {
+                TensorFile::Gguf(PathBuf::from(filename))
+            } else if filename.ends_with(".safetensors") {
+                TensorFile::Safetensor(PathBuf::from(filename))
+            } else {
+                panic!("bad file extensions");
+            }
+        })
+        .parse(input)
+}
+
+pub fn filename(input: &str) -> IResult<&str, &str> {
+    nom::bytes::complete::take_while1(is_file_char).parse(input)
+}
+
+pub fn is_file_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_'
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    use strum::IntoEnumIterator;
 
     use super::*;
 
@@ -503,6 +467,15 @@ mod tests {
         for message in test_data.split(":endcase\n").filter(|s| !s.is_empty()) {
             dbg!(&message);
             system(message).expect("should be able to parse system message");
+        }
+    }
+
+    #[test]
+    fn adapaters_are_parsed() {
+        let test_data = include_str!("./testdata/adapters.txt");
+        for test_case in test_data.lines() {
+            dbg!(test_case);
+            adapter(test_case).expect("should be able to parse adapter");
         }
     }
 }

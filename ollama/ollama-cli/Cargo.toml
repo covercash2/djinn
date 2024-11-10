@@ -9,6 +9,7 @@ async-stream = "0.3.5"
 chrono = "0.4.38"
 clap = { version = "4.5.16", features = ["derive", "string"] }
 color-eyre = "0.6.3"
+chumsky = "0.9.3"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 edit = "0.1.5"
 extend = "1.2.0"
