@@ -3,6 +3,7 @@ use std::sync::Arc;
 use ollama_rs::generation::chat::{
     request::ChatMessageRequest, ChatMessage, ChatMessageResponseStream,
 };
+use strum::{EnumDiscriminants, EnumString};
 
 use super::{Client, ModelName};
 
@@ -13,7 +14,10 @@ pub struct ChatRequest {
     pub history: Vec<Message>,
 }
 
-#[derive(Debug, Clone, strum::Display)]
+#[derive(Debug, Clone, strum::Display, EnumDiscriminants)]
+#[strum_discriminants(name(MessageRole))]
+#[strum_discriminants(derive(EnumString))]
+#[strum_discriminants(strum(serialize_all = "lowercase"))]
 pub enum Message {
     #[strum(serialize = "assistant: {0}")]
     Assistant(Arc<str>),
@@ -35,6 +39,18 @@ impl Message {
     pub fn content(&self) -> Arc<str> {
         match self {
             Message::Assistant(arc) | Message::User(arc) | Message::System(arc) => arc.clone(),
+        }
+    }
+}
+
+impl<'a> From<(MessageRole, &'a str)> for Message {
+    fn from(value: (MessageRole, &'a str)) -> Self {
+        let (role, message) = value;
+        let message: Arc<str> = message.into();
+        match role {
+            MessageRole::Assistant => Message::Assistant(message),
+            MessageRole::User => Message::User(message),
+            MessageRole::System => Message::System(message),
         }
     }
 }
