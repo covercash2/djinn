@@ -13,6 +13,7 @@ chumsky = "0.9.3"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 edit = "0.1.5"
 extend = "1.2.0"
+derive_builder = "0.20.2"
 futures = "0.3.30"
 itertools = "0.13.0"
 nom = "7.1.3"
