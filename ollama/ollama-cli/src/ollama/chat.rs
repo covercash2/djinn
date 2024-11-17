@@ -3,6 +3,7 @@ use std::sync::Arc;
 use ollama_rs::generation::chat::{
     request::ChatMessageRequest, ChatMessage, ChatMessageResponseStream,
 };
+use serde::{Deserialize, Serialize};
 use strum::{EnumDiscriminants, EnumString};
 
 use super::{Client, ModelName};
@@ -14,7 +15,7 @@ pub struct ChatRequest {
     pub history: Vec<Message>,
 }
 
-#[derive(Debug, Clone, strum::Display, EnumDiscriminants)]
+#[derive(Debug, Clone, strum::Display, EnumDiscriminants, Serialize, Deserialize)]
 #[strum_discriminants(name(MessageRole))]
 #[strum_discriminants(derive(EnumString))]
 #[strum_discriminants(strum(serialize_all = "lowercase"))]

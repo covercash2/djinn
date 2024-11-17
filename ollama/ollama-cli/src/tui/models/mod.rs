@@ -1,5 +1,6 @@
 use model_info::{ModelInfoView, ModelInfoViewModel};
 use model_list::{ModelListView, ModelListViewModel};
+use modelfile::{ModelfileView, ModelfileViewModel};
 use ollama_rs::models::ModelInfo;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
@@ -17,11 +18,13 @@ use super::{event::Action, AppEvent, StyleExt};
 
 mod model_info;
 mod model_list;
+mod modelfile;
 
 #[derive(Clone, Debug, Default)]
 pub struct ModelsViewModel {
     model_list: ModelListViewModel,
     model_info: ModelInfoViewModel,
+    modelfile: ModelfileViewModel,
     active_pane: Option<Pane>,
     focused_pane: Pane,
 }
@@ -30,7 +33,10 @@ impl ModelsViewModel {
     pub fn handle_response(&mut self, response: Response) -> Result<()> {
         match response {
             Response::LocalModels(_) => self.model_list.handle_response(response),
-            Response::ModelInfo(_) => self.model_info.handle_response(response),
+            Response::ModelInfo(_) => self
+                .model_info
+                .handle_response(response.clone())
+                .and_then(|_| self.modelfile.handle_response(response)),
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }
@@ -40,6 +46,7 @@ impl ModelsViewModel {
             let model_event = match pane {
                 Pane::ModelList => self.model_list.handle_event(action).await?,
                 Pane::ModelInfo => self.model_info.handle_action(action)?,
+                Pane::Modelfile => self.modelfile.handle_action(action)?,
             };
 
             if let Some(model_event) = model_event {
@@ -99,20 +106,23 @@ pub enum Pane {
     #[default]
     ModelList,
     ModelInfo,
+    Modelfile,
 }
 
 impl Pane {
     fn next(&self) -> Pane {
         match self {
             Pane::ModelList => Pane::ModelInfo,
-            Pane::ModelInfo => Pane::ModelList,
+            Pane::ModelInfo => Pane::Modelfile,
+            Pane::Modelfile => Pane::ModelList,
         }
     }
 
     fn previous(&self) -> Pane {
         match self {
-            Pane::ModelList => Pane::ModelInfo,
+            Pane::ModelList => Pane::Modelfile,
             Pane::ModelInfo => Pane::ModelList,
+            Pane::Modelfile => Pane::ModelInfo,
         }
     }
 }
@@ -120,9 +130,13 @@ impl Pane {
 #[extend::ext(name = ModelsView)]
 pub impl<'a> Frame<'a> {
     fn models_view(&mut self, parent: Rect, style: Style, view_model: &mut ModelsViewModel) {
-        let vertical = Layout::vertical([Constraint::Percentage(20), Constraint::Min(1)]);
+        let vertical = Layout::vertical([
+            Constraint::Percentage(20),
+            Constraint::Min(1),
+            Constraint::Min(1),
+        ]);
 
-        let [model_list_area, model_info_area] = vertical.areas(parent);
+        let [model_list_area, model_info_area, modelfile_area] = vertical.areas(parent);
 
         let model_list_style = if let Some(Pane::ModelList) = view_model.active_pane {
             Style::active()
@@ -150,6 +164,16 @@ pub impl<'a> Frame<'a> {
             model_info_style,
             &mut view_model.model_info,
         );
+
+        let modelfile_style = if let Some(Pane::Modelfile) = view_model.active_pane {
+            Style::active()
+        } else if view_model.focused_pane == Pane::Modelfile {
+            Style::focused()
+        } else {
+            style
+        };
+
+        self.modelfile(modelfile_area, modelfile_style, &mut view_model.modelfile);
     }
 }
 
