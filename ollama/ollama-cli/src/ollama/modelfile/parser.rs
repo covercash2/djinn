@@ -390,6 +390,7 @@ pub fn message(input: &str) -> IResult<&str, Instruction> {
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
     use strum::IntoEnumIterator;
 
     use crate::ollama::modelfile::test_data::{
@@ -455,7 +456,13 @@ mod tests {
     #[test]
     fn triple_quotes_are_parsed() {
         for quote in TEST_TRIPLE_QUOTES {
-            triple_quote_string(quote).expect("should be able to parse triple quoted strings");
+            let (_rest, parsed) = triple_quote_string(quote).expect("should be able to parse triple quoted strings");
+            assert_snapshot!(parsed, @r"
+            here's some text
+                        in triple quotes
+                        we just need to consume it all
+                        and return it back
+            ");
         }
     }
 
