@@ -5,19 +5,26 @@
 //! to define a derived model.
 //! This is an attempt to parse that genius file format in Rust.
 
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use nom::instructions;
+use error::ModelfileError;
+use parser::instructions;
+use serde::{Deserialize, Serialize};
 use strum::{EnumDiscriminants, EnumIter, EnumString, IntoStaticStr, VariantArray};
 
 use super::chat::Message;
 
-mod nom;
+pub mod error;
+mod parser;
 
 #[cfg(test)]
 pub mod test_data;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Modelfile {
     from: String,
     parameters: Vec<Parameter>,
@@ -29,16 +36,18 @@ pub struct Modelfile {
 }
 
 impl FromStr for Modelfile {
-    type Err = String;
+    type Err = ModelfileError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let instructions: Vec<Instruction> = instructions(input)
-            .map_err(|error| error.to_string())
+            .map_err(|error| ModelfileError::Parse(error.to_string()))
             .and_then(|(rest, instructions)| {
                 if rest.is_empty() {
                     Ok(instructions)
                 } else {
-                    Err("parser did not consume all input".into())
+                    Err(ModelfileError::Parse(
+                        "parser did not consume all input".to_string(),
+                    ))
                 }
             })?;
 
@@ -73,7 +82,7 @@ pub struct ModelfileBuilder {
 }
 
 impl ModelfileBuilder {
-    pub fn build(self) -> Result<Modelfile, String> {
+    pub fn build(self) -> Result<Modelfile, ModelfileError> {
         let ModelfileBuilder {
             from,
             parameters,
@@ -94,16 +103,18 @@ impl ModelfileBuilder {
                 messages,
             })
         } else {
-            Err("Modelfile requires a FROM instruction".into())
+            Err(ModelfileError::Builder(
+                "Modelfile requires a FROM instruction".into(),
+            ))
         }
     }
 
-    pub fn from(&mut self, input: String) -> Result<&mut Self, String> {
+    pub fn from(&mut self, input: String) -> Result<&mut Self, ModelfileError> {
         if self.from.is_some() {
-            Err(format!(
+            Err(ModelfileError::Builder(format!(
                 "Modelfile can only have one FROM instruction: {}",
                 input
-            ))
+            )))
         } else {
             self.from = Some(input);
             Ok(self)
@@ -115,36 +126,36 @@ impl ModelfileBuilder {
         self
     }
 
-    pub fn template(&mut self, template: String) -> Result<&mut Self, String> {
+    pub fn template(&mut self, template: String) -> Result<&mut Self, ModelfileError> {
         if self.template.is_some() {
-            Err(format!(
+            Err(ModelfileError::Builder(format!(
                 "Modelfile can only have one TEMPLATE instruction: {}",
                 template
-            ))
+            )))
         } else {
             self.template = Some(template);
             Ok(self)
         }
     }
 
-    pub fn system(&mut self, system: String) -> Result<&mut Self, String> {
+    pub fn system(&mut self, system: String) -> Result<&mut Self, ModelfileError> {
         if self.system.is_some() {
-            Err(format!(
+            Err(ModelfileError::Builder(format!(
                 "Modelfile can only have one SYSTEM instruction: {}",
                 system,
-            ))
+            )))
         } else {
             self.system = Some(system);
             Ok(self)
         }
     }
 
-    pub fn adapter(&mut self, adapter: TensorFile) -> Result<&mut Self, String> {
+    pub fn adapter(&mut self, adapter: TensorFile) -> Result<&mut Self, ModelfileError> {
         if self.adapter.is_some() {
-            Err(format!(
+            Err(ModelfileError::Builder(format!(
                 "Modelfile can only have one ADAPTER instruction: {:?}",
                 adapter,
-            ))
+            )))
         } else {
             self.adapter = Some(adapter);
             Ok(self)
@@ -196,14 +207,29 @@ impl From<Message> for Instruction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TensorFile {
     Gguf(PathBuf),
     Safetensor(PathBuf),
 }
 
+impl AsRef<Path> for TensorFile {
+    fn as_ref(&self) -> &Path {
+        match self {
+            TensorFile::Gguf(path_buf) => path_buf.as_ref(),
+            TensorFile::Safetensor(path_buf) => path_buf.as_ref(),
+        }
+    }
+}
+
+impl Display for TensorFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.as_ref().display().to_string())
+    }
+}
+
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
-#[derive(Debug, Clone, EnumDiscriminants)]
+#[derive(Debug, Clone, EnumDiscriminants, strum::Display, Serialize, Deserialize)]
 #[strum_discriminants(name(ParameterName))]
 #[strum_discriminants(derive(EnumIter, IntoStaticStr, EnumString, VariantArray))]
 #[strum_discriminants(strum(serialize_all = "snake_case"))]

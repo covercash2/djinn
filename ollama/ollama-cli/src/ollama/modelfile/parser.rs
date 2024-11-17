@@ -21,11 +21,11 @@ use nom::{
         complete::tag_no_case,
         streaming::{tag, take_until, take_while, take_while1},
     },
-    character::complete::{self, multispace0, multispace1},
+    character::complete::{self, char, multispace1},
     combinator::{eof, value},
-    error::{context, dbg_dmp},
-    multi::{many0, many1, many_till},
-    sequence::{delimited, pair, preceded, terminated},
+    error::context,
+    multi::{many1, many_till},
+    sequence::{delimited, pair, preceded, separated_pair, terminated},
     IResult, Parser as _,
 };
 
@@ -72,14 +72,24 @@ pub fn from(input: &str) -> IResult<&str, Instruction> {
 }
 
 pub fn model_id(input: &str) -> IResult<&str, &str> {
-    complete::not_line_ending(input)
+    complete::not_line_ending.parse(input)
+}
+
+// TODO
+fn versioned_model(input: &str) -> IResult<&str, ModelId> {
+    separated_pair(filename, char(':'), filename)
+        .map(|(name, version)| ModelId::VersionedModel {
+            name: name.to_string(),
+            version: version.to_string(),
+        })
+        .parse(input)
 }
 
 #[derive(Debug, Clone)]
 pub enum ModelId {
     VersionedModel { name: String, version: String },
-    Path { path: PathBuf },
-    Gguf { path: PathBuf },
+    Blob { path: PathBuf },
+    TensorFile(TensorFile),
 }
 
 /// Parse a comment line.
@@ -111,6 +121,7 @@ pub fn skip_lines(input: &str) -> IResult<&str, Instruction> {
 /// `*` the docs are actually super weird about this.
 /// They say in [the spec]:
 /// > Note: syntax may be model specific
+///
 /// Good thing the authors are geniuses,
 /// otherwise this would be totally unhinged.
 ///
@@ -159,7 +170,6 @@ pub fn single_quoted_multiline_string(input: &str) -> IResult<&str, &str> {
 }
 
 pub fn parameter_name(input: &str) -> IResult<&str, ParameterName> {
-    dbg!(input);
     alt((
         terminated(
             tag::<&str, &str, _>(ParameterName::Mirostat.into()),
@@ -245,9 +255,7 @@ pub fn string_parameter_value(input: &str) -> IResult<&str, String> {
 }
 
 pub fn parameter(input: &str) -> IResult<&str, Parameter> {
-    dbg!(&input);
     let (input, name) = parameter_name(input)?;
-    dbg!(name);
     match name {
         ParameterName::Mirostat => int_parameter_value.map(Parameter::Mirostat).parse(input),
         ParameterName::MirostatEta => float_parameter_value
@@ -281,8 +289,6 @@ pub fn parameter(input: &str) -> IResult<&str, Parameter> {
 /// https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter
 pub fn parameter_line(input: &str) -> IResult<&str, Instruction> {
     let parameter_tag = tag_no_case("PARAMETER");
-
-    dbg!(&input);
 
     context(
         "PARAMETER",
