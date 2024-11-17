@@ -16,6 +16,7 @@ use super::ModelEvent;
 pub struct ModelfileViewModel {
     modelfile: Option<Modelfile>,
     model_info: HashMap<String, toml::Value>,
+    selected: Option<usize>,
     instructions: Vec<String>,
     details: Option<toml::Value>,
     list_state: ListState,
@@ -50,12 +51,12 @@ impl ModelfileViewModel {
         match action {
             Action::Quit => Ok(Some(ModelEvent::Deactivate)),
             Action::Up => {
-                self.list_state.select_previous();
+                self.prev();
                 self.update_details()?;
                 Ok(None)
             }
             Action::Down => {
-                self.list_state.select_next();
+                self.next();
                 self.update_details()?;
                 Ok(None)
             }
@@ -69,16 +70,44 @@ impl ModelfileViewModel {
         }
     }
 
+    fn next(&mut self) {
+        if let Some(selected) = self.selected {
+            if selected == self.instructions.len() - 1 {
+                self.selected = Some(0);
+            } else {
+                self.selected = Some(selected + 1);
+            }
+        } else {
+            self.selected = Some(0);
+        }
+    }
+
+    fn prev(&mut self) {
+        if let Some(selected) = self.selected {
+            if selected == 0 {
+                self.selected = Some(self.instructions.len() - 1);
+            } else {
+                self.selected = Some(selected - 1);
+            }
+        } else {
+            self.selected = Some(self.instructions.len() - 1);
+        }
+    }
+
     fn update_details(&mut self) -> Result<()> {
         tracing::info!(offset = self.list_state.selected(), "updating offset");
-        if let Some(selected) = self.list_state.selected() {
-            let details = self
+        if let Some(selected) = self.selected {
+            let instruction = self
                 .instructions
                 .get(selected)
-                .and_then(|instruction| self.model_info.get(instruction))
+                .ok_or(Error::ModelfileIndex(selected))?;
+            let details = self
+                .model_info
+                .get(instruction)
                 .cloned()
-                .ok_or(Error::ModelfileIndex)?;
+                .ok_or(Error::ModelfileMissing(instruction.to_string()))?;
             self.details = Some(details);
+            self.list_state.select(Some(selected));
         }
         Ok(())
     }
