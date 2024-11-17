@@ -11,8 +11,11 @@ pub enum Error {
     #[error(transparent)]
     Modelfile(#[from] ModelfileError),
 
-    #[error("unable to index instruction in Modelfile")]
-    ModelfileIndex,
+    #[error("unable to index instruction in Modelfile: {0}")]
+    ModelfileIndex(usize),
+
+    #[error("missing instruction in Modelfile: {0}")]
+    ModelfileMissing(String),
 
     #[error(transparent)]
     OllamaRs(#[from] OllamaError),
