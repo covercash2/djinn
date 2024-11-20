@@ -12,7 +12,6 @@ use crate::error::Result;
 pub mod chat;
 pub mod embeddings;
 pub mod generate;
-pub mod modelfile;
 
 pub const DEFAULT_MODEL: &str = "mistral-nemo";
 pub const DEFAULT_DOMAIN: &str = "hoss";
