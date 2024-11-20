@@ -1,22 +1,37 @@
-# djinn
+# `djinn-rs`
 
-Right now the Rust implementation is most complete.
+a Rust playground
+for running language models
+and some other machine learning models.
 
-Run with command line arguments:
+## `djinn-cli`
+the main entrypoint
+for running either
+a server (with `djinn-server`)
+or a one shot inference.
+
+## `djinn-core`
+
+core ML functionality and model implementations.
+
+## `djinn-server`
+
+an HTTP server
+with an API
+and HTMX front-end
+for running models
+
+# examples
+
+run the server on a Macbook M-series:
 
 ```sh
-$ cd djinn-rs
-$ cargo run -- --help
-# example prompt
-$ cargo run --release -- llama --disable-flash-attention --model-version v1 --dtype f32
- "In a world" --sample-len 256 --repeat-penalty 50
+cargo run --release --features djinn-core/mac -- server-config --name test
 ```
 
-## supported models
-
-- Llama 1
-- YOLOv8
-
-### TODO
-- Llama 2
-- [LoRA](https://github.com/EricLBuehler/candle-lora)
+breakdown:
+    - `cargo run --release` to build in release mode for best performance
+    - `--features djinn-core/mac` to enable CoreML acceleration
+    - `--` everything before this are `cargo` args and everything after are `djinn` args
+    - `server-config` command to run the server from a config file
+    - `--name test` to run the config named `test`, in `./configs/server/test.toml`
