@@ -12,7 +12,7 @@ use crate::ollama::chat::Message;
 
 use super::MessagesViewModel;
 
-const ELIPSIS: &str = "[...]";
+const ELLIPSIS: &str = "[...]";
 
 #[derive(Default)]
 struct MessageViewBuilder {
@@ -97,7 +97,7 @@ fn fit_content(content: &str, width: u16, height: u16) -> Vec<Cow<'_, str>> {
 
     if (height as usize) <= content_lines.len() {
         content_lines.pop();
-        content_lines.push(ELIPSIS.into());
+        content_lines.push(ELLIPSIS.into());
     }
 
     content_lines
