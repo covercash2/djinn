@@ -21,8 +21,6 @@ pub mod widget_item;
 pub mod widget_rendering;
 pub mod widget_state;
 
-const TEST_OUTPUT: &str = include_str!("../../../example_output.txt");
-
 #[derive(Clone, Debug)]
 pub struct MessagesViewModel {
     /// Streaming response from the model before it's finished.
@@ -37,7 +35,7 @@ impl Default for MessagesViewModel {
     fn default() -> Self {
         Self {
             model_stream: Default::default(),
-            messages: VecDeque::from([Message::Assistant(TEST_OUTPUT.into())]),
+            messages: VecDeque::from([Message::Assistant("".into())]),
             state: Default::default(),
         }
     }
