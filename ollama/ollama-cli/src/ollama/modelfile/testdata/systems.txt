@@ -1,3 +1,0 @@
-SYSTEM """Here is a multiline
- system message""":endcase
-SYSTEM You are Qwen, created by Alibaba Cloud. You are a helpful assistant.:endcase

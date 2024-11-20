@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use modelfile::Modelfile;
 use ratatui::{
     layout::{Constraint, Layout, Offset, Rect},
     style::{Color, Style},
@@ -8,7 +9,7 @@ use ratatui::{
 };
 
 use crate::error::{Error, Result};
-use crate::{lm::Response, ollama::modelfile::Modelfile, tui::event::Action};
+use crate::{lm::Response, tui::event::Action};
 
 use super::ModelEvent;
 

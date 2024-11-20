@@ -1,8 +1,9 @@
+use modelfile::modelfile::error::ModelfileError;
 use ollama_rs::error::OllamaError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
-use crate::{lm::Response, ollama::modelfile::error::ModelfileError};
+use crate::lm::Response;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

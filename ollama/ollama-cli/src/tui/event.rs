@@ -32,6 +32,7 @@ impl From<KeyEvent> for Action {
     fn from(key_event: KeyEvent) -> Self {
         match key_event.code {
             KeyCode::Char('q') => Action::Quit,
+            KeyCode::Esc => Action::Quit,
             KeyCode::Char('j') => Action::Down,
             KeyCode::Char('k') => Action::Up,
             KeyCode::Up => Action::Up,

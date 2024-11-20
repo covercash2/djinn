@@ -1,2 +1,0 @@
-adapter ./ollama-lora.gguf
-ADAPTER ./ollama-lora.safetensors
