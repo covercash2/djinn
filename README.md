@@ -4,6 +4,10 @@ a Rust playground
 for running language models
 and some other machine learning models.
 
+## `ollama-cli`
+
+a CLI/TUI for interacting with an [Ollama] server.
+
 ## `djinn-cli`
 the main entrypoint
 for running either

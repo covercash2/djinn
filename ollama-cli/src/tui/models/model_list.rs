@@ -5,7 +5,7 @@ use ollama_rs::models::LocalModel;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
-    text::{Line, Span},
+    text::Span,
     widgets::{Block, Row, Table, TableState},
     Frame,
 };
