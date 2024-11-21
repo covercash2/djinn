@@ -15,12 +15,6 @@ use crate::{
 pub mod state;
 pub mod view;
 
-pub mod highlight_spacing;
-pub mod widget;
-pub mod widget_item;
-pub mod widget_rendering;
-pub mod widget_state;
-
 #[derive(Clone, Debug)]
 pub struct MessagesViewModel {
     /// Streaming response from the model before it's finished.
@@ -46,7 +40,7 @@ pub enum MessagesEvent {
     Quit,
 }
 
-impl<'a> From<Message> for Text<'a> {
+impl From<Message> for Text<'_> {
     fn from(value: Message) -> Self {
         let role = value.role();
         let content = value.content();
