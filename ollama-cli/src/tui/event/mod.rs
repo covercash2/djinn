@@ -1,5 +1,12 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionDefinition {
+    action: Action,
+    key: KeyEvent,
+    description: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Action {
     Left,
@@ -40,6 +47,8 @@ impl From<KeyEvent> for Action {
             KeyCode::Char('h') => Action::Left,
             KeyCode::Char('l') => Action::Right,
             KeyCode::Char('r') => Action::Refresh,
+            KeyCode::Char('w') => Action::RightWord,
+            KeyCode::Char('b') => Action::LeftWord,
             KeyCode::Enter => Action::Enter,
             _ => Action::Unhandled,
         }

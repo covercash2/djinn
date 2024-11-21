@@ -1,11 +1,7 @@
 use ratatui::widgets::ListState;
 
-use super::view::MessageContent;
-
 #[derive(Debug, Clone, Default)]
 pub struct MessagesState {
-    cursor: usize,
-    message_view: Vec<MessageContent>,
     pub list_state: ListState,
 }
 

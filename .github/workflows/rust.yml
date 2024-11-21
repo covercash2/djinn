@@ -19,6 +19,8 @@ jobs:
     - name: typos-action
       uses: crate-ci/typos@v1.27.3
     - uses: actions/checkout@v4
+    - name: lint
+      run: cargo clippy
     - name: Build
       run: cargo build --verbose
     - name: Run tests

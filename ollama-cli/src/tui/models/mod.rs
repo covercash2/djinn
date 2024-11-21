@@ -51,10 +51,6 @@ impl ModelsViewModel {
 
             if let Some(model_event) = model_event {
                 match model_event {
-                    ModelEvent::Activate(pane) => {
-                        self.active_pane = Some(pane);
-                        Ok(None)
-                    }
                     ModelEvent::Deactivate => {
                         self.active_pane = None;
                         Ok(None)
@@ -94,7 +90,6 @@ impl ModelsViewModel {
 
 #[derive(Clone, Debug)]
 pub enum ModelEvent {
-    Activate(Pane),
     Deactivate,
     EditInfo(ModelInfo),
     GetInfo(ModelName),

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use modelfile::Modelfile;
 use ratatui::{
-    layout::{Constraint, Layout, Offset, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     widgets::{Block, List, ListState, Paragraph, Wrap},
     Frame,
@@ -21,10 +21,7 @@ pub struct ModelfileViewModel {
     instructions: Vec<String>,
     details: Option<toml::Value>,
     list_state: ListState,
-    /// x, y scroll offset
-    scroll_offset: Offset,
-    wrap: bool,
-    active_panel: Panel,
+    active_panel: Option<Panel>,
 }
 
 impl ModelfileViewModel {
@@ -61,7 +58,14 @@ impl ModelfileViewModel {
                 self.update_details()?;
                 Ok(None)
             }
-            Action::Enter => todo!(),
+            Action::Enter => {
+                if let Some(_selected) = self.selected {
+                    self.active_panel = Some(Panel::Details);
+                    Ok(None)
+                } else {
+                    Ok(None)
+                }
+            }
             Action::Left => todo!(),
             Action::Right => todo!(),
             Action::LeftWord => todo!(),

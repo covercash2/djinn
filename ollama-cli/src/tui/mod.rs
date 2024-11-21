@@ -1,4 +1,4 @@
-use std::{io::stdout, process::Command, time::Duration};
+use std::{io::stdout, time::Duration};
 
 use chat::ChatViewModel;
 use crossterm::ExecutableCommand as _;
@@ -120,6 +120,7 @@ impl AppContext {
         Ok(app_event)
     }
 
+    // TODO: use this function with [`modelfile`]
     fn edit_model_file(
         &mut self,
         terminal: &mut DefaultTerminal,
@@ -131,7 +132,7 @@ impl AppContext {
         let mut edit_options = edit::Builder::default();
         let edit_options = edit_options.suffix(".tmpl");
 
-        let edited_modelfile = edit::edit_with_builder(model_info.modelfile, edit_options)?;
+        let _edited_modelfile = edit::edit_with_builder(model_info.modelfile, edit_options)?;
 
         stdout().execute(crossterm::terminal::EnterAlternateScreen)?;
         crossterm::terminal::enable_raw_mode()?;

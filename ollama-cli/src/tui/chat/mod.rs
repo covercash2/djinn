@@ -167,7 +167,7 @@ pub impl<'a> Frame<'a> {
                     "e".bold(),
                     " to start editing.".bold(),
                 ],
-                Style::default().add_modifier(Modifier::RAPID_BLINK),
+                style.add_modifier(Modifier::RAPID_BLINK),
             ),
             InputMode::Edit => (
                 vec![

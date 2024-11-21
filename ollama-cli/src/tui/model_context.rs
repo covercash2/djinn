@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use ollama_rs::models::{LocalModel, ModelInfo};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
