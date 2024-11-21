@@ -15,7 +15,7 @@ use crate::{
 pub mod state;
 pub mod view;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MessagesViewModel {
     /// Streaming response from the model before it's finished.
     model_stream: String,
@@ -23,16 +23,6 @@ pub struct MessagesViewModel {
     /// of the conversation.
     messages: VecDeque<Message>,
     state: state::MessagesState,
-}
-
-impl Default for MessagesViewModel {
-    fn default() -> Self {
-        Self {
-            model_stream: Default::default(),
-            messages: VecDeque::from([Message::Assistant("".into())]),
-            state: Default::default(),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
