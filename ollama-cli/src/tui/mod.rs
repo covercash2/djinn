@@ -5,12 +5,14 @@ use crossterm::ExecutableCommand as _;
 use futures::StreamExt as _;
 use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
+use nav::{NavView, NavViewModel};
 use ollama_rs::models::ModelInfo;
 use ratatui::{
     crossterm::event::Event,
     style::{Color, Style},
     DefaultTerminal, Frame,
 };
+use strum::VariantNames;
 
 use crate::{
     lm::{Prompt, Response},
@@ -24,6 +26,7 @@ pub mod input;
 pub mod messages;
 mod model_context;
 pub mod models;
+mod nav;
 mod widgets_ext;
 
 pub struct AppContext {
@@ -31,15 +34,20 @@ pub struct AppContext {
     view: View,
 }
 
-#[derive(Clone)]
-enum View {
+#[derive(Clone, Debug, strum::EnumString, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(VariantNames))]
+#[strum_discriminants(name(ViewName))]
+#[strum_discriminants(strum(serialize_all = "lowercase"))]
+#[strum(serialize_all = "lowercase")]
+pub enum View {
     Chat(ChatViewModel),
     Models(ModelsViewModel),
+    Nav(NavViewModel),
 }
 
 impl Default for View {
     fn default() -> Self {
-        View::Models(ModelsViewModel::default())
+        View::Nav(Default::default())
     }
 }
 
@@ -48,6 +56,7 @@ impl View {
         let result = match self {
             View::Chat(ref mut chat_view_model) => chat_view_model.handle_response(response),
             View::Models(ref mut models_view_model) => models_view_model.handle_response(response),
+            View::Nav(_nav_view_model) => Ok(()),
         };
 
         if let Err(error) = result {
@@ -86,6 +95,9 @@ impl AppContext {
             View::Models(models_view_model) => {
                 frame.models_view(frame.area(), Style::default(), models_view_model)
             }
+            View::Nav(nav_view_model) => {
+                frame.nav_view(frame.area(), Style::active(), nav_view_model)
+            }
         }
     }
 
@@ -97,12 +109,9 @@ impl AppContext {
             tokio::select! {
                 _ = interval.tick() => { terminal.draw(|frame| self.draw(frame))?; },
                 Some(Ok(event)) = events.next() => {
-                    if let Some(app_event) = self.handle_input(event).await? {
-                        match app_event {
-                            AppEvent::Submit(message) => self.submit_message(message).await,
-                            AppEvent::EditSystemPrompt(model_info) => self.edit_model_file(&mut terminal, model_info)?,
-                            AppEvent::Quit => return Ok(()),
-                        }
+                    let cont = self.handle_event(&mut terminal, event).await?;
+                    if !cont {
+                        return Ok(());
                     }
                 },
                 Some(response) = self.model_context.response_receiver.recv() => {
@@ -112,10 +121,40 @@ impl AppContext {
         }
     }
 
+    /// Returns true if the event was handled
+    /// and false if the app should quit.
+    async fn handle_event(
+        &mut self,
+        terminal: &mut DefaultTerminal,
+        event: Event,
+    ) -> anyhow::Result<bool> {
+        if let Some(app_event) = self.handle_input(event.clone()).await? {
+            match app_event {
+                AppEvent::Submit(message) => {
+                    self.submit_message(message).await;
+                    Ok(true)
+                }
+                AppEvent::EditSystemPrompt(model_info) => {
+                    self.edit_model_file(terminal, model_info)?;
+                    Ok(true)
+                }
+                AppEvent::Quit => Ok(false),
+                AppEvent::Activate(view) => {
+                    self.view = view;
+                    Ok(true)
+                }
+            }
+        } else {
+            tracing::debug!(?event, "unhandled event");
+            Ok(true)
+        }
+    }
+
     async fn handle_input(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
         let app_event = match &mut self.view {
             View::Chat(ref mut chat_view_model) => chat_view_model.handle_event(event).await?,
             View::Models(models_view_model) => models_view_model.handle_event(event.into()).await?,
+            View::Nav(nav_view_model) => nav_view_model.handle_action(event.into())?,
         };
         Ok(app_event)
     }
@@ -150,6 +189,7 @@ impl AppContext {
 }
 
 pub enum AppEvent {
+    Activate(View),
     Submit(Prompt),
     EditSystemPrompt(ModelInfo),
     Quit,

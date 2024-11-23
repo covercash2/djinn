@@ -9,6 +9,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("error indexing collection at index {index}: {msg}")]
+    BadIndex { index: usize, msg: &'static str },
+
+    #[error("unable to parse view from string: {0}")]
+    ViewParse(&'static str),
+
     #[error(transparent)]
     Modelfile(#[from] ModelfileError),
 

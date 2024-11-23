@@ -21,7 +21,7 @@ use super::{
     AppEvent, StyleExt as _,
 };
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct ChatViewModel {
     text_input: TextInputViewModel,
     messages: MessagesViewModel,
