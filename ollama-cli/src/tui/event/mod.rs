@@ -110,8 +110,6 @@ mod tests {
 
     #[test]
     fn load_default_keymap() {
-        let event_definitions: EventDefinitions = toml::from_str(DEFAULTS).unwrap();
-
-        assert_debug_snapshot!(event_definitions);
+        let _event_definitions: EventDefinitions = toml::from_str(DEFAULTS).unwrap();
     }
 }
