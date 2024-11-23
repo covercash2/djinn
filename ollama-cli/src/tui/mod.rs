@@ -2,6 +2,7 @@ use std::{io::stdout, time::Duration};
 
 use chat::ChatViewModel;
 use crossterm::ExecutableCommand as _;
+use event::Action;
 use futures::StreamExt as _;
 use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
@@ -15,6 +16,7 @@ use ratatui::{
 use strum::VariantNames;
 
 use crate::{
+    error::Result,
     lm::{Prompt, Response},
     ollama,
     tui::chat::ChatView as _,
@@ -66,6 +68,16 @@ impl View {
             );
         }
     }
+
+    pub async fn init(&mut self) -> Result<Option<AppEvent>> {
+        match self {
+            View::Chat(_chat_view_model) => Ok(None),
+            View::Models(models_view_model) => {
+                models_view_model.handle_event(Action::Refresh).await
+            }
+            View::Nav(_nav_view_model) => Ok(None),
+        }
+    }
 }
 
 #[extend::ext]
@@ -109,9 +121,11 @@ impl AppContext {
             tokio::select! {
                 _ = interval.tick() => { terminal.draw(|frame| self.draw(frame))?; },
                 Some(Ok(event)) = events.next() => {
-                    let cont = self.handle_event(&mut terminal, event).await?;
-                    if !cont {
-                        return Ok(());
+                    if let Some(app_event) = self.handle_input(event).await? {
+                        let cont = self.handle_event(&mut terminal, app_event).await?;
+                        if !cont {
+                            return Ok(());
+                        }
                     }
                 },
                 Some(response) = self.model_context.response_receiver.recv() => {
@@ -126,27 +140,31 @@ impl AppContext {
     async fn handle_event(
         &mut self,
         terminal: &mut DefaultTerminal,
-        event: Event,
+        event: AppEvent,
     ) -> anyhow::Result<bool> {
-        if let Some(app_event) = self.handle_input(event.clone()).await? {
-            match app_event {
-                AppEvent::Submit(message) => {
-                    self.submit_message(message).await;
-                    Ok(true)
-                }
-                AppEvent::EditSystemPrompt(model_info) => {
-                    self.edit_model_file(terminal, model_info)?;
-                    Ok(true)
-                }
-                AppEvent::Quit => Ok(false),
-                AppEvent::Activate(view) => {
-                    self.view = view;
+        match event {
+            AppEvent::Submit(message) => {
+                self.submit_message(message).await;
+                Ok(true)
+            }
+            AppEvent::EditSystemPrompt(model_info) => {
+                self.edit_model_file(terminal, model_info)?;
+                Ok(true)
+            }
+            AppEvent::Quit => Ok(false),
+            AppEvent::Activate(view) => {
+                self.view = view;
+                if let Some(event) = self.view.init().await? {
+                    // necessary because of async recursion
+                    Box::pin(self.handle_event(terminal, event)).await
+                } else {
                     Ok(true)
                 }
             }
-        } else {
-            tracing::debug!(?event, "unhandled event");
-            Ok(true)
+            AppEvent::Deactivate => {
+                self.view = View::Nav(Default::default());
+                Ok(true)
+            }
         }
     }
 
@@ -190,6 +208,7 @@ impl AppContext {
 
 pub enum AppEvent {
     Activate(View),
+    Deactivate,
     Submit(Prompt),
     EditSystemPrompt(ModelInfo),
     Quit,
