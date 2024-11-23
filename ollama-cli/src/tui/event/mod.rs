@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use keymap::KeyMap;
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +44,10 @@ impl EventProcessor {
             .get(&self.input_mode)
             .and_then(|map| map.0.get(&KeyMap::from(event)))
             .copied()
-            .unwrap_or(Action::Nop)
+            .unwrap_or(match event.code {
+                KeyCode::Char(c) => Action::Unhandled(c),
+                _ => Action::Nop,
+            })
     }
 }
 

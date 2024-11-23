@@ -15,7 +15,7 @@ r = "refresh"
 w = "right_word"
 b = "left_word"
 enter = "enter"
-backspace = "backspace"
+backspace = "left"
 
 [edit]
 esc = "escape"
