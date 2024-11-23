@@ -19,73 +19,38 @@ use super::{
 pub struct TextInputViewModel {
     pub input: String,
     pub cursor_position: usize,
-    pub mode: InputMode,
 }
 
 #[derive(Debug, Clone)]
 pub enum TextInputEvent {
+    InputMode(InputMode),
     Submit(Arc<str>),
     Quit,
 }
 
 impl TextInputViewModel {
     pub fn handle_action(&mut self, action: Action) -> Result<Option<TextInputEvent>> {
-        match self.mode {
-            InputMode::Normal => match action {
-                Action::Edit => {
-                    self.mode = InputMode::Edit;
-                }
-                Action::Quit => return Ok(Some(TextInputEvent::Quit)),
-                Action::Right => self.move_cursor_right(),
-                Action::Left => self.move_cursor_left(),
-                Action::Beginning => self.move_cursor_to_beginning(),
-                Action::End => self.move_cursor_to_end(),
-                Action::RightWord => self.move_cursor_word(),
-                Action::LeftWord => self.move_cursor_back(),
-                _ => {}
-            },
-            InputMode::Edit => match action {
-                Action::Enter => return Ok(Some(self.submit_message())),
-                Action::Escape => self.mode = InputMode::Normal,
-                Action::Backspace => self.delete_char(),
-                Action::Unhandled(to_insert) => self.enter_char(to_insert),
-                _ => {}
-            },
+        match action {
+            Action::Edit => {
+                return Ok(Some(TextInputEvent::InputMode(InputMode::Edit)))
+            }
+            Action::Quit => return Ok(Some(TextInputEvent::Quit)),
+            Action::Right => self.move_cursor_right(),
+            Action::Left => self.move_cursor_left(),
+            Action::Beginning => self.move_cursor_to_beginning(),
+            Action::End => self.move_cursor_to_end(),
+            Action::RightWord => self.move_cursor_word(),
+            Action::LeftWord => self.move_cursor_back(),
+            Action::Enter => return Ok(Some(self.submit_message())),
+            Action::Escape => {
+                return Ok(Some(TextInputEvent::InputMode(InputMode::Normal)));
+            }
+            Action::Backspace => self.delete_char(),
+            Action::Unhandled(to_insert) => self.enter_char(to_insert),
+            _ => {}
         }
         Ok(None)
     }
-
-    // TODO: remove
-    // pub fn handle_key_event(&mut self, key: KeyEvent) -> Option<TextInputEvent> {
-    //     match self.mode {
-    //         InputMode::Normal => match key.code {
-    //             KeyCode::Char('i') | KeyCode::Char('a') => {
-    //                 self.mode = InputMode::Edit;
-    //             }
-    //             KeyCode::Char('q') => return Some(TextInputEvent::Quit),
-    //             KeyCode::Char('l') => self.move_cursor_right(),
-    //             KeyCode::Char('h') => self.move_cursor_left(),
-    //             KeyCode::Char('0') => self.move_cursor_to_beginning(),
-    //             KeyCode::Char('$') => self.move_cursor_to_end(),
-    //             KeyCode::Char('w') => self.move_cursor_word(),
-    //             KeyCode::Char('b') => self.move_cursor_back(),
-    //             _ => {}
-    //         },
-    //         InputMode::Edit if key.kind == KeyEventKind::Press => match key.code {
-    //             KeyCode::Enter => return Some(self.submit_message()),
-    //             KeyCode::Esc => self.mode = InputMode::Normal,
-    //             KeyCode::Char('\\') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-    //                 self.mode = InputMode::Normal
-    //             }
-    //             KeyCode::Backspace => self.delete_char(),
-    //             KeyCode::Char(to_insert) => self.enter_char(to_insert),
-    //             _ => {}
-    //         },
-    //         _ => {}
-    //     }
-    //
-    //     None
-    // }
 
     fn submit_message(&mut self) -> TextInputEvent {
         let message: Arc<str> = self.input.clone().into();
@@ -336,10 +301,7 @@ pub impl<'a> Frame<'a> {
 
         let input = Paragraph::new(lines.render())
             .scroll((y, 0))
-            .style(match view_model.mode {
-                InputMode::Normal => style,
-                InputMode::Edit => style.fg(Color::Yellow),
-            })
+            .style(style)
             .block(
                 Block::bordered().title(format!("cursor position: {}", view_model.cursor_position)),
             );

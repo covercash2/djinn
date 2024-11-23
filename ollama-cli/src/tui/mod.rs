@@ -2,7 +2,7 @@ use std::{io::stdout, time::Duration};
 
 use chat::ChatViewModel;
 use crossterm::ExecutableCommand as _;
-use event::{Action, EventProcessor};
+use event::{Action, EventProcessor, InputMode};
 use futures::StreamExt as _;
 use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
@@ -168,6 +168,10 @@ impl AppContext {
                 self.view = View::Nav(Default::default());
                 Ok(true)
             }
+            AppEvent::InputMode(input_mode) => {
+                self.event_processor.input_mode(input_mode);
+                Ok(true)
+            }
         }
     }
 
@@ -215,5 +219,6 @@ pub enum AppEvent {
     Deactivate,
     Submit(Prompt),
     EditSystemPrompt(ModelInfo),
+    InputMode(InputMode),
     Quit,
 }

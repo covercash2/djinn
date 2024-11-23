@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style, Stylize as _},
-    text::{Line, Text},
-    widgets::Paragraph,
+    style::Style,
     Frame,
 };
 
@@ -50,6 +48,7 @@ pub enum ChatEvent {
     Activate(Pane),
     Deactivate,
     NextView,
+    InputMode(InputMode),
     Submit(Arc<str>),
     Quit,
 }
@@ -67,6 +66,7 @@ impl From<TextInputEvent> for ChatEvent {
         match value {
             TextInputEvent::Submit(message) => ChatEvent::Submit(message),
             TextInputEvent::Quit => ChatEvent::Deactivate,
+            TextInputEvent::InputMode(input_mode) => ChatEvent::InputMode(input_mode),
         }
     }
 }
@@ -139,6 +139,7 @@ impl ChatViewModel {
                 Some(AppEvent::Submit(prompt))
             }
             ChatEvent::Quit => Some(AppEvent::Deactivate),
+            ChatEvent::InputMode(input_mode) => Some(AppEvent::InputMode(input_mode)),
         }
     }
 }
@@ -146,40 +147,9 @@ impl ChatViewModel {
 #[extend::ext(name = ChatView)]
 pub impl<'a> Frame<'a> {
     fn chat_view(&mut self, parent: Rect, style: Style, view_model: &mut ChatViewModel) {
-        let vertical = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Max(5),
-            Constraint::Min(1),
-        ]);
+        let vertical = Layout::vertical([Constraint::Max(5), Constraint::Min(1)]);
 
-        let [help_area, input_area, messages_area] = vertical.areas(parent);
-
-        let (msg, style) = match view_model.text_input.mode {
-            InputMode::Normal => (
-                vec![
-                    "Press ".into(),
-                    "q".bold(),
-                    " to exit, ".into(),
-                    "e".bold(),
-                    " to start editing.".bold(),
-                ],
-                style.add_modifier(Modifier::RAPID_BLINK),
-            ),
-            InputMode::Edit => (
-                vec![
-                    "Press ".into(),
-                    "Esc".bold(),
-                    " to stop editing, ".into(),
-                    "Enter".bold(),
-                    " to record the message".into(),
-                ],
-                Style::default(),
-            ),
-        };
-
-        let text = Text::from(Line::from(msg)).patch_style(style);
-        let help_message = Paragraph::new(text);
-        self.render_widget(help_message, help_area);
+        let [input_area, messages_area] = vertical.areas(parent);
 
         let input_style = if view_model.focused_view == Pane::Input {
             if let Some(Pane::Input) = view_model.active_view {
@@ -188,7 +158,7 @@ pub impl<'a> Frame<'a> {
                 Style::focused()
             }
         } else {
-            Style::default()
+            style
         };
         self.input_view(input_area, input_style, &view_model.text_input);
 
@@ -199,7 +169,7 @@ pub impl<'a> Frame<'a> {
                 Style::focused()
             }
         } else {
-            Style::default()
+            style
         };
         self.messages_view(messages_area, messages_style, &mut view_model.messages);
     }
