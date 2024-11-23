@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     style::{Style, Stylize},
     text::{Span, Text},
