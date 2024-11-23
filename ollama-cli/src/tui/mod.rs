@@ -4,6 +4,7 @@ use chat::ChatViewModel;
 use crossterm::ExecutableCommand as _;
 use event::{Action, EventProcessor, InputMode};
 use futures::StreamExt as _;
+use generate::{GenerateView, GenerateViewModel};
 use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
 use nav::{NavView, NavViewModel};
@@ -44,8 +45,9 @@ pub struct AppContext {
 #[strum_discriminants(strum(serialize_all = "lowercase"))]
 #[strum(serialize_all = "lowercase")]
 pub enum View {
-    Chat(ChatViewModel),
     Models(ModelsViewModel),
+    Chat(ChatViewModel),
+    Generate(GenerateViewModel),
     Nav(NavViewModel),
 }
 
@@ -60,6 +62,7 @@ impl View {
         let result = match self {
             View::Chat(ref mut chat_view_model) => chat_view_model.handle_response(response),
             View::Models(ref mut models_view_model) => models_view_model.handle_response(response),
+            View::Generate(ref mut view_model) => view_model.handle_response(response),
             View::Nav(_nav_view_model) => Ok(()),
         };
 
@@ -78,6 +81,7 @@ impl View {
                 models_view_model.handle_event(Action::Refresh).await
             }
             View::Nav(_nav_view_model) => Ok(None),
+            View::Generate(_generate_view_model) => Ok(None),
         }
     }
 }
@@ -112,6 +116,9 @@ impl AppContext {
             }
             View::Nav(nav_view_model) => {
                 frame.nav_view(frame.area(), Style::active(), nav_view_model)
+            }
+            View::Generate(generate_view_model) => {
+                frame.generate_view(frame.area(), Style::default(), generate_view_model)
             }
         }
     }
@@ -181,6 +188,7 @@ impl AppContext {
             View::Chat(ref mut chat_view_model) => chat_view_model.handle_action(action).await?,
             View::Models(models_view_model) => models_view_model.handle_event(action).await?,
             View::Nav(nav_view_model) => nav_view_model.handle_action(action)?,
+            View::Generate(generate_view_model) => generate_view_model.handle_action(action)?,
         };
         Ok(app_event)
     }
