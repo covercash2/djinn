@@ -112,7 +112,7 @@ impl ChatViewModel {
                 });
                 Some(AppEvent::Submit(prompt))
             }
-            ChatEvent::Quit => Some(AppEvent::Quit),
+            ChatEvent::Quit => Some(AppEvent::Deactivate),
         }
     }
 

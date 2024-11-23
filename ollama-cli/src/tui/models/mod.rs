@@ -81,7 +81,7 @@ impl ModelsViewModel {
                     self.active_pane = Some(self.focused_pane);
                     Ok(None)
                 }
-                Action::Quit => Ok(Some(AppEvent::Quit)),
+                Action::Quit => Ok(Some(AppEvent::Deactivate)),
                 Action::LeftWord | Action::RightWord | Action::Unhandled => Ok(None),
             }
         }
