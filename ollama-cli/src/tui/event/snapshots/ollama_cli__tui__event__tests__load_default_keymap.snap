@@ -9,42 +9,6 @@ EventDefinitions(
             {
                 Key {
                     event: KeyEvent {
-                        code: Left,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Left,
-                        },
-                    ),
-                }: Left,
-                Key {
-                    event: KeyEvent {
-                        code: Enter,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Enter,
-                        },
-                    ),
-                }: Enter,
-                Key {
-                    event: KeyEvent {
                         code: Esc,
                         modifiers: KeyModifiers(
                             0x0,
@@ -61,24 +25,6 @@ EventDefinitions(
                         },
                     ),
                 }: Escape,
-                Key {
-                    event: KeyEvent {
-                        code: Up,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Up,
-                        },
-                    ),
-                }: Up,
                 Key {
                     event: KeyEvent {
                         code: Down,
@@ -99,50 +45,6 @@ EventDefinitions(
                 }: Down,
                 Key {
                     event: KeyEvent {
-                        code: Backspace,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Backspace,
-                        },
-                    ),
-                }: Backspace,
-            },
-        ),
-        Normal: ActionMap(
-            {
-                Key {
-                    event: KeyEvent {
-                        code: Char(
-                            'i',
-                        ),
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Char(
-                                'i',
-                            ),
-                        },
-                    ),
-                }: Edit,
-                Key {
-                    event: KeyEvent {
                         code: Enter,
                         modifiers: KeyModifiers(
                             0x0,
@@ -161,8 +63,66 @@ EventDefinitions(
                 }: Enter,
                 Key {
                     event: KeyEvent {
+                        code: Backspace,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Backspace,
+                        },
+                    ),
+                }: Backspace,
+                Key {
+                    event: KeyEvent {
+                        code: Left,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Left,
+                        },
+                    ),
+                }: Left,
+                Key {
+                    event: KeyEvent {
+                        code: Up,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Up,
+                        },
+                    ),
+                }: Up,
+            },
+        ),
+        Normal: ActionMap(
+            {
+                Key {
+                    event: KeyEvent {
                         code: Char(
-                            'q',
+                            '0',
                         ),
                         modifiers: KeyModifiers(
                             0x0,
@@ -176,11 +136,29 @@ EventDefinitions(
                         Node {
                             modifiers: 0,
                             key: Char(
-                                'q',
+                                '0',
                             ),
                         },
                     ),
-                }: Quit,
+                }: Beginning,
+                Key {
+                    event: KeyEvent {
+                        code: Left,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Left,
+                        },
+                    ),
+                }: Left,
                 Key {
                     event: KeyEvent {
                         code: Char(
@@ -205,26 +183,8 @@ EventDefinitions(
                 }: Down,
                 Key {
                     event: KeyEvent {
-                        code: Down,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Down,
-                        },
-                    ),
-                }: Down,
-                Key {
-                    event: KeyEvent {
                         code: Char(
-                            'r',
+                            'a',
                         ),
                         modifiers: KeyModifiers(
                             0x0,
@@ -238,29 +198,11 @@ EventDefinitions(
                         Node {
                             modifiers: 0,
                             key: Char(
-                                'r',
+                                'a',
                             ),
                         },
                     ),
-                }: Refresh,
-                Key {
-                    event: KeyEvent {
-                        code: Up,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Up,
-                        },
-                    ),
-                }: Up,
+                }: Edit,
                 Key {
                     event: KeyEvent {
                         code: Char(
@@ -286,7 +228,7 @@ EventDefinitions(
                 Key {
                     event: KeyEvent {
                         code: Char(
-                            '0',
+                            'i',
                         ),
                         modifiers: KeyModifiers(
                             0x0,
@@ -300,15 +242,15 @@ EventDefinitions(
                         Node {
                             modifiers: 0,
                             key: Char(
-                                '0',
+                                'i',
                             ),
                         },
                     ),
-                }: Beginning,
+                }: Edit,
                 Key {
                     event: KeyEvent {
                         code: Char(
-                            'b',
+                            'q',
                         ),
                         modifiers: KeyModifiers(
                             0x0,
@@ -322,69 +264,11 @@ EventDefinitions(
                         Node {
                             modifiers: 0,
                             key: Char(
-                                'b',
+                                'q',
                             ),
                         },
                     ),
-                }: LeftWord,
-                Key {
-                    event: KeyEvent {
-                        code: Esc,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Esc,
-                        },
-                    ),
-                }: Escape,
-                Key {
-                    event: KeyEvent {
-                        code: Char(
-                            'k',
-                        ),
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Char(
-                                'k',
-                            ),
-                        },
-                    ),
-                }: Up,
-                Key {
-                    event: KeyEvent {
-                        code: Backspace,
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Backspace,
-                        },
-                    ),
-                }: Left,
+                }: Quit,
                 Key {
                     event: KeyEvent {
                         code: Char(
@@ -409,7 +293,7 @@ EventDefinitions(
                 }: Left,
                 Key {
                     event: KeyEvent {
-                        code: Left,
+                        code: Up,
                         modifiers: KeyModifiers(
                             0x0,
                         ),
@@ -421,10 +305,148 @@ EventDefinitions(
                     node: Some(
                         Node {
                             modifiers: 0,
-                            key: Left,
+                            key: Up,
+                        },
+                    ),
+                }: Up,
+                Key {
+                    event: KeyEvent {
+                        code: Char(
+                            'k',
+                        ),
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Char(
+                                'k',
+                            ),
+                        },
+                    ),
+                }: Up,
+                Key {
+                    event: KeyEvent {
+                        code: Esc,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Esc,
+                        },
+                    ),
+                }: Escape,
+                Key {
+                    event: KeyEvent {
+                        code: Char(
+                            'r',
+                        ),
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Char(
+                                'r',
+                            ),
+                        },
+                    ),
+                }: Refresh,
+                Key {
+                    event: KeyEvent {
+                        code: Enter,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Enter,
+                        },
+                    ),
+                }: Enter,
+                Key {
+                    event: KeyEvent {
+                        code: Backspace,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Backspace,
                         },
                     ),
                 }: Left,
+                Key {
+                    event: KeyEvent {
+                        code: Down,
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Down,
+                        },
+                    ),
+                }: Down,
+                Key {
+                    event: KeyEvent {
+                        code: Char(
+                            'b',
+                        ),
+                        modifiers: KeyModifiers(
+                            0x0,
+                        ),
+                        kind: Press,
+                        state: KeyEventState(
+                            0x0,
+                        ),
+                    },
+                    node: Some(
+                        Node {
+                            modifiers: 0,
+                            key: Char(
+                                'b',
+                            ),
+                        },
+                    ),
+                }: LeftWord,
                 Key {
                     event: KeyEvent {
                         code: Char(
@@ -447,28 +469,6 @@ EventDefinitions(
                         },
                     ),
                 }: End,
-                Key {
-                    event: KeyEvent {
-                        code: Char(
-                            'a',
-                        ),
-                        modifiers: KeyModifiers(
-                            0x0,
-                        ),
-                        kind: Press,
-                        state: KeyEventState(
-                            0x0,
-                        ),
-                    },
-                    node: Some(
-                        Node {
-                            modifiers: 0,
-                            key: Char(
-                                'a',
-                            ),
-                        },
-                    ),
-                }: Edit,
             },
         ),
     },
