@@ -12,6 +12,8 @@ use crate::{
     ollama::chat::Message,
 };
 
+use super::event::Action;
+
 pub mod state;
 pub mod view;
 
@@ -79,21 +81,21 @@ impl MessagesViewModel {
         Ok(())
     }
 
-    pub fn handle_key_event(&mut self, key_event: KeyEvent) -> Option<MessagesEvent> {
-        match key_event.code {
-            KeyCode::Char('q') => {
+    pub fn handle_action(&mut self, action: Action) -> Option<MessagesEvent> {
+        match action {
+            Action::Quit => {
                 self.state.select(None);
                 Some(MessagesEvent::Quit)
             }
-            KeyCode::Char('j') => {
+            Action::Down => {
                 self.state.select_next();
                 None
             }
-            KeyCode::Char('k') => {
+            Action::Up => {
                 self.state.select_previous();
                 None
             }
-            KeyCode::Enter => {
+            Action::Enter => {
                 if self.state.selected().is_some() {
                     // TODO: enter fullscreen
                 }

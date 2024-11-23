@@ -82,7 +82,7 @@ impl ModelsViewModel {
                     Ok(None)
                 }
                 Action::Quit => Ok(Some(AppEvent::Deactivate)),
-                Action::LeftWord | Action::RightWord | Action::Unhandled => Ok(None),
+                _ => Ok(None),
             }
         }
     }

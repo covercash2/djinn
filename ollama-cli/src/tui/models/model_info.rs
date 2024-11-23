@@ -101,7 +101,7 @@ impl ModelInfoViewModel {
                 self.scroll_offset = self.scroll_offset.right();
                 Ok(None)
             }
-            Action::LeftWord | Action::RightWord | Action::Unhandled => Ok(None),
+            _ => Ok(None),
         }
     }
 }

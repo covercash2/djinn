@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style, Stylize as _},
@@ -16,7 +15,8 @@ use crate::{
 };
 
 use super::{
-    input::{InputMode, InputView as _, TextInputEvent, TextInputViewModel},
+    event::{Action, InputMode},
+    input::{InputView as _, TextInputEvent, TextInputViewModel},
     messages::{view::MessagesView as _, MessagesEvent, MessagesViewModel},
     AppEvent, StyleExt as _,
 };
@@ -76,17 +76,43 @@ impl ChatViewModel {
         self.messages.handle_response(response)
     }
 
-    pub async fn handle_event(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
-        let chat_event: Option<ChatEvent> = match event {
-            Event::FocusGained
-            | Event::FocusLost
-            | Event::Mouse(_)
-            | Event::Paste(_)
-            | Event::Resize(_, _) => None,
-            Event::Key(key_event) => self.handle_key_event(key_event).await?,
-        };
-
-        Ok(chat_event.and_then(|event| self.handle_chat_event(event)))
+    pub async fn handle_action(&mut self, action: Action) -> Result<Option<AppEvent>> {
+        if let Some(active_view) = self.active_view {
+            match active_view {
+                Pane::Input => {
+                    let chat_event: Option<ChatEvent> =
+                        self.text_input.handle_action(action)?.map(Into::into);
+                    if let Some(chat_event) = chat_event {
+                        Ok(self.handle_chat_event(chat_event))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                Pane::Messages => {
+                    let chat_event: Option<ChatEvent> =
+                        self.messages.handle_action(action).map(Into::into);
+                    if let Some(chat_event) = chat_event {
+                        Ok(self.handle_chat_event(chat_event))
+                    } else {
+                        Ok(None)
+                    }
+                }
+            }
+        } else {
+            let chat_event = match action {
+                Action::Quit => Some(ChatEvent::Quit),
+                Action::Up | Action::Down | Action::Left | Action::Right => {
+                    Some(ChatEvent::NextView)
+                }
+                Action::Enter => Some(ChatEvent::Activate(self.focused_view)),
+                _ => None,
+            };
+            if let Some(chat_event) = chat_event {
+                Ok(self.handle_chat_event(chat_event))
+            } else {
+                Ok(None)
+            }
+        }
     }
 
     fn handle_chat_event(&mut self, event: ChatEvent) -> Option<AppEvent> {
@@ -113,36 +139,6 @@ impl ChatViewModel {
                 Some(AppEvent::Submit(prompt))
             }
             ChatEvent::Quit => Some(AppEvent::Deactivate),
-        }
-    }
-
-    pub async fn handle_key_event(&mut self, event: KeyEvent) -> anyhow::Result<Option<ChatEvent>> {
-        if let Some(active_view) = self.active_view {
-            match active_view {
-                Pane::Input => {
-                    let app_event: Option<ChatEvent> =
-                        self.text_input.handle_key_event(event).map(Into::into);
-                    Ok(app_event)
-                }
-                Pane::Messages => {
-                    let app_event: Option<ChatEvent> =
-                        self.messages.handle_key_event(event).map(Into::into);
-
-                    Ok(app_event)
-                }
-            }
-        } else {
-            match event.code {
-                KeyCode::Char('q') => Ok(Some(ChatEvent::Quit)),
-                KeyCode::Char('j')
-                | KeyCode::Char('k')
-                | KeyCode::Up
-                | KeyCode::Down
-                | KeyCode::Char('h')
-                | KeyCode::Char('l') => Ok(Some(ChatEvent::NextView)),
-                KeyCode::Enter => Ok(Some(ChatEvent::Activate(self.focused_view))),
-                _ => Ok(None),
-            }
         }
     }
 }
