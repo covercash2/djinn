@@ -348,12 +348,26 @@ name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
+
+[[package]]
+name = "bstr"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a68f1f47cdf0ec8ee4b941b2eee2a80cb796db73118c0dd09ac63fbe405be22"
+dependencies = [
+ "memchr",
+ "regex-automata 0.4.7",
+ "serde",
+]
 
 [[package]]
 name = "bumpalo"
@@ -724,6 +738,7 @@ dependencies = [
  "mio",
  "parking_lot",
  "rustix",
+ "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -2093,6 +2108,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "keymap"
+version = "0.4.0"
+source = "git+https://github.com/covercash2/keymap-rs#b67a6cb002abfae3cf6f3a0af871dd79693da63b"
+dependencies = [
+ "crossterm",
+ "pom",
+ "serde",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2559,6 +2586,7 @@ dependencies = [
  "futures",
  "insta",
  "itertools 0.13.0",
+ "keymap",
  "modelfile",
  "nom",
  "ollama-rs",
@@ -2788,6 +2816,15 @@ dependencies = [
  "fdeflate",
  "flate2",
  "miniz_oxide",
+]
+
+[[package]]
+name = "pom"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c972d8f86e943ad532d0b04e8965a749ad1d18bb981a9c7b3ae72fe7fd7744b"
+dependencies = [
+ "bstr",
 ]
 
 [[package]]

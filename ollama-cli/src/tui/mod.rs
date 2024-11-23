@@ -2,7 +2,7 @@ use std::{io::stdout, time::Duration};
 
 use chat::ChatViewModel;
 use crossterm::ExecutableCommand as _;
-use event::Action;
+use event::{Action, EventProcessor};
 use futures::StreamExt as _;
 use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
@@ -24,6 +24,7 @@ use crate::{
 
 pub mod chat;
 pub mod event;
+pub mod generate;
 pub mod input;
 pub mod messages;
 mod model_context;
@@ -33,6 +34,7 @@ mod widgets_ext;
 
 pub struct AppContext {
     model_context: ModelContext,
+    event_processor: EventProcessor,
     view: View,
 }
 
@@ -95,6 +97,7 @@ impl AppContext {
     pub fn new(client: ollama::Client) -> Self {
         Self {
             model_context: ModelContext::spawn(client),
+            event_processor: Default::default(),
             view: Default::default(),
         }
     }
@@ -169,10 +172,11 @@ impl AppContext {
     }
 
     async fn handle_input(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
+        let action = self.event_processor.process(event);
         let app_event = match &mut self.view {
-            View::Chat(ref mut chat_view_model) => chat_view_model.handle_event(event).await?,
-            View::Models(models_view_model) => models_view_model.handle_event(event.into()).await?,
-            View::Nav(nav_view_model) => nav_view_model.handle_action(event.into())?,
+            View::Chat(ref mut chat_view_model) => chat_view_model.handle_action(action).await?,
+            View::Models(models_view_model) => models_view_model.handle_event(action).await?,
+            View::Nav(nav_view_model) => nav_view_model.handle_action(action)?,
         };
         Ok(app_event)
     }

@@ -71,7 +71,7 @@ impl ModelfileViewModel {
             Action::LeftWord => todo!(),
             Action::RightWord => todo!(),
             Action::Refresh => todo!(),
-            Action::Unhandled => todo!(),
+            _ => todo!(),
         }
     }
 
