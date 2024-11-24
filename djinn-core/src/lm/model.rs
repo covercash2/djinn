@@ -62,20 +62,6 @@ impl Model {
     }
 }
 
-// impl Lm for Mistral {
-//     // type Config = candle_transformers::models::mistral::Config;
-//     type Weights = Mistral;
-//
-//     fn run(
-//         &mut self,
-//         prompt: String,
-//         config: RunConfig,
-//         model: Self::Weights,
-//     ) -> impl Stream<Item = Result<String>> + '_ {
-//         todo!()
-//     }
-// }
-
 impl ModelArchitecture {
     pub async fn load_weights(
         &self,
