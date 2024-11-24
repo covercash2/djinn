@@ -2109,8 +2109,9 @@ dependencies = [
 
 [[package]]
 name = "keymap"
-version = "0.4.0"
-source = "git+https://github.com/covercash2/keymap-rs#b67a6cb002abfae3cf6f3a0af871dd79693da63b"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "060033dfc0287371e543c2bf48db38cbca4e6bfe370e4429f1ffef93eb17c86c"
 dependencies = [
  "crossterm",
  "pom",
