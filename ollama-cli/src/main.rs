@@ -1,20 +1,23 @@
-use std::fs::File;
+use std::{fs::File, path::Path};
 
 use clap::{Parser, Subcommand};
+use config::Config;
 use ollama::ModelHost;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tui::AppContext;
 
 pub mod bytes_size;
+mod config;
 mod error;
+mod fs_ext;
 mod lm;
 mod ollama;
 mod tui;
 
 #[derive(Parser)]
 pub struct Cli {
-    #[arg(default_value_t)]
-    address: ModelHost,
+    #[arg(long)]
+    host: Option<ModelHost>,
     #[command(subcommand)]
     mode: Mode,
 }
@@ -34,20 +37,25 @@ enum Command {
     Embed(ollama::generate::Request),
 }
 
-fn setup_tracing() {
+fn setup_tracing(log_file: impl AsRef<Path>) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .json()
         .with_span_events(FmtSpan::FULL)
-        .with_writer(File::create("logs.log").unwrap())
+        .with_writer(File::create(log_file)?)
         .init();
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    setup_tracing();
     let args = Cli::parse();
+    let config = Config::load()?;
+    setup_tracing(&config.log_file)?;
 
-    let client = ollama::Client::new(args.address.url()).await?;
+    let host = args.host.as_ref().unwrap_or(&config.host);
+
+    let client = ollama::Client::new(host.url()).await?;
 
     match args.mode {
         Mode::OneShot { command } => match command {
@@ -62,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
         Mode::Tui => {
             color_eyre::install().expect("unable to install color_eyre");
             tracing::info!("starting TUI");
-            let app_context = AppContext::new(client);
+            let app_context = AppContext::new(client, config);
             let terminal = ratatui::init();
             app_context.run(terminal).await?;
             ratatui::restore();
