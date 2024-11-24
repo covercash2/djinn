@@ -16,6 +16,7 @@ w = "right_word"
 b = "left_word"
 enter = "enter"
 backspace = "left"
+space = "popup"
 
 [edit]
 esc = "escape"
