@@ -1,19 +1,45 @@
+use std::path::Path;
+
+use itertools::Itertools;
 use ratatui::{
-    layout::{Constraint, Flex, Layout, Rect}, style::Style, widgets::{Block, Clear, Paragraph, Wrap}, Frame
+    layout::{Constraint, Flex, Layout, Rect},
+    style::Style,
+    widgets::{Block, Clear, Paragraph, Wrap},
+    Frame,
+};
+
+use crate::{
+    error::{Error, Result},
+    fs_ext::read_file_to_string,
 };
 
 #[derive(Debug, Clone)]
 pub struct PopupViewModel {
+    title: String,
     content: String,
 }
 
 impl PopupViewModel {
-    pub fn new(content: impl ToString) -> Self {
-        PopupViewModel { content: content.to_string() }
+    pub fn new(title: impl ToString, content: impl ToString) -> Self {
+        PopupViewModel {
+            title: title.to_string(),
+            content: content.to_string(),
+        }
+    }
+
+    pub fn log_popup(log_file: impl AsRef<Path>) -> Result<Self> {
+        let logs = read_file_to_string(log_file)?;
+
+        let content = logs.lines().rev().take(10).join("\n");
+
+        Ok(PopupViewModel {
+            title: "logs".to_string(),
+            content,
+        })
     }
 }
 
-pub fn popup_area(parent: Rect, percent_x: u16, percent_y: u16) -> Rect {
+fn popup_area(parent: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
 
@@ -32,7 +58,7 @@ pub impl<'a> Frame<'a> {
             .block(block)
             .style(style);
 
-        let area = popup_area(parent, 60, 20);
+        let area = popup_area(parent, 60, 60);
         self.render_widget(Clear, area);
         self.render_widget(content, area);
     }

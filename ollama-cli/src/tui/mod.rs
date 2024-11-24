@@ -18,6 +18,7 @@ use ratatui::{
 use strum::VariantNames;
 
 use crate::{
+    config::Config,
     error::Result,
     lm::{Prompt, Response},
     ollama,
@@ -40,6 +41,7 @@ pub struct AppContext {
     event_processor: EventProcessor,
     popup: Option<PopupViewModel>,
     view: View,
+    config: Config,
 }
 
 #[derive(Clone, Debug, strum::EnumString, strum::EnumDiscriminants)]
@@ -101,12 +103,13 @@ impl Style {
 }
 
 impl AppContext {
-    pub fn new(client: ollama::Client) -> Self {
+    pub fn new(client: ollama::Client, config: Config) -> Self {
         Self {
             model_context: ModelContext::spawn(client),
-            event_processor: Default::default(),
+            event_processor: EventProcessor::new(config.keymap.clone()),
             popup: None,
             view: Default::default(),
+            config,
         }
     }
 
@@ -200,7 +203,7 @@ impl AppContext {
         }
 
         if action == Action::Popup {
-            self.popup = Some(PopupViewModel::new("hello"));
+            self.popup = Some(PopupViewModel::log_popup(&self.config.log_file)?);
             Ok(None)
         } else {
             let app_event = match &mut self.view {

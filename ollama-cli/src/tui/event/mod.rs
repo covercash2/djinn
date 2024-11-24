@@ -12,17 +12,13 @@ pub struct EventProcessor {
     definitions: EventDefinitions,
 }
 
-impl Default for EventProcessor {
-    fn default() -> Self {
-        let definitions = toml::from_str(DEFAULTS).expect("should be able to load default keymaps");
-        Self {
+impl EventProcessor {
+    pub fn new(definitions: EventDefinitions) -> Self {
+        EventProcessor {
             input_mode: Default::default(),
             definitions,
         }
     }
-}
-
-impl EventProcessor {
     pub fn input_mode(&mut self, input_mode: InputMode) {
         self.input_mode = input_mode;
     }
@@ -59,8 +55,14 @@ pub enum InputMode {
     Edit,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct EventDefinitions(HashMap<InputMode, ActionMap>);
+
+impl Default for EventDefinitions {
+    fn default() -> Self {
+        toml::from_str(DEFAULTS).expect("should be able to load default keymaps")
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActionDefinition {
@@ -77,7 +79,7 @@ impl From<Action> for ActionDefinition {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ActionMap(HashMap<KeyMap, Action>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

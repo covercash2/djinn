@@ -5,6 +5,7 @@ use ollama_rs::{
     models::{LocalModel, ModelInfo},
     Ollama,
 };
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::error::Result;
@@ -70,7 +71,7 @@ impl Display for ModelName {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelHost(Url);
 
 impl ModelHost {

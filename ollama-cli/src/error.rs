@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use modelfile::modelfile::error::ModelfileError;
 use ollama_rs::error::OllamaError;
 use thiserror::Error;
@@ -9,6 +11,18 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("error reading file {path}: {source}")]
+    ReadFile {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    #[error("error in linemux: {source}")]
+    LineMux {
+        source: std::io::Error,
+        msg: &'static str,
+    },
+
     #[error("error indexing collection at index {index}: {msg}")]
     BadIndex { index: usize, msg: &'static str },
 

@@ -16,7 +16,8 @@ edit = "0.1.5"
 extend = "1.2.0"
 futures = "0.3.30"
 itertools = "0.13.0"
-keymap = { version = "0.4.1", features = ["crossterm"] }
+keymap = { git = "https://github.com/covercash2/keymap-rs", features = ["crossterm"] }
+linemux = "0.3"
 modelfile = "0.2.0"
 nom = "7.1.3"
 ollama-rs = { version = "0.2.1", features = ["stream"] }
@@ -36,6 +37,7 @@ tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 unicode-width = "0.2.0"
 url = { version = "2.5.2", features = ["serde"] }
+xdg = "2.5.2"
 
 [dev-dependencies]
 insta = { version = "1.41.1", features = ["json", "toml"] }
