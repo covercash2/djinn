@@ -13,7 +13,7 @@ use crate::{
 use super::{
     event::Action,
     input::{InputView, TextInputEvent, TextInputViewModel},
-    AppEvent,
+    AppEvent, StyleExt as _,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -133,9 +133,26 @@ pub impl<'a> Frame<'a> {
 
         let [input_area, output_area] = vertical.areas(parent);
 
-        self.input_view(input_area, style, &view_model.input);
+        let input_style = if let Some(Pane::Input) = view_model.active_pane {
+            Style::active()
+        } else if view_model.focused_pane == Pane::Input {
+            Style::focused()
+        } else {
+            style
+        };
+
+        self.input_view(input_area, input_style, &view_model.input);
+
+        let output_style = if let Some(Pane::Output) = view_model.active_pane {
+            Style::active()
+        } else if view_model.focused_pane == Pane::Output {
+            Style::focused()
+        } else {
+            style
+        };
 
         let output = Paragraph::new(view_model.output.as_str())
+            .style(output_style)
             .wrap(Wrap { trim: true })
             .block(Block::bordered());
 
