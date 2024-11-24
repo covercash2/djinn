@@ -9,6 +9,7 @@ use model_context::ModelContext;
 use models::{ModelsView, ModelsViewModel};
 use nav::{NavView, NavViewModel};
 use ollama_rs::models::ModelInfo;
+use popup::{PopupView, PopupViewModel};
 use ratatui::{
     crossterm::event::Event,
     style::{Color, Style},
@@ -31,11 +32,13 @@ pub mod messages;
 mod model_context;
 pub mod models;
 mod nav;
+mod popup;
 mod widgets_ext;
 
 pub struct AppContext {
     model_context: ModelContext,
     event_processor: EventProcessor,
+    popup: Option<PopupViewModel>,
     view: View,
 }
 
@@ -102,6 +105,7 @@ impl AppContext {
         Self {
             model_context: ModelContext::spawn(client),
             event_processor: Default::default(),
+            popup: None,
             view: Default::default(),
         }
     }
@@ -120,6 +124,9 @@ impl AppContext {
             View::Generate(generate_view_model) => {
                 frame.generate_view(frame.area(), Style::default(), generate_view_model)
             }
+        }
+        if let Some(ref mut popup) = self.popup {
+            frame.popup(frame.area(), Style::active(), popup);
         }
     }
 
@@ -184,13 +191,28 @@ impl AppContext {
 
     async fn handle_input(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
         let action = self.event_processor.process(event);
-        let app_event = match &mut self.view {
-            View::Chat(ref mut chat_view_model) => chat_view_model.handle_action(action).await?,
-            View::Models(models_view_model) => models_view_model.handle_event(action).await?,
-            View::Nav(nav_view_model) => nav_view_model.handle_action(action)?,
-            View::Generate(generate_view_model) => generate_view_model.handle_action(action)?,
-        };
-        Ok(app_event)
+
+        if let Some(_popup) = &self.popup {
+            if action == Action::Popup {
+                self.popup = None;
+            }
+            return Ok(None);
+        }
+
+        if action == Action::Popup {
+            self.popup = Some(PopupViewModel::new("hello"));
+            Ok(None)
+        } else {
+            let app_event = match &mut self.view {
+                View::Chat(ref mut chat_view_model) => {
+                    chat_view_model.handle_action(action).await?
+                }
+                View::Models(models_view_model) => models_view_model.handle_event(action).await?,
+                View::Nav(nav_view_model) => nav_view_model.handle_action(action)?,
+                View::Generate(generate_view_model) => generate_view_model.handle_action(action)?,
+            };
+            Ok(app_event)
+        }
     }
 
     // TODO: use this function with [`modelfile`]

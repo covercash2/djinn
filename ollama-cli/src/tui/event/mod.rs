@@ -93,6 +93,7 @@ pub enum Action {
     LeftWord,
     RightWord,
     Refresh,
+    Popup,
     Enter,
     Escape,
     Backspace,
