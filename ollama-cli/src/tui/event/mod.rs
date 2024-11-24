@@ -104,8 +104,6 @@ pub enum Action {
 
 #[cfg(test)]
 mod tests {
-    use insta::assert_debug_snapshot;
-
     use super::*;
 
     #[test]
