@@ -182,7 +182,11 @@ impl AppContext {
                 }
             }
             AppEvent::Deactivate => {
-                self.view = View::Nav(Default::default());
+                if self.popup.is_some() {
+                    self.popup = None;
+                } else {
+                    self.view = View::Nav(Default::default());
+                }
                 Ok(true)
             }
             AppEvent::InputMode(input_mode) => {
@@ -195,15 +199,15 @@ impl AppContext {
     async fn handle_input(&mut self, event: Event) -> anyhow::Result<Option<AppEvent>> {
         let action = self.event_processor.process(event);
 
-        if let Some(_popup) = &self.popup {
-            if action == Action::Popup {
-                self.popup = None;
-            }
-            return Ok(None);
+        if let Some(ref mut popup) = self.popup {
+            return Ok(popup.handle_action(action)?);
         }
 
         if action == Action::Popup {
             self.popup = Some(PopupViewModel::log_popup(&self.config.log_file)?);
+            Ok(None)
+        } else if action == Action::Help {
+            self.popup = Some(PopupViewModel::keymap_popup(&self.event_processor));
             Ok(None)
         } else {
             let app_event = match &mut self.view {

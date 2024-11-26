@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use keymap::KeyMap;
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 
 const DEFAULTS: &str = include_str!("../../../default_keymap.toml");
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct EventProcessor {
-    input_mode: InputMode,
-    definitions: EventDefinitions,
+    pub input_mode: InputMode,
+    pub definitions: EventDefinitions,
 }
 
 impl EventProcessor {
@@ -19,6 +20,7 @@ impl EventProcessor {
             definitions,
         }
     }
+
     pub fn input_mode(&mut self, input_mode: InputMode) {
         self.input_mode = input_mode;
     }
@@ -47,7 +49,19 @@ impl EventProcessor {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    EnumIter,
+    strum::Display,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum InputMode {
     #[default]
@@ -56,7 +70,7 @@ pub enum InputMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct EventDefinitions(HashMap<InputMode, ActionMap>);
+pub struct EventDefinitions(pub HashMap<InputMode, ActionMap>);
 
 impl Default for EventDefinitions {
     fn default() -> Self {
@@ -80,9 +94,9 @@ impl From<Action> for ActionDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct ActionMap(HashMap<KeyMap, Action>);
+pub struct ActionMap(pub HashMap<KeyMap, Action>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, strum::Display)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {
     Beginning,
@@ -96,6 +110,7 @@ pub enum Action {
     RightWord,
     Refresh,
     Popup,
+    Help,
     Enter,
     Escape,
     Backspace,
