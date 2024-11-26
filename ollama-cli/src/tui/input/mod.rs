@@ -31,9 +31,7 @@ pub enum TextInputEvent {
 impl TextInputViewModel {
     pub fn handle_action(&mut self, action: Action) -> Result<Option<TextInputEvent>> {
         match action {
-            Action::Edit => {
-                return Ok(Some(TextInputEvent::InputMode(InputMode::Edit)))
-            }
+            Action::Edit => return Ok(Some(TextInputEvent::InputMode(InputMode::Edit))),
             Action::Quit => return Ok(Some(TextInputEvent::Quit)),
             Action::Right => self.move_cursor_right(),
             Action::Left => self.move_cursor_left(),
