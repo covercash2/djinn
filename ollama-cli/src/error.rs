@@ -5,7 +5,7 @@ use ollama_rs::error::OllamaError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
-use crate::lm::Response;
+use crate::{lm::Response, tui::event::InputMode};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -17,11 +17,8 @@ pub enum Error {
         path: PathBuf,
     },
 
-    #[error("error in linemux: {source}")]
-    LineMux {
-        source: std::io::Error,
-        msg: &'static str,
-    },
+    #[error("keymap should have all modes defined by default. missing {0}")]
+    MissingKeymap(InputMode),
 
     #[error("error indexing collection at index {index}: {msg}")]
     BadIndex { index: usize, msg: &'static str },
