@@ -6,6 +6,10 @@ use event::{Action, EventProcessor, InputMode};
 use futures::StreamExt as _;
 use generate::{GenerateView, GenerateViewModel};
 use model_context::ModelContext;
+use modelfile::{
+    modelfile::{Instruction, InstructionName},
+    Modelfile,
+};
 use models::{ModelsView, ModelsViewModel};
 use nav::{NavView, NavViewModel};
 use ollama_rs::models::ModelInfo;
@@ -15,12 +19,13 @@ use ratatui::{
     style::{Color, Style},
     DefaultTerminal, Frame,
 };
-use strum::VariantNames;
+use strum::{EnumMessage as _, VariantNames};
 
 use crate::{
     config::Config,
-    error::Result,
+    error::{Error, Result},
     lm::{Prompt, Response},
+    model_definition::ModelDefinition,
     ollama,
     tui::chat::ChatView as _,
 };
@@ -34,6 +39,7 @@ mod model_context;
 pub mod models;
 mod nav;
 mod popup;
+mod text;
 mod widgets_ext;
 
 pub struct AppContext {
@@ -63,12 +69,17 @@ impl Default for View {
 }
 
 impl View {
-    pub fn handle_response(&mut self, response: Response) {
-        let result = match self {
-            View::Chat(ref mut chat_view_model) => chat_view_model.handle_response(response),
-            View::Models(ref mut models_view_model) => models_view_model.handle_response(response),
-            View::Generate(ref mut view_model) => view_model.handle_response(response),
-            View::Nav(_nav_view_model) => Ok(()),
+    pub fn handle_response_event(&mut self, event: ResponseEvent) {
+        let result: Result<()> = match self {
+            View::Models(models_view_model) => models_view_model.handle_response_event(event),
+            View::Chat(chat_view_model) => chat_view_model.handle_response_event(event),
+            View::Generate(generate_view_model) => match event {
+                ResponseEvent::OllamaResponse(response) => {
+                    generate_view_model.handle_response(response)
+                }
+                _ => Err(Error::UnexpectedResponse(event)),
+            },
+            View::Nav(_) => Ok(()),
         };
 
         if let Err(error) = result {
@@ -149,10 +160,34 @@ impl AppContext {
                     }
                 },
                 Some(response) = self.model_context.response_receiver.recv() => {
-                    self.view.handle_response(response);
+                    self.handle_response(response).await?
                 }
             }
         }
+    }
+
+    async fn handle_response(&mut self, response: Response) -> anyhow::Result<()> {
+        tracing::info!(response = ?response.get_message(), "handling response");
+
+        if let Response::LocalModels(models) = response {
+            let local_modelfiles = self
+                .config
+                .model_cache
+                .load()?
+                .into_iter()
+                .map(ModelDefinition::LocalCache)
+                .chain(models.into_iter().map(ModelDefinition::OllamaRemote))
+                .collect();
+
+            self.view
+                .handle_response_event(ResponseEvent::UpdatedModels(local_modelfiles));
+            return Ok(());
+        }
+
+        let response = ResponseEvent::OllamaResponse(response);
+
+        self.view.handle_response_event(response);
+        Ok(())
     }
 
     /// Returns true if the event was handled
@@ -162,13 +197,10 @@ impl AppContext {
         terminal: &mut DefaultTerminal,
         event: AppEvent,
     ) -> anyhow::Result<bool> {
+        tracing::info!("handling event",);
         match event {
             AppEvent::Submit(message) => {
                 self.submit_message(message).await;
-                Ok(true)
-            }
-            AppEvent::EditSystemPrompt(model_info) => {
-                self.edit_model_file(terminal, model_info)?;
                 Ok(true)
             }
             AppEvent::Quit => Ok(false),
@@ -191,6 +223,17 @@ impl AppContext {
             }
             AppEvent::InputMode(input_mode) => {
                 self.event_processor.input_mode(input_mode);
+                Ok(true)
+            }
+            AppEvent::EditModelInstruction {
+                modelfile,
+                instruction,
+            } => {
+                self.edit_instruction(terminal, instruction, modelfile)?;
+                Ok(true)
+            }
+            AppEvent::EditModelfile(modelfile) => {
+                self.edit_full_modelfile(terminal, modelfile)?;
                 Ok(true)
             }
         }
@@ -223,23 +266,67 @@ impl AppContext {
     }
 
     // TODO: use this function with [`modelfile`]
-    fn edit_model_file(
+    fn edit_full_modelfile(
         &mut self,
         terminal: &mut DefaultTerminal,
         model_info: ModelInfo,
     ) -> anyhow::Result<()> {
-        stdout().execute(crossterm::terminal::LeaveAlternateScreen)?;
-        crossterm::terminal::disable_raw_mode()?;
+        let modelfile_text = model_info.modelfile;
 
+        let edited_modelfile = self.edit_text(terminal, modelfile_text.as_str())?;
+
+        tracing::info!(edited_modelfile, "modelfile edited");
+        Ok(())
+    }
+
+    fn edit_instruction(
+        &mut self,
+        terminal: &mut DefaultTerminal,
+        instruction: Instruction,
+        modelfile: Modelfile,
+    ) -> anyhow::Result<()> {
+        let instruction_name: InstructionName = (&instruction).into();
+
+        let builder = modelfile.build_on();
+        let builder = match instruction {
+            Instruction::From(base_model) => {
+                let old_text: String = base_model.to_string();
+                let updated_text: String = self.edit_text(terminal, &old_text)?;
+                builder.from(&updated_text)?
+            }
+            Instruction::Skip => todo!(),
+            Instruction::Parameter(parameter) => todo!(),
+            Instruction::Template(template) => todo!(),
+            Instruction::System(system_message) => todo!(),
+            Instruction::Adapter(adapter) => todo!(),
+            Instruction::License(license) => todo!(),
+            Instruction::Message(message) => todo!(),
+        };
+
+        let modelfile: Modelfile = builder.build()?;
+        self.config.model_cache.save("test", modelfile)?;
+
+        Ok(())
+    }
+
+    fn edit_text(&mut self, terminal: &mut DefaultTerminal, text: &str) -> anyhow::Result<String> {
         let mut edit_options = edit::Builder::default();
         let edit_options = edit_options.suffix(".tmpl");
 
-        let _edited_modelfile = edit::edit_with_builder(model_info.modelfile, edit_options)?;
+        stdout().execute(crossterm::terminal::LeaveAlternateScreen)?;
+        crossterm::terminal::disable_raw_mode()?;
+
+        let edited_text = edit::edit_with_builder(text, edit_options)?;
 
         stdout().execute(crossterm::terminal::EnterAlternateScreen)?;
         crossterm::terminal::enable_raw_mode()?;
         terminal.clear()?;
-        Ok(())
+
+        let new_modelfile: Modelfile = edited_text.parse()?;
+        let json: String = serde_json::to_string(&new_modelfile)?;
+
+        tracing::info!(%json, "modelfile edited");
+        Ok(edited_text)
     }
 
     async fn submit_message(&mut self, prompt: Prompt) {
@@ -251,11 +338,24 @@ impl AppContext {
     }
 }
 
+/// An event triggered from within the app.
+/// Usually originally triggered from key events.
 pub enum AppEvent {
     Activate(View),
     Deactivate,
     Submit(Prompt),
-    EditSystemPrompt(ModelInfo),
+    EditModelInstruction {
+        modelfile: Modelfile,
+        instruction: Instruction,
+    },
+    EditModelfile(ModelInfo),
     InputMode(InputMode),
     Quit,
+}
+
+/// A response from an asyncrhonous or otherwise external source
+#[derive(Debug, Clone)]
+pub enum ResponseEvent {
+    OllamaResponse(Response),
+    UpdatedModels(Vec<ModelDefinition>),
 }

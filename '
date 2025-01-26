@@ -1,0 +1,8 @@
+use std::sync::Arc;
+
+
+/// A line of text meant to be shown in the TUI interface
+pub struct TextLine {
+    text: Arc<str>,
+    status: tracing::Level,,
+}

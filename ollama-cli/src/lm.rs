@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use ollama_rs::models::{LocalModel, ModelInfo};
+use strum::EnumMessage;
 
 use crate::ollama::{chat::ChatRequest, ModelName};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, EnumMessage)]
 pub enum Response {
     Eos,
     Error(Arc<str>),
@@ -13,6 +14,7 @@ pub enum Response {
     ModelInfo(ModelInfo),
 }
 
+#[derive(Debug, Clone)]
 pub enum Prompt {
     Generate(Arc<str>),
     Chat(ChatRequest),

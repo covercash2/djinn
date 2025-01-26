@@ -16,7 +16,7 @@ use super::{
     event::{Action, InputMode},
     input::{InputView as _, TextInputEvent, TextInputViewModel},
     messages::{view::MessagesView as _, MessagesEvent, MessagesViewModel},
-    AppEvent, StyleExt as _,
+    AppEvent, ResponseEvent, StyleExt as _,
 };
 
 #[derive(Default, Clone, Debug)]
@@ -72,8 +72,8 @@ impl From<TextInputEvent> for ChatEvent {
 }
 
 impl ChatViewModel {
-    pub fn handle_response(&mut self, response: Response) -> Result<()> {
-        self.messages.handle_response(response)
+    pub fn handle_response_event(&mut self, event: ResponseEvent) -> Result<()> {
+        self.messages.handle_response_event(event)
     }
 
     pub async fn handle_action(&mut self, action: Action) -> Result<Option<AppEvent>> {

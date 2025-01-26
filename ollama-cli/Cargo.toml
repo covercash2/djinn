@@ -18,7 +18,8 @@ futures = "0.3.30"
 itertools = "0.13.0"
 keymap = { git = "https://github.com/covercash2/keymap-rs", features = ["crossterm"] }
 linemux = "0.3"
-modelfile = "0.2.0"
+# modelfile = "0.2.1"
+modelfile = { path = "/Users/chrash/github/covercash2/modelfile/" }
 nom = "7.1.3"
 ollama-rs = { version = "0.2.1", features = ["stream"] }
 ratatui = { version = "0.28.1", features = ["unstable-widget-ref"] }

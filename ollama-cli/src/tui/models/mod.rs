@@ -1,3 +1,4 @@
+use ::modelfile::{modelfile::Instruction, Modelfile};
 use model_info::{ModelInfoView, ModelInfoViewModel};
 use model_list::{ModelListView, ModelListViewModel};
 use modelfile::{ModelfileView, ModelfileViewModel};
@@ -14,7 +15,7 @@ use crate::{
     ollama::ModelName,
 };
 
-use super::{event::Action, AppEvent, StyleExt};
+use super::{event::Action, AppEvent, ResponseEvent, StyleExt};
 
 mod model_info;
 mod model_list;
@@ -30,14 +31,17 @@ pub struct ModelsViewModel {
 }
 
 impl ModelsViewModel {
-    pub fn handle_response(&mut self, response: Response) -> Result<()> {
-        match response {
-            Response::LocalModels(_) => self.model_list.handle_response(response),
-            Response::ModelInfo(_) => self
-                .model_info
-                .handle_response(response.clone())
-                .and_then(|_| self.modelfile.handle_response(response)),
-            _ => Err(Error::UnexpectedResponse(response)),
+    pub fn handle_response_event(&mut self, event: ResponseEvent) -> Result<()> {
+        match &event {
+            ResponseEvent::OllamaResponse(response) => match response {
+                Response::LocalModels(_) => self.model_list.handle_response_event(event),
+                Response::ModelInfo(_) => self
+                    .model_info
+                    .handle_response_event(event.clone())
+                    .and_then(|_| self.modelfile.handle_response(response.clone())),
+                _ => Err(Error::UnexpectedResponse(event)),
+            },
+            ResponseEvent::UpdatedModels(_) => self.model_list.handle_response_event(event),
         }
     }
 
@@ -59,9 +63,16 @@ impl ModelsViewModel {
                     ModelEvent::GetInfo(model_name) => {
                         Ok(Some(AppEvent::Submit(Prompt::ModelInfo(model_name))))
                     }
-                    ModelEvent::EditInfo(model_info) => {
-                        Ok(Some(AppEvent::EditSystemPrompt(model_info)))
+                    ModelEvent::EditFullModelfile(model_info) => {
+                        Ok(Some(AppEvent::EditModelfile(model_info)))
                     }
+                    ModelEvent::EditInstruction {
+                        instruction,
+                        modelfile,
+                    } => Ok(Some(AppEvent::EditModelInstruction {
+                        instruction,
+                        modelfile,
+                    })),
                 }
             } else {
                 Ok(None)
@@ -91,7 +102,11 @@ impl ModelsViewModel {
 #[derive(Clone, Debug)]
 pub enum ModelEvent {
     Deactivate,
-    EditInfo(ModelInfo),
+    EditFullModelfile(ModelInfo),
+    EditInstruction {
+        instruction: Instruction,
+        modelfile: Modelfile,
+    },
     GetInfo(ModelName),
     Refresh,
 }

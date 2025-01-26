@@ -6,6 +6,13 @@ meta {
 
 post {
   url: {{baseUrl}}/api/show
-  body: none
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "model": "llama3.2",
+    "verbose": true
+  }
 }

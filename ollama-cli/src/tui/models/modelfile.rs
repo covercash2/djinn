@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use modelfile::Modelfile;
+use modelfile::{
+    modelfile::{Instruction, InstructionName},
+    Modelfile,
+};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
@@ -18,7 +21,7 @@ pub struct ModelfileViewModel {
     modelfile: Option<Modelfile>,
     model_info: HashMap<String, toml::Value>,
     selected: Option<usize>,
-    instructions: Vec<String>,
+    instructions: Vec<Instruction>,
     details: Option<toml::Value>,
     list_state: ListState,
     active_panel: Option<Panel>,
@@ -29,11 +32,9 @@ impl ModelfileViewModel {
         let string = toml::to_string(&modelfile)?;
         let map: HashMap<String, toml::Value> = toml::from_str(&string)?;
 
+        self.instructions = modelfile.clone().instructions().collect();
         self.modelfile = Some(modelfile);
         self.model_info = map;
-        let mut instructions: Vec<String> = self.model_info.keys().cloned().collect();
-        instructions.sort();
-        self.instructions = instructions;
         Ok(())
     }
 
@@ -105,10 +106,11 @@ impl ModelfileViewModel {
             let instruction = self
                 .instructions
                 .get(selected)
+                .map(InstructionName::from)
                 .ok_or(Error::ModelfileIndex(selected))?;
             let details = self
                 .model_info
-                .get(instruction)
+                .get(instruction.into())
                 .cloned()
                 .ok_or(Error::ModelfileMissing(instruction.to_string()))?;
             self.details = Some(details);
@@ -131,7 +133,7 @@ pub impl<'a> Frame<'a> {
         let [instruction_panel, detail_panel] =
             Layout::horizontal([Constraint::Min(15), Constraint::Min(2)]).areas(parent);
 
-        let instructions = List::from_iter(view_model.instructions.iter().map(|s| s.as_str()))
+        let instructions = List::from_iter(view_model.instructions.iter().map(|s| s.as_ref()))
             .block(Block::bordered())
             .style(style)
             .highlight_style(

@@ -11,6 +11,7 @@ mod config;
 mod error;
 mod fs_ext;
 mod lm;
+mod model_definition;
 mod ollama;
 mod tui;
 

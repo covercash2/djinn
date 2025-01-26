@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use ollama_rs::models::LocalModel;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
@@ -11,28 +10,34 @@ use ratatui::{
 };
 
 use crate::{
-    error::{Error, Result},
-    lm::Response,
+    error::Result,
+    model_definition::ModelDefinition,
     ollama::ModelName,
-    tui::event::Action,
+    tui::{event::Action, ResponseEvent},
 };
 
 use super::{u64Ext as _, ModelEvent};
 
+const DEFAULT_TIME_FORMAT: &str = "%a %v %T";
+
 #[derive(Clone, Debug, Default)]
 pub struct ModelListViewModel {
-    models: Vec<LocalModel>,
+    models: Vec<ModelDefinition>,
     widget_state: TableState,
 }
 
 impl ModelListViewModel {
-    pub fn handle_response(&mut self, response: Response) -> Result<()> {
-        let Response::LocalModels(local_models) = response else {
-            return Err(Error::UnexpectedResponse(response));
-        };
-
-        self.models = local_models;
-        Ok(())
+    pub fn handle_response_event(&mut self, event: ResponseEvent) -> Result<()> {
+        match event {
+            ResponseEvent::UpdatedModels(definitions) => {
+                self.models = definitions;
+                Ok(())
+            }
+            event => {
+                tracing::warn!(?event, "unexpected event",);
+                Ok(())
+            }
+        }
     }
 
     pub async fn handle_event(&mut self, action: Action) -> Result<Option<ModelEvent>> {
@@ -45,7 +50,7 @@ impl ModelListViewModel {
                     .selected()
                     .and_then(|index| self.models.get(index))
                 {
-                    let name: Arc<str> = model.name.clone().into();
+                    let name: Arc<str> = model.name().clone().into();
                     Ok(Some(ModelEvent::GetInfo(ModelName(name))))
                 } else {
                     Ok(None)
@@ -64,6 +69,52 @@ impl ModelListViewModel {
     }
 }
 
+impl ModelDefinition {
+    pub fn name(&self) -> String {
+        match self {
+            ModelDefinition::OllamaRemote(local_model) => local_model.name.as_str().into(),
+            ModelDefinition::LocalCache(local_modelfile) => local_modelfile
+                .path
+                .file_name()
+                .map(std::ffi::OsStr::to_string_lossy)
+                .unwrap_or("???".into())
+                .into(),
+            ModelDefinition::Synced { remote, local: _ } => remote.name.as_str().into(),
+        }
+    }
+
+    pub fn size(&self) -> String {
+        match self {
+            ModelDefinition::OllamaRemote(local_model) => local_model.size.fit_to_bytesize().into(),
+            ModelDefinition::LocalCache(_) => "NA".into(),
+            ModelDefinition::Synced { remote, local: _ } => remote.size.fit_to_bytesize().into(),
+        }
+    }
+
+    pub fn modified_at(&self) -> String {
+        match self {
+            ModelDefinition::OllamaRemote(local_model) => {
+                let last_modified: DateTime<Utc> = local_model
+                    .modified_at
+                    .parse()
+                    .expect("could not parse datetime from ollama");
+                last_modified.format(DEFAULT_TIME_FORMAT).to_string().into()
+            }
+            ModelDefinition::LocalCache(local_modelfile) => {
+                let last_modified: DateTime<Utc> = local_modelfile.modified.into();
+                last_modified.format(DEFAULT_TIME_FORMAT).to_string().into()
+            }
+            ModelDefinition::Synced { remote, local: _ } => {
+                let last_modified: DateTime<Utc> = remote
+                    .modified_at
+                    .parse()
+                    .expect("could not parse datetime from ollama");
+                last_modified.format(DEFAULT_TIME_FORMAT).to_string().into()
+            }
+        }
+    }
+}
+
 #[extend::ext(name = ModelListView)]
 pub impl<'a> Frame<'a> {
     fn model_list(&mut self, parent: Rect, style: Style, view_model: &mut ModelListViewModel) {
@@ -75,13 +126,10 @@ pub impl<'a> Frame<'a> {
             .models
             .iter()
             .map(|info| {
-                let name = Span::from(info.name.as_str());
-                let size = Span::from(info.size.fit_to_bytesize());
-                let last_modified: DateTime<Utc> = info
-                    .modified_at
-                    .parse()
-                    .expect("could not parse datetime from ollama");
-                let last_modified = Span::from(last_modified.format("%a %v %T").to_string());
+                let name = Span::from(info.name());
+                let size = Span::from(info.size());
+                let last_modified: String = info.modified_at();
+                let last_modified = Span::from(last_modified);
                 Row::from_iter([name, size, last_modified])
             })
             .collect();

@@ -5,7 +5,10 @@ use ollama_rs::error::OllamaError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
-use crate::{lm::Response, tui::event::InputMode};
+use crate::{
+    lm::Response,
+    tui::{event::InputMode, ResponseEvent},
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -13,6 +16,30 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("error reading file {path}: {source}")]
     ReadFile {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    #[error("error opening file at {path}: {source}")]
+    OpenFile {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    #[error("error opening file at {path}: {source}")]
+    WriteFile {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    #[error("error creating directory at {path}: {source}")]
+    CreateDir {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+
+    #[error("error listing entries at {path}: {source}")]
+    ReadDir {
         source: std::io::Error,
         path: PathBuf,
     },
@@ -48,5 +75,5 @@ pub enum Error {
     TomlSer(#[from] toml::ser::Error),
 
     #[error("got an unexpected response: {0:?}")]
-    UnexpectedResponse(Response),
+    UnexpectedResponse(ResponseEvent),
 }

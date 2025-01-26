@@ -10,7 +10,7 @@ use ratatui::{
 use crate::{
     error::{Error, Result},
     lm::Response,
-    tui::event::Action,
+    tui::{event::Action, ResponseEvent},
 };
 
 use super::ModelEvent;
@@ -64,12 +64,12 @@ impl Offset {
 }
 
 impl ModelInfoViewModel {
-    pub fn handle_response(&mut self, response: Response) -> Result<()> {
-        if let Response::ModelInfo(model_info) = response {
+    pub fn handle_response_event(&mut self, event: ResponseEvent) -> Result<()> {
+        if let ResponseEvent::OllamaResponse(Response::ModelInfo(model_info)) = event {
             self.info = Some(model_info);
             Ok(())
         } else {
-            Err(Error::UnexpectedResponse(response))
+            Err(Error::UnexpectedResponse(event))
         }
     }
 
@@ -87,7 +87,7 @@ impl ModelInfoViewModel {
             Action::Quit => Ok(Some(ModelEvent::Deactivate)),
             Action::Enter => {
                 if let Some(ref model) = self.info {
-                    Ok(Some(ModelEvent::EditInfo(model.clone())))
+                    Ok(Some(ModelEvent::EditFullModelfile(model.clone())))
                 } else {
                     tracing::info!("no model selected to edit",);
                     Ok(None)

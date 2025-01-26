@@ -11,7 +11,7 @@ use crate::{
     ollama::chat::Message,
 };
 
-use super::event::Action;
+use super::{event::Action, ResponseEvent};
 
 pub mod state;
 pub mod view;
@@ -52,10 +52,14 @@ impl MessagesViewModel {
             .collect()
     }
 
-    pub fn handle_response(&mut self, response: Response) -> Result<()> {
+    pub fn handle_response_event(&mut self, event: ResponseEvent) -> Result<()> {
+        let ResponseEvent::OllamaResponse(ref response) = event else {
+            return Ok(());
+        };
+
         match response {
             Response::ModelInfo(_) | Response::LocalModels(_) => {
-                return Err(Error::UnexpectedResponse(response))
+                return Err(Error::UnexpectedResponse(event))
             }
             Response::Eos => {
                 let message = Message::Assistant(self.model_stream.clone().into());
@@ -69,7 +73,7 @@ impl MessagesViewModel {
                     self.clear_stream();
                 }
                 // TODO: make an error state
-                let message = Message::User(error_str);
+                let message = Message::User(error_str.clone());
                 self.push_message(message);
             }
             Response::Token(str) => {
