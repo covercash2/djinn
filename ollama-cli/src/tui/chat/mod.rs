@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::{
     error::Result,
-    lm::{Prompt, Response},
+    lm::Prompt,
     ollama::chat::{ChatRequest, Message},
 };
 

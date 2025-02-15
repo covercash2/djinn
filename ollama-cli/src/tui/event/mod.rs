@@ -5,6 +5,10 @@ use keymap::KeyMap;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
+mod action;
+
+pub use action::*;
+
 const DEFAULTS: &str = include_str!("../../../default_keymap.toml");
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -76,48 +80,6 @@ impl Default for EventDefinitions {
     fn default() -> Self {
         toml::from_str(DEFAULTS).expect("should be able to load default keymaps")
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ActionDefinition {
-    action: Action,
-    description: String,
-}
-
-impl From<Action> for ActionDefinition {
-    fn from(action: Action) -> Self {
-        ActionDefinition {
-            action,
-            description: String::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct ActionMap(pub HashMap<KeyMap, Action>);
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, strum::Display)]
-#[serde(rename_all = "snake_case")]
-pub enum Action {
-    Beginning,
-    End,
-    Left,
-    Right,
-    Up,
-    Down,
-    Edit,
-    LeftWord,
-    RightWord,
-    Refresh,
-    Popup,
-    Help,
-    Enter,
-    Escape,
-    Backspace,
-    Quit,
-    #[serde(skip)]
-    Unhandled(char),
-    Nop,
 }
 
 #[cfg(test)]

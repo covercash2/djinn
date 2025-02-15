@@ -4,7 +4,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use modelfile::Modelfile;
+
 use crate::error::Result;
+
+#[derive(Clone, Debug)]
+pub enum AppFileData {
+    Modelfile(Modelfile),
+}
+
+impl AppFileData {
+    pub fn file_extension(&self) -> &'static str {
+        match self {
+            AppFileData::Modelfile(_) => ".Modelfile",
+        }
+    }
+}
+
+impl From<Modelfile> for AppFileData {
+    fn from(value: Modelfile) -> Self {
+        AppFileData::Modelfile(value)
+    }
+}
 
 pub fn read_file_to_string(path: impl AsRef<Path>) -> Result<String> {
     std::fs::read_to_string(&path).map_err(|source| crate::error::Error::ReadFile {
@@ -17,7 +38,7 @@ pub fn save_file(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result<(
     let path = path.as_ref();
     let mut file = std::fs::File::options()
         .write(true)
-        .create_new(true)
+        .create(true)
         .open(path)
         .map_err(|source| crate::error::Error::OpenFile {
             source,

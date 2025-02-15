@@ -1,0 +1,19 @@
+meta {
+  name: create model with system
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/push
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "model": "jarvis-nemo",
+    "from": "mistral-nemo",
+    
+  }
+}

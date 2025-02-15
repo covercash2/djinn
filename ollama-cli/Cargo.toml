@@ -6,12 +6,14 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.87"
 async-stream = "0.3.5"
+bon = "3.3.2"
 chrono = "0.4.38"
 chumsky = "0.9.3"
 clap = { version = "4.5.16", features = ["derive", "string"] }
 color-eyre = "0.6.3"
 crossterm = { version = "0.28.1", features = ["event-stream", "serde"] }
 derive_builder = "0.20.2"
+derive_more = { version = "1.0.0", features = ["display", "deref", "from", "as_ref", "into_iterator"] }
 edit = "0.1.5"
 extend = "1.2.0"
 futures = "0.3.30"

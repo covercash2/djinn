@@ -1,6 +1,6 @@
 use ::modelfile::{modelfile::Instruction, Modelfile};
 use model_info::{ModelInfoView, ModelInfoViewModel};
-use model_list::{ModelListView, ModelListViewModel};
+use model_list::ModelListViewModel;
 use modelfile::{ModelfileView, ModelfileViewModel};
 use ollama_rs::models::ModelInfo;
 use ratatui::{
@@ -13,9 +13,10 @@ use crate::{
     error::{Error, Result},
     lm::{Prompt, Response},
     ollama::ModelName,
+    tui::BatchEvents,
 };
 
-use super::{event::Action, AppEvent, ResponseEvent, StyleExt};
+use super::{event::Action, widgets_ext::DrawViewModel, AppEvent, ResponseEvent, StyleExt};
 
 mod model_info;
 mod model_list;
@@ -73,6 +74,9 @@ impl ModelsViewModel {
                         instruction,
                         modelfile,
                     })),
+                    ModelEvent::Batch(event) => {
+                        todo!()
+                    }
                 }
             } else {
                 Ok(None)
@@ -101,6 +105,7 @@ impl ModelsViewModel {
 
 #[derive(Clone, Debug)]
 pub enum ModelEvent {
+    Batch(BatchEvents<ModelEvent>),
     Deactivate,
     EditFullModelfile(ModelInfo),
     EditInstruction {
@@ -155,11 +160,10 @@ pub impl<'a> Frame<'a> {
         } else {
             style
         };
-        self.model_list(
-            model_list_area,
-            model_list_style,
-            &mut view_model.model_list,
-        );
+
+        view_model
+            .model_list
+            .draw_view_model(self, model_list_area, model_list_style);
 
         let model_info_style = if let Some(Pane::ModelInfo) = view_model.active_pane {
             Style::active()

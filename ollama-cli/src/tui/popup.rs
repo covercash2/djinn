@@ -1,5 +1,6 @@
 use std::{path::Path, sync::Arc};
 
+use form_enter::{FormAction, FormEnter};
 use itertools::Itertools;
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
@@ -11,44 +12,89 @@ use strum::IntoEnumIterator as _;
 
 use crate::{
     error::{Error, Result},
-    fs_ext::read_file_to_string,
+    fs_ext::{read_file_to_string, AppFileData},
     tui::event::InputMode,
 };
 
 use super::{
-    event::{Action, EventProcessor},
+    event::{Action, ActionHandler, EventProcessor},
+    widgets_ext::DrawViewModel,
     AppEvent,
 };
+
+pub mod form_enter;
 
 #[derive(Debug, Clone)]
 pub struct PopupViewModel {
     title: String,
     content: PopupContent,
-    scroll_offset: u16,
 }
 
-#[derive(Debug, Clone)]
-pub struct PopupContent {
-    columns: Arc<[String]>,
+#[derive(Clone, Debug)]
+pub enum PopupContent {
+    List(ListContent),
+    Form(FormEnter),
 }
 
-impl<S: AsRef<str>> From<S> for PopupContent {
-    fn from(value: S) -> Self {
-        PopupContent {
-            columns: [value.as_ref().to_string()].into(),
+impl PopupContent {
+    pub fn line_count(&self) -> usize {
+        match self {
+            PopupContent::List(list_content) => list_content.line_count(),
+            PopupContent::Form(_) => 2,
         }
     }
 }
 
-impl<S: AsRef<str>> FromIterator<S> for PopupContent {
-    fn from_iter<T: IntoIterator<Item = S>>(iter: T) -> Self {
-        let columns: Arc<[String]> = iter.into_iter().map(|s| s.as_ref().into()).collect();
-
-        Self { columns }
+impl From<ListContent> for PopupContent {
+    fn from(value: ListContent) -> Self {
+        PopupContent::List(value)
     }
 }
 
-impl PopupContent {
+impl From<FormEnter> for PopupContent {
+    fn from(value: FormEnter) -> Self {
+        PopupContent::Form(value)
+    }
+}
+
+impl ActionHandler for PopupContent {
+    type Event = AppEvent;
+
+    fn handle_action(&mut self, action: Action) -> Result<Option<AppEvent>> {
+        match self {
+            PopupContent::List(list_content) => list_content.handle_action(action),
+            PopupContent::Form(form_enter) => form_enter.handle_action(action),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ListContent {
+    columns: Arc<[String]>,
+    scroll_offset: u16,
+}
+
+impl<S: AsRef<str>> From<S> for ListContent {
+    fn from(value: S) -> Self {
+        ListContent {
+            columns: [value.as_ref().to_string()].into(),
+            scroll_offset: 0,
+        }
+    }
+}
+
+impl<S: AsRef<str>> FromIterator<S> for ListContent {
+    fn from_iter<T: IntoIterator<Item = S>>(iter: T) -> Self {
+        let columns: Arc<[String]> = iter.into_iter().map(|s| s.as_ref().into()).collect();
+
+        Self {
+            columns,
+            scroll_offset: 0,
+        }
+    }
+}
+
+impl ListContent {
     pub fn line_count(&self) -> usize {
         self.columns
             .iter()
@@ -56,14 +102,34 @@ impl PopupContent {
             .max()
             .expect("should have a non-zero number of columns")
     }
+
+    fn max_scroll(&self) -> u16 {
+        (self.line_count())
+            .try_into()
+            .expect("should be able to fit popup content into u16")
+    }
 }
 
+#[bon::bon]
 impl PopupViewModel {
-    pub fn new(title: impl ToString, content: impl Into<PopupContent>) -> Self {
+    pub fn new(title: impl ToString, content: impl Into<ListContent>) -> Self {
         PopupViewModel {
             title: title.to_string(),
-            content: content.into(),
-            scroll_offset: 0,
+            content: content.into().into(),
+        }
+    }
+
+    #[builder]
+    pub fn file_save(data: AppFileData, prefix: Option<String>) -> Self {
+        PopupViewModel {
+            title: "save file".to_string(),
+            content: PopupContent::Form(FormEnter {
+                title: "enter filename".into(),
+                prefix: prefix.unwrap_or_default().into(),
+                suffix: data.file_extension().into(),
+                entry: "".into(),
+                action: FormAction::SaveFile { data },
+            }),
         }
     }
 
@@ -77,7 +143,7 @@ impl PopupViewModel {
 
     pub fn keymap_popup(event_processor: &EventProcessor) -> Self {
         let keymaps = &event_processor.definitions.0;
-        let keymap_help: PopupContent = InputMode::iter()
+        let keymap_help: ListContent = InputMode::iter()
             .map(|mode| {
                 let keymap = keymaps
                     .get(&mode)
@@ -97,14 +163,12 @@ impl PopupViewModel {
 
         PopupViewModel::new("help", keymap_help)
     }
+}
 
-    fn max_scroll(&self) -> u16 {
-        (self.content.line_count())
-            .try_into()
-            .expect("should be able to fit popup content into u16")
-    }
+impl ActionHandler for ListContent {
+    type Event = AppEvent;
 
-    pub fn handle_action(&mut self, action: Action) -> Result<Option<AppEvent>> {
+    fn handle_action(&mut self, action: Action) -> Result<Option<AppEvent>> {
         match action {
             Action::Up => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
@@ -133,6 +197,14 @@ impl PopupViewModel {
     }
 }
 
+impl ActionHandler for PopupViewModel {
+    type Event = AppEvent;
+
+    fn handle_action(&mut self, action: Action) -> Result<Option<AppEvent>> {
+        self.content.handle_action(action)
+    }
+}
+
 fn popup_area(parent: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
@@ -143,31 +215,40 @@ fn popup_area(parent: Rect, percent_x: u16, percent_y: u16) -> Rect {
     area
 }
 
+impl DrawViewModel for ListContent {
+    fn draw_view_model(&mut self, frame: &mut Frame<'_>, parent: Rect, style: Style) {
+        let layout = Layout::horizontal(self.columns.iter().map(|_| Constraint::Fill(1)));
+
+        for (i, column_area) in layout.split(parent).iter().enumerate() {
+            let content = Paragraph::new(self.columns[i].as_str())
+                .wrap(Wrap { trim: true })
+                .scroll((self.scroll_offset, 0))
+                .block(Block::new().padding(Padding::proportional(2)))
+                .style(style);
+            frame.render_widget(content, *column_area);
+        }
+    }
+}
+
+impl DrawViewModel for PopupViewModel {
+    fn draw_view_model(&mut self, frame: &mut Frame<'_>, parent: Rect, style: Style) {
+        let area = popup_area(parent, 60, 60);
+        frame.render_widget(Clear, area);
+
+        let block = Block::bordered().title(self.title.as_str());
+
+        match &mut self.content {
+            PopupContent::List(list_content) => list_content.draw_view_model(frame, area, style),
+            PopupContent::Form(form_enter) => form_enter.draw_view_model(frame, area, style),
+        }
+
+        frame.render_widget(block, area);
+    }
+}
+
 #[extend::ext(name = PopupView)]
 pub impl<'a> Frame<'a> {
     fn popup(&mut self, parent: Rect, style: Style, view_model: &mut PopupViewModel) {
-        let area = popup_area(parent, 60, 60);
-        self.render_widget(Clear, area);
-
-        let block = Block::bordered().title(view_model.title.as_str());
-
-        let layout = Layout::horizontal(
-            view_model
-                .content
-                .columns
-                .iter()
-                .map(|_| Constraint::Fill(1)),
-        );
-
-        for (i, column_area) in layout.split(area).iter().enumerate() {
-            let content = Paragraph::new(view_model.content.columns[i].as_str())
-                .wrap(Wrap { trim: true })
-                .scroll((view_model.scroll_offset, 0))
-                .block(Block::new().padding(Padding::proportional(2)))
-                .style(style);
-            self.render_widget(content, *column_area);
-        }
-
-        self.render_widget(block, area);
+        view_model.draw_view_model(self, parent, style);
     }
 }

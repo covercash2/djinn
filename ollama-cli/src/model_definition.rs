@@ -1,4 +1,4 @@
-use std::{fs::DirEntry, path::PathBuf, sync::Arc, time::SystemTime};
+use std::{fs::DirEntry, path::PathBuf, time::SystemTime};
 
 use ollama_rs::models::LocalModel;
 

@@ -33,6 +33,7 @@ impl ModelContext {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             while let Some(prompt) = prompt_receiver.recv().await {
+                tracing::debug!(?prompt, "recieved prompt");
                 match prompt {
                     Prompt::Generate(string) => context.handle_generate_mode(string).await?,
                     Prompt::Chat(request) => context.handle_chat_mode(request).await?,
@@ -41,6 +42,7 @@ impl ModelContext {
                 }
             }
 
+            tracing::info!("prompt receiver task closed");
             Ok(())
         });
 
@@ -63,7 +65,8 @@ impl ModeContext {
         let local_models = self.client.list_local_models().await?;
         self.response_sender
             .send(Response::LocalModels(local_models))
-            .await?;
+            .await
+            .inspect_err(|error| tracing::error!(%error, "unable to send response"))?;
         Ok(())
     }
 
@@ -71,7 +74,8 @@ impl ModeContext {
         let model_info = self.client.model_info(model_name).await?;
         self.response_sender
             .send(Response::ModelInfo(model_info))
-            .await?;
+            .await
+            .inspect_err(|error| tracing::error!(%error, "unable to send response"));
         Ok(())
     }
 

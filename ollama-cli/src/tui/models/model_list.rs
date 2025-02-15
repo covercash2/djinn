@@ -13,7 +13,7 @@ use crate::{
     error::Result,
     model_definition::ModelDefinition,
     ollama::ModelName,
-    tui::{event::Action, ResponseEvent},
+    tui::{event::Action, widgets_ext::DrawViewModel, BatchEvents, ResponseEvent},
 };
 
 use super::{u64Ext as _, ModelEvent};
@@ -51,6 +51,12 @@ impl ModelListViewModel {
                     .and_then(|index| self.models.get(index))
                 {
                     let name: Arc<str> = model.name().clone().into();
+                    let refresh_event = ModelEvent::GetInfo(ModelName(name.clone()));
+
+                    let event_batch: BatchEvents<ModelEvent> =
+                        [refresh_event, ModelEvent::Deactivate]
+                            .into_iter()
+                            .collect();
                     Ok(Some(ModelEvent::GetInfo(ModelName(name))))
                 } else {
                     Ok(None)
@@ -115,14 +121,13 @@ impl ModelDefinition {
     }
 }
 
-#[extend::ext(name = ModelListView)]
-pub impl<'a> Frame<'a> {
-    fn model_list(&mut self, parent: Rect, style: Style, view_model: &mut ModelListViewModel) {
+impl DrawViewModel for ModelListViewModel {
+    fn draw_view_model(&mut self, frame: &mut Frame<'_>, parent: Rect, style: Style) {
         let vertical = Layout::vertical([Constraint::Min(1)]);
 
         let [model_info_area] = vertical.areas(parent);
 
-        let models: Table = view_model
+        let models: Table = self
             .models
             .iter()
             .map(|info| {
@@ -144,6 +149,6 @@ pub impl<'a> Frame<'a> {
             )
             .highlight_symbol(">>");
 
-        self.render_stateful_widget(list, model_info_area, &mut view_model.widget_state);
+        frame.render_stateful_widget(list, model_info_area, &mut self.widget_state);
     }
 }

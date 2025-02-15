@@ -8,6 +8,7 @@ use tui::AppContext;
 
 pub mod bytes_size;
 mod config;
+mod cursor;
 mod error;
 mod fs_ext;
 mod lm;

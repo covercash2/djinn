@@ -8,3 +8,7 @@ check:
 
 open_log:
 	cat  ~/.local/state/ollama_tui/tui.log
+
+# list modelfiles on this machine
+list_modelfiles:
+  ls ~/.local/share/ollama_tui/modelfile/

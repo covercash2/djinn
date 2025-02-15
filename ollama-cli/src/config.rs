@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use derive_more::derive::AsRef;
 use modelfile::Modelfile;
 use serde::{Deserialize, Serialize};
 
@@ -55,8 +56,11 @@ impl AsRef<Path> for LogFile {
 }
 
 /// A place for local [`modelfile`]s
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelCache(PathBuf);
+#[derive(Debug, Clone, Serialize, Deserialize, AsRef, derive_more::Display)]
+#[display("{path:?}")]
+pub struct ModelCache {
+    path: PathBuf,
+}
 
 impl Default for ModelCache {
     fn default() -> Self {
@@ -65,24 +69,25 @@ impl Default for ModelCache {
             .get_data_home()
             .join("modelfile");
 
-        Self(path)
+        Self { path }
     }
 }
 
 impl ModelCache {
-    pub fn save(&self, name: &str, modelfile: Modelfile) -> Result<()> {
-        let path = self.0.join(format!("{name}.Modelfile"));
+    /// Pass only the filename. This function will add a `.Modelfile` extension.
+    pub fn save(&self, name: &str, modelfile: &Modelfile) -> Result<()> {
+        let path = self.path.join(format!("{name}.Modelfile"));
         let contents = modelfile.render();
         save_file(path, contents)?;
         Ok(())
     }
 
     pub fn load(&self) -> Result<Vec<LocalModelfile>> {
-        if !self.0.exists() {
-            self.0.create_dir_all()?;
+        if !self.path.exists() {
+            self.path.create_dir_all()?;
         }
         let paths = self
-            .0
+            .path
             .dir()?
             .flat_map(|dir_entry| {
                 dir_entry
@@ -97,6 +102,21 @@ impl ModelCache {
             .collect();
 
         Ok(paths)
+    }
+
+    /// Create a temporary file.
+    ///
+    /// this is a way to get around some limitations
+    /// of the architecture i'm currently using.
+    /// since `AppEvents` don't themselves trigger `AppEvents`
+    pub fn stage(&self, modelfile: &Modelfile) -> Result<()> {
+        self.save(".temp.Modelfile", &modelfile)
+    }
+
+    pub fn get_staged(&self) -> Result<Modelfile> {
+        let file = self.path.join(".temp.Modelfile");
+        let contents = read_file_to_string(file)?;
+        Ok(contents.parse()?)
     }
 }
 

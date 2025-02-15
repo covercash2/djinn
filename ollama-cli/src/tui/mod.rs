@@ -1,29 +1,28 @@
-use std::{io::stdout, time::Duration};
+use std::{io::stdout, ops::ControlFlow, sync::Arc, time::Duration};
 
 use chat::ChatViewModel;
 use crossterm::ExecutableCommand as _;
-use event::{Action, EventProcessor, InputMode};
+use event::{Action, ActionHandler as _, EventProcessor, InputMode};
 use futures::StreamExt as _;
 use generate::{GenerateView, GenerateViewModel};
 use model_context::ModelContext;
-use modelfile::{
-    modelfile::{Instruction, InstructionName},
-    Modelfile,
-};
+use modelfile::{modelfile::Instruction, Modelfile};
 use models::{ModelsView, ModelsViewModel};
 use nav::{NavView, NavViewModel};
 use ollama_rs::models::ModelInfo;
-use popup::{PopupView, PopupViewModel};
+use popup::PopupViewModel;
 use ratatui::{
     crossterm::event::Event,
     style::{Color, Style},
     DefaultTerminal, Frame,
 };
-use strum::{EnumMessage as _, VariantNames};
+use strum::{AsRefStr, EnumMessage as _, VariantNames};
+use widgets_ext::DrawViewModel;
 
 use crate::{
     config::Config,
     error::{Error, Result},
+    fs_ext::AppFileData,
     lm::{Prompt, Response},
     model_definition::ModelDefinition,
     ollama,
@@ -140,7 +139,7 @@ impl AppContext {
             }
         }
         if let Some(ref mut popup) = self.popup {
-            frame.popup(frame.area(), Style::active(), popup);
+            popup.draw_view_model(frame, frame.area(), Style::active());
         }
     }
 
@@ -153,9 +152,8 @@ impl AppContext {
                 _ = interval.tick() => { terminal.draw(|frame| self.draw(frame))?; },
                 Some(Ok(event)) = events.next() => {
                     if let Some(app_event) = self.handle_input(event).await? {
-                        let cont = self.handle_event(&mut terminal, app_event).await?;
-                        if !cont {
-                            return Ok(());
+                        if let ControlFlow::Break(()) = self.handle_event(&mut terminal, app_event).await? {
+                            return Ok(())
                         }
                     }
                 },
@@ -167,7 +165,7 @@ impl AppContext {
     }
 
     async fn handle_response(&mut self, response: Response) -> anyhow::Result<()> {
-        tracing::info!(response = ?response.get_message(), "handling response");
+        tracing::info!(response = response.as_ref(), "handling response");
 
         if let Response::LocalModels(models) = response {
             let local_modelfiles = self
@@ -196,21 +194,22 @@ impl AppContext {
         &mut self,
         terminal: &mut DefaultTerminal,
         event: AppEvent,
-    ) -> anyhow::Result<bool> {
-        tracing::info!("handling event",);
+    ) -> anyhow::Result<ControlFlow<()>> {
+        tracing::info!(event = event.as_ref(), "handling event",);
         match event {
-            AppEvent::Submit(message) => {
-                self.submit_message(message).await;
-                Ok(true)
+            AppEvent::Submit(request) => {
+                tracing::info!(?request, "submitting async request");
+                self.submit_message(request).await;
+                Ok(ControlFlow::Continue(()))
             }
-            AppEvent::Quit => Ok(false),
+            AppEvent::Quit => Ok(ControlFlow::Break(())),
             AppEvent::Activate(view) => {
                 self.view = view;
                 if let Some(event) = self.view.init().await? {
                     // necessary because of async recursion
                     Box::pin(self.handle_event(terminal, event)).await
                 } else {
-                    Ok(true)
+                    Ok(ControlFlow::Continue(()))
                 }
             }
             AppEvent::Deactivate => {
@@ -219,22 +218,49 @@ impl AppContext {
                 } else {
                     self.view = View::Nav(Default::default());
                 }
-                Ok(true)
+                Ok(ControlFlow::Continue(()))
             }
             AppEvent::InputMode(input_mode) => {
                 self.event_processor.input_mode(input_mode);
-                Ok(true)
+                Ok(ControlFlow::Continue(()))
             }
             AppEvent::EditModelInstruction {
                 modelfile,
                 instruction,
             } => {
-                self.edit_instruction(terminal, instruction, modelfile)?;
-                Ok(true)
+                tracing::warn!(?modelfile, ?instruction, "not implemented");
+                Ok(ControlFlow::Continue(()))
             }
             AppEvent::EditModelfile(modelfile) => {
-                self.edit_full_modelfile(terminal, modelfile)?;
-                Ok(true)
+                let modelfile: Modelfile = self.edit_full_modelfile(terminal, modelfile)?;
+                self.event_processor.input_mode = InputMode::Edit;
+                self.config.model_cache.stage(&modelfile)?;
+                self.popup = Some(
+                    PopupViewModel::file_save()
+                        .prefix(self.config.model_cache.to_string())
+                        .data(modelfile.into())
+                        .call(),
+                );
+                Ok(ControlFlow::Continue(()))
+            }
+            AppEvent::SaveFile { name, data } => {
+                match data {
+                    AppFileData::Modelfile(modelfile) => {
+                        self.config.model_cache.save(name.as_ref(), &modelfile)?;
+                    }
+                }
+
+                Ok(ControlFlow::Continue(()))
+            }
+            AppEvent::Batch(batch_event) => {
+                for event in batch_event.events.into_iter() {
+                    if let ControlFlow::Break(()) =
+                        Box::pin(self.handle_event(terminal, event)).await?
+                    {
+                        return Ok(ControlFlow::Break(()));
+                    }
+                }
+                Ok(ControlFlow::Continue(()))
             }
         }
     }
@@ -270,43 +296,16 @@ impl AppContext {
         &mut self,
         terminal: &mut DefaultTerminal,
         model_info: ModelInfo,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Modelfile> {
         let modelfile_text = model_info.modelfile;
 
         let edited_modelfile = self.edit_text(terminal, modelfile_text.as_str())?;
 
         tracing::info!(edited_modelfile, "modelfile edited");
-        Ok(())
-    }
 
-    fn edit_instruction(
-        &mut self,
-        terminal: &mut DefaultTerminal,
-        instruction: Instruction,
-        modelfile: Modelfile,
-    ) -> anyhow::Result<()> {
-        let instruction_name: InstructionName = (&instruction).into();
+        let modelfile: Modelfile = edited_modelfile.parse()?;
 
-        let builder = modelfile.build_on();
-        let builder = match instruction {
-            Instruction::From(base_model) => {
-                let old_text: String = base_model.to_string();
-                let updated_text: String = self.edit_text(terminal, &old_text)?;
-                builder.from(&updated_text)?
-            }
-            Instruction::Skip => todo!(),
-            Instruction::Parameter(parameter) => todo!(),
-            Instruction::Template(template) => todo!(),
-            Instruction::System(system_message) => todo!(),
-            Instruction::Adapter(adapter) => todo!(),
-            Instruction::License(license) => todo!(),
-            Instruction::Message(message) => todo!(),
-        };
-
-        let modelfile: Modelfile = builder.build()?;
-        self.config.model_cache.save("test", modelfile)?;
-
-        Ok(())
+        Ok(modelfile)
     }
 
     fn edit_text(&mut self, terminal: &mut DefaultTerminal, text: &str) -> anyhow::Result<String> {
@@ -332,14 +331,22 @@ impl AppContext {
     async fn submit_message(&mut self, prompt: Prompt) {
         self.model_context
             .prompt_sender
-            .send(prompt)
+            .send(prompt.clone())
             .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    %error,
+                    ?prompt,
+                    "unable to send prompt",
+                );
+            })
             .expect("unable to send message")
     }
 }
 
 /// An event triggered from within the app.
 /// Usually originally triggered from key events.
+#[derive(Clone, Debug, AsRefStr)]
 pub enum AppEvent {
     Activate(View),
     Deactivate,
@@ -349,8 +356,26 @@ pub enum AppEvent {
         instruction: Instruction,
     },
     EditModelfile(ModelInfo),
+    SaveFile {
+        name: Arc<str>,
+        data: AppFileData,
+    },
     InputMode(InputMode),
     Quit,
+    Batch(BatchEvents<AppEvent>),
+}
+
+#[derive(Clone, Debug)]
+pub struct BatchEvents<T> {
+    events: Vec<T>,
+}
+
+impl<E> FromIterator<E> for BatchEvents<E> {
+    fn from_iter<T: IntoIterator<Item = E>>(iter: T) -> Self {
+        BatchEvents {
+            events: iter.into_iter().collect(),
+        }
+    }
 }
 
 /// A response from an asyncrhonous or otherwise external source

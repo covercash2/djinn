@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use ratatui::layout::Rect;
+use ratatui::{layout::Rect, style::Style, Frame};
 
 #[extend::ext]
 pub impl Rect {
@@ -10,4 +10,8 @@ pub impl Rect {
 
         textwrap::wrap(text, wrap)
     }
+}
+
+pub trait DrawViewModel {
+    fn draw_view_model(&mut self, frame: &mut Frame<'_>, parent: Rect, style: Style);
 }
