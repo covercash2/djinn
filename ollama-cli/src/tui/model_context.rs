@@ -33,7 +33,7 @@ impl ModelContext {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             while let Some(prompt) = prompt_receiver.recv().await {
-                tracing::debug!(?prompt, "recieved prompt");
+                tracing::debug!(?prompt, "received prompt");
                 match prompt {
                     Prompt::Generate(string) => context.handle_generate_mode(string).await?,
                     Prompt::Chat(request) => context.handle_chat_mode(request).await?,
