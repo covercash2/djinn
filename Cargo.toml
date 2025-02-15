@@ -1,5 +1,5 @@
 [workspace]
-members = [ "djinn-cli","djinn-core", "djinn-server", "ollama-cli" ]
+members = [ "djinn-cli","djinn-core", "djinn-server"]
 default-members = ["djinn-cli", "ollama-cli"]
 resolver = "2"
 
