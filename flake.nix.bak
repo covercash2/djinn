@@ -1,0 +1,62 @@
+# https://github.com/helix-editor/helix/blob/master/flake.nix
+{
+  description = "Machine learning experiments and such";
+
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    crate2nix.url = "github:nix-community/crate2nix";
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+  };
+
+  outputs =
+    inputs @ { self
+    , nixpkgs
+    , rust-overlay
+    , crate2nix
+    , flake-parts
+    , ...
+    }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
+
+      perSystem = { system, lib, inputs', ... }:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ rust-overlay.overlays.default ];
+          };
+          buildRustCrateForPkgs =
+            crate:
+            pkgs.buildRustCrate.override {
+              rustc = pkgs.rust-bin.stable.lates.default;
+              cargo = pkgs.rust-bin.stable.latest.default;
+            };
+          generatedCargoNix = inputs.crate2nix.tools.${system}.generatedCargoNIx {
+            name = "rustnix";
+            src = ./.;
+          };
+
+          cargoNix = import generatedCargoNix {
+            inherit pkgs buildRustCrateForPkgs;
+          };
+        in
+          rec {
+            checks = {
+              rustnix = cargoNix.rootCrate.build.override {
+                runTests = true;
+              };
+            };
+            packages = {
+              rustnix = cargoNix.rootCrate.build;
+              default = packages.rustnix;
+            };
+          };
+    };
+}
