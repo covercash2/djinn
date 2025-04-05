@@ -1,7 +1,5 @@
 use std::path::Path;
 
-#[cfg(not(feature = "fixed-seed"))]
-use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -32,7 +30,10 @@ fn default_seed() -> u64 {
 
 #[cfg(not(feature = "fixed-seed"))]
 fn random_seed() -> u64 {
-    thread_rng().gen::<u64>()
+    use rand::prelude::*;
+    use rand::rng;
+
+    rng().random::<u64>()
 }
 
 const fn default_repeat_last_n() -> usize {
