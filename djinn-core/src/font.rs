@@ -1,4 +1,7 @@
-pub fn get_default_font<'a>() -> Option<rusttype::Font<'a>> {
+use ab_glyph::{Font, FontArc, InvalidFont};
+
+pub fn get_default_font<'a>() -> Result<impl Font, InvalidFont> {
     let bytes = include_bytes!("../data/font/roboto-mono-stripped.ttf") as &[u8];
-    rusttype::Font::try_from_vec(bytes.into())
+
+    FontArc::try_from_slice(bytes)
 }

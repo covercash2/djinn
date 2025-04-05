@@ -79,7 +79,7 @@ fn run_task<T: Task>(device: Device, args: args::Args) -> anyhow::Result<()> {
     for image_name in args.images.iter() {
         tracing::info!("processing {image_name}");
         let mut image_name = std::path::PathBuf::from(image_name);
-        let original_image = image::io::Reader::open(&image_name)?
+        let original_image = image::ImageReader::open(&image_name)?
             .decode()
             .map_err(Error::wrap)?;
         let (width, height) = {
@@ -173,7 +173,8 @@ pub fn report_detect(
     let w_ratio = initial_w as f32 / w as f32;
     let h_ratio = initial_h as f32 / h as f32;
     let mut img = img.to_rgb8();
-    let font = crate::font::get_default_font();
+    // TODO: load font and inject instead of loading here
+    let font = crate::font::get_default_font().expect("failed to load font");
     for (class_index, bboxes_for_class) in bboxes.iter().enumerate() {
         for b in bboxes_for_class.iter() {
             tracing::info!("{}: {:?}", crate::coco_classes::NAMES[class_index], b);
@@ -189,27 +190,25 @@ pub fn report_detect(
                 );
             }
             if legend_size > 0 {
-                if let Some(font) = font.as_ref() {
-                    imageproc::drawing::draw_filled_rect_mut(
-                        &mut img,
-                        imageproc::rect::Rect::at(xmin, ymin).of_size(dx as u32, legend_size),
-                        image::Rgb([170, 0, 0]),
-                    );
-                    let legend = format!(
-                        "{}   {:.0}%",
-                        crate::coco_classes::NAMES[class_index],
-                        100. * b.confidence
-                    );
-                    imageproc::drawing::draw_text_mut(
-                        &mut img,
-                        image::Rgb([255, 255, 255]),
-                        xmin,
-                        ymin,
-                        rusttype::Scale::uniform(legend_size as f32 - 1.),
-                        font,
-                        &legend,
-                    )
-                }
+                imageproc::drawing::draw_filled_rect_mut(
+                    &mut img,
+                    imageproc::rect::Rect::at(xmin, ymin).of_size(dx as u32, legend_size),
+                    image::Rgb([170, 0, 0]),
+                );
+                let legend = format!(
+                    "{}   {:.0}%",
+                    crate::coco_classes::NAMES[class_index],
+                    100. * b.confidence
+                );
+                imageproc::drawing::draw_text_mut(
+                    &mut img,
+                    image::Rgb([255, 255, 255]),
+                    xmin,
+                    ymin,
+                    legend_size as f32 - 1.,
+                    &font,
+                    &legend,
+                )
             }
         }
     }
