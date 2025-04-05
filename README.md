@@ -27,4 +27,17 @@ for running models
 
 # examples
 
-run the server on a Macbook M-seriesm/ollama/ollama/
+run the server on a Macbook M-series:
+
+```sh
+cargo run --release --features djinn-core/mac -- server-config --name test
+```
+
+breakdown:
+    - `cargo run --release` to build in release mode for best performance
+    - `--features djinn-core/mac` to enable CoreML acceleration
+    - `--` everything before this are `cargo` args and everything after are `djinn` args
+    - `server-config` command to run the server from a config file
+    - `--name test` to run the config named `test`, in `./configs/server/test.toml`
+
+[Ollama]: https://github.com/ollama/ollama/

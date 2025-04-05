@@ -39,7 +39,7 @@
 
         # Define the Rust compiler and tools.
         # https://github.com/oxalica/rust-overlay#rust-binrust-toolchainstable
-        rustToolchain = pkgs.rust-bin.nightly.latest.default.override {
+        rustToolchain = pkgs.rust-bin.nightly."2025-02-01".default.override {
           extensions = [ "clippy" "rustfmt" "rust-src" ];
         };
 
@@ -163,16 +163,19 @@
         devShells.default = pkgs.mkShell {
           inputsFrom = [ djinn-cli ];
           packages = with pkgs; [
-            rustToolchain
-            rust-analyzer
-            cargo-watch
-            cargo-expand
             cargo-audit
+            cargo-expand
+            cargo-udeps
+            cargo-watch
+            just
+            rust-analyzer
+            rustToolchain
           ];
 
           # Include environment variables for development
           shellHook = ''
             ${shellEnvSetup}
+            export RUST_LOG=info
             echo ""
             echo "🔧 djinn development environment loaded"
             echo ""
