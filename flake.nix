@@ -1,3 +1,4 @@
+# https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-flake.html
 {
   description = "djinn - machine learning experiments with candle";
 
@@ -56,14 +57,14 @@
         # Crane setup for Rust package building
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-        # Environment variables
-        envVars = if pkgs.stdenv.isDarwin then {
-          DYLD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath systemDependencies}";
-        } else if pkgs.stdenv.isLinux then {
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath systemDependencies}";
-          CUDA_HOME = "${pkgs.cudaPackages.cudatoolkit}";
-          CUDA_PATH = "${pkgs.cudaPackages.cudatoolkit}";
-        } else {};
+        # Environment variables as shell commands
+        shellEnvSetup = if pkgs.stdenv.isDarwin then ''
+          export DYLD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath systemDependencies}
+        '' else if pkgs.stdenv.isLinux then ''
+          export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath systemDependencies}
+          export CUDA_HOME=${pkgs.cudaPackages.cudatoolkit}
+          export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+        '' else "";
 
         # Filter source to only include necessary files
         src = pkgs.lib.cleanSourceWith {
@@ -122,6 +123,8 @@
         };
 
         # Development shell with all dependencies
+        # https://nixos.org/manual/nixpkgs/stable/#sec-pkgs-mkShell
+        # https://nix.dev/tutorials/first-steps/declarative-shell.html
         devShells.default = pkgs.mkShell {
           inputsFrom = [ djinn-cli ];
           packages = with pkgs; [
@@ -133,13 +136,11 @@
           ];
 
           # Include environment variables for development
-          inherit envVars;
           shellHook = ''
-            ${pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (k: v: "export ${k}=${v}") envVars)}
+            ${shellEnvSetup}
             echo "djinn development environment loaded"
           '';
         };
       }
     );
 }
-
