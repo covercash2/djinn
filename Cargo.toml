@@ -15,6 +15,7 @@ anyhow = "1.0.97"
 async-stream = "0.3.6"
 axum = "0.8.3"
 axum-streams = { version = "0.20.0", features = ["json"] }
+bon = "3.8.1"
 candle-core = { version = "0.8.4" }
 candle-nn = { version = "0.8.4" }
 candle-transformers = { version = "0.8.4" }
