@@ -24,7 +24,11 @@ pub fn save_image<P: AsRef<std::path::Path>>(img: &Tensor, p: P) -> Result<()> {
     Ok(())
 }
 
-/// Load a set of images
+/// Load a set of images, normalizing pixel values to the `[-1, 1]` range.
+///
+/// This normalization (`pixel / 255 * 2 - 1`) is suitable for Stable Diffusion
+/// and similar diffusion models. It is **not** appropriate for CLIP, which
+/// requires per-channel mean/std normalization — see [`clip::Clip::encode_image`].
 pub fn load_images<P: AsRef<std::path::Path>>(
     paths: &[P],
     image_size: usize,
@@ -35,7 +39,11 @@ pub fn load_images<P: AsRef<std::path::Path>>(
         .and_then(|images| Tensor::stack(&images, 0).map_err(|e| anyhow::anyhow!(e)))
 }
 
-/// Load an image into a [`Tensor`]
+/// Load an image into a [`Tensor`], normalizing pixel values to the `[-1, 1]` range.
+///
+/// This normalization (`pixel / 255 * 2 - 1`) is suitable for Stable Diffusion
+/// and similar diffusion models. It is **not** appropriate for CLIP, which
+/// requires per-channel mean/std normalization — see [`clip::Clip::encode_image`].
 pub fn load_image<T: AsRef<std::path::Path>>(path: T, image_size: usize) -> anyhow::Result<Tensor> {
     let img = image::ImageReader::open(path)?.decode()?;
     let (height, width) = (image_size, image_size);
