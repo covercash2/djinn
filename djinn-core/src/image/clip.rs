@@ -43,9 +43,9 @@ pub enum ClipError {
 }
 
 pub struct ModelFile {
-    name: String,
-    revision: String,
-    file: String,
+    pub name: String,
+    pub revision: String,
+    pub file: String,
 }
 
 impl ModelFile {
@@ -73,6 +73,22 @@ impl ModelFile {
         Self::new(
             "openai/clip-vit-base-patch32",
             "refs/pr/15",
+            "model.safetensors",
+        )
+    }
+
+    pub fn siglip_tokenizer() -> Self {
+        Self::new(
+            "google/siglip-base-patch16-224",
+            "main",
+            "tokenizer.json",
+        )
+    }
+
+    pub fn siglip_model() -> Self {
+        Self::new(
+            "google/siglip-base-patch16-224",
+            "main",
             "model.safetensors",
         )
     }
