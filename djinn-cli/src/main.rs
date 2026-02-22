@@ -19,6 +19,7 @@ use tracing::Instrument;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+mod clip;
 mod mistral;
 mod server;
 
@@ -46,6 +47,7 @@ enum Runner {
     },
     SingleRun(SingleRunArgs),
     Config(ConfigArgs),
+    Clip(clip::Args),
 }
 
 #[derive(Parser)]
@@ -167,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
             djinn_server::run_server(config).instrument(span).await
         }
         Runner::SingleRun(args) => single_run(args).await,
+        Runner::Clip(args) => clip::run(args).await,
         Runner::Config(args) => {
             let config: ModelRun = args.try_into()?;
             //TODO only Mistral is supported for now

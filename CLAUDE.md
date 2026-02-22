@@ -51,14 +51,19 @@ This is a Cargo workspace with these members:
   - `model.rs` — `ModelArchitecture` enum (Mistral, QMistral, Starcoder), `Model` enum, `ModelContext` (runs inference via `async_stream`)
   - `config.rs` — `ModelConfig` (variant, device, flash_attn, model_source), `RunConfig` (sampling params), `ModelRun`
   - `mistral/` — Mistral-specific HF Hub loading and context creation
-- `image/` — Image utilities
+- `image/` — Image utilities and Stable Diffusion pipeline
   - `mod.rs` — `save_image`, `load_image`, `load_images` (tensor ↔ file)
   - `clip.rs` — CLIP model support
-  - `gen.rs` — Stable Diffusion image generation (v1.5, v2.1, SDXL, Turbo, inpainting variants)
+  - `gen.rs` — Stable Diffusion image generation (v1.5, v2.1, SDXL, Turbo, inpainting variants); `Args` struct is the CLI entrypoint
+  - `config.rs` — `GenConfig` (serde TOML struct); loaded from `~/.config/djinn/image-gen.toml`
+  - `error.rs` — `Error` / `Result<T>` for the image gen pipeline (typed `thiserror` variants)
+- `config/` — Generic XDG config infrastructure
+  - `mod.rs` — `Error` / `Result<T>` for config loading
+  - `xdg.rs` — `config_dir()`, `config_file()`, `load<T>()` — reads TOML from `$XDG_CONFIG_HOME/djinn/`
 - `device.rs` — `Device` enum (Cpu/Cuda/Metal) with `cfg_if` feature-gated defaults
 - `hf_hub_ext.rs` — HuggingFace Hub helpers (`Hub` wrapper, `hub_load_safetensors`)
 - `yolov8/` — YOLOv8 object detection
-- `error.rs` — `Error` type wrapping candle, tokenizer, and anyhow errors
+- `error.rs` — Top-level `Error` type for the crate
 
 ### Feature Flags (`djinn-core`)
 
@@ -69,6 +74,8 @@ This is a Cargo workspace with these members:
 ### Config Files
 
 Server configs live in `./configs/server/<name>.toml` and reference model configs at paths like `./configs/model/<model>.toml`.
+
+Image generation config lives at `~/.config/djinn/image-gen.toml` (XDG). All fields are optional `Option<T>`. Priority order: config file < env var (`DJINN_SD_*`) < explicit CLI flag.
 
 Example model config (`configs/model/q_mistral.toml`):
 ```toml

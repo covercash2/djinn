@@ -10,6 +10,7 @@ pub mod config;
 pub mod device;
 pub mod image;
 pub mod lm;
+pub mod tensor_ext;
 pub mod yolov8;
 
 pub use error::Error;
