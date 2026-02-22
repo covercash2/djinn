@@ -1,6 +1,7 @@
 use candle_core::{DType, Device, Result, Tensor};
 
 pub mod clip;
+pub mod config;
 pub mod gen;
 
 /// Saves an image to disk using the image crate, this expects an input with shape

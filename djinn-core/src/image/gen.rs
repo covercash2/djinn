@@ -16,92 +16,101 @@ use tracing_subscriber::util::SubscriberInitExt as _;
 use crate::device::Device;
 
 /// CLI arguments for Stable Diffusion image generation.
+///
+/// All settings can be provided via CLI flag, environment variable, or a config
+/// file at `$XDG_CONFIG_HOME/djinn/image-gen.toml`.  The priority order is:
+/// config file < env var < explicit CLI flag.
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
+    /// Path to a TOML config file. Defaults to `$XDG_CONFIG_HOME/djinn/image-gen.toml`.
+    #[arg(long, env = "DJINN_SD_CONFIG", value_name = "FILE")]
+    config_file: Option<PathBuf>,
+
     /// The prompt to be used for image generation.
-    #[arg(
-        long,
-        default_value = "A very realistic photo of a rusty robot walking on a sandy beach"
-    )]
-    prompt: String,
-    #[arg(long, default_value = "")]
-    uncond_prompt: String,
-    /// Run on CPU rather than on GPU.
-    #[arg(long)]
-    device: Device,
+    #[arg(long, env = "DJINN_SD_PROMPT")]
+    prompt: Option<String>,
+    /// Negative prompt — describe what to exclude from the image.
+    #[arg(long, env = "DJINN_SD_UNCOND_PROMPT")]
+    uncond_prompt: Option<String>,
+    /// Compute device to run inference on.
+    #[arg(long, env = "DJINN_SD_DEVICE")]
+    device: Option<Device>,
     /// Enable tracing (generates a trace-timestamp.json file).
-    #[arg(long)]
+    #[arg(long, env = "DJINN_SD_TRACING")]
     tracing: bool,
     /// The height in pixels of the generated image.
-    #[arg(long)]
+    #[arg(long, env = "DJINN_SD_HEIGHT")]
     height: Option<usize>,
     /// The width in pixels of the generated image.
-    #[arg(long)]
+    #[arg(long, env = "DJINN_SD_WIDTH")]
     width: Option<usize>,
     /// The UNet weight file, in .safetensors format.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, env = "DJINN_SD_UNET_WEIGHTS", value_name = "FILE")]
     unet_weights: Option<String>,
     /// The CLIP weight file, in .safetensors format.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, env = "DJINN_SD_CLIP_WEIGHTS", value_name = "FILE")]
     clip_weights: Option<String>,
     /// The CLIP2 weight file, in .safetensors format.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, env = "DJINN_SD_CLIP2_WEIGHTS", value_name = "FILE")]
     clip2_weights: Option<String>,
     /// The VAE weight file, in .safetensors format.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, env = "DJINN_SD_VAE_WEIGHTS", value_name = "FILE")]
     vae_weights: Option<String>,
-    #[arg(long, value_name = "FILE")]
-    /// The file specifying the tokenizer to used for tokenization.
+    /// The tokenizer file.
+    #[arg(long, env = "DJINN_SD_TOKENIZER", value_name = "FILE")]
     tokenizer: Option<String>,
-    /// The size of the sliced attention or 0 for automatic slicing (disabled by default)
-    #[arg(long)]
+    /// The size of the sliced attention or 0 for automatic slicing (disabled by default).
+    #[arg(long, env = "DJINN_SD_SLICED_ATTENTION_SIZE")]
     sliced_attention_size: Option<usize>,
     /// The number of steps to run the diffusion for.
-    #[arg(long)]
+    #[arg(long, env = "DJINN_SD_N_STEPS")]
     n_steps: Option<usize>,
     /// The number of samples to generate iteratively.
-    #[arg(long, default_value_t = 1)]
-    num_samples: usize,
-    /// The numbers of samples to generate simultaneously.
-    #[arg[long, default_value_t = 1]]
-    bsize: usize,
+    #[arg(long, env = "DJINN_SD_NUM_SAMPLES")]
+    num_samples: Option<usize>,
+    /// The number of samples to generate simultaneously (batch size).
+    #[arg(long, env = "DJINN_SD_BSIZE")]
+    bsize: Option<usize>,
     /// The name of the final image to generate.
-    #[arg(long, value_name = "FILE", default_value = "sd_final.png")]
-    final_image: PathBuf,
-    #[arg(long, value_enum, default_value = "v2-1")]
-    sd_version: StableDiffusionVersion,
+    #[arg(long, env = "DJINN_SD_FINAL_IMAGE", value_name = "FILE")]
+    final_image: Option<PathBuf>,
+    /// Stable Diffusion model version.
+    #[arg(long, value_enum, env = "DJINN_SD_VERSION")]
+    sd_version: Option<StableDiffusionVersion>,
     /// Generate intermediary images at each step.
     #[arg(long, action)]
     intermediary_images: bool,
-    #[arg(long)]
+    /// Use flash attention (CUDA only).
+    #[arg(long, env = "DJINN_SD_USE_FLASH_ATTN")]
     use_flash_attn: bool,
-    #[arg(long)]
+    /// Use FP16 weights to reduce VRAM usage.
+    #[arg(long, env = "DJINN_SD_USE_F16")]
     use_f16: bool,
-    #[arg(long)]
+    /// Classifier-free guidance scale.
+    #[arg(long, env = "DJINN_SD_GUIDANCE_SCALE")]
     guidance_scale: Option<f64>,
     /// Path to the mask image for inpainting.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, env = "DJINN_SD_MASK_PATH", value_name = "FILE")]
     mask_path: Option<String>,
     /// Path to the image used to initialize the latents. For inpainting, this is the image to be masked.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, env = "DJINN_SD_IMG2IMG", value_name = "FILE")]
     img2img: Option<PathBuf>,
-    /// The strength, indicates how much to transform the initial image. The
-    /// value must be between 0 and 1, a value of 1 discards the initial image
-    /// information.
-    #[arg(long, default_value_t = 0.8)]
-    img2img_strength: f64,
+    /// How much to transform the initial image (0.0 = no change, 1.0 = full diffusion).
+    #[arg(long, env = "DJINN_SD_IMG2IMG_STRENGTH")]
+    img2img_strength: Option<f64>,
     /// The seed to use when generating random samples.
-    #[arg(long)]
+    #[arg(long, env = "DJINN_SD_SEED")]
     seed: Option<u64>,
-    /// Force the saved image to update only the masked region
+    /// Force the saved image to update only the masked region.
     #[arg(long)]
     only_update_masked: bool,
 }
 
 /// Supported Stable Diffusion model versions.
-#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq, Eq)]
-enum StableDiffusionVersion {
+#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StableDiffusionVersion {
     /// Stable Diffusion v1.5
     V1_5,
     /// Stable Diffusion v1.5 inpainting variant
@@ -559,35 +568,44 @@ fn inpainting_tensors(
 impl Args {
     /// Run the full Stable Diffusion pipeline and write the output image(s) to disk.
     pub fn run(self) -> anyhow::Result<()> {
-        let Args {
-            prompt,
-            uncond_prompt,
-            device,
-            height,
-            width,
-            n_steps,
-            tokenizer,
-            final_image,
-            sliced_attention_size,
-            num_samples,
-            bsize,
-            sd_version,
-            clip_weights,
-            clip2_weights,
-            vae_weights,
-            unet_weights,
-            tracing,
-            use_f16,
-            guidance_scale,
-            use_flash_attn,
-            mask_path,
-            img2img,
-            img2img_strength,
-            seed,
-            only_update_masked,
-            intermediary_images,
-            ..
-        } = self;
+        // Load file config from the XDG path (or --config-file override).
+        // clap has already merged env vars into `self`, so the priority chain is:
+        //   config file  <  env var (via clap)  <  explicit CLI flag
+        let file_config = super::config::load(self.config_file.as_deref())?;
+
+        let prompt = self.prompt
+            .or(file_config.prompt)
+            .ok_or_else(|| anyhow::anyhow!(
+                "prompt is required — pass --prompt, set DJINN_SD_PROMPT, \
+                 or add `prompt = \"...\"` to the config file"
+            ))?;
+        let uncond_prompt = self.uncond_prompt.or(file_config.uncond_prompt).unwrap_or_default();
+        let device      = self.device.or(file_config.device).unwrap_or_default();
+        let height      = self.height.or(file_config.height);
+        let width       = self.width.or(file_config.width);
+        let n_steps     = self.n_steps.or(file_config.n_steps);
+        let tokenizer   = self.tokenizer.or(file_config.tokenizer);
+        let final_image = self.final_image.or(file_config.final_image)
+            .unwrap_or_else(|| PathBuf::from("sd_final.png"));
+        let sliced_attention_size = self.sliced_attention_size.or(file_config.sliced_attention_size);
+        let num_samples = self.num_samples.or(file_config.num_samples).unwrap_or(1);
+        let bsize       = self.bsize.or(file_config.bsize).unwrap_or(1);
+        let sd_version  = self.sd_version.or(file_config.sd_version)
+            .unwrap_or(StableDiffusionVersion::V2_1);
+        let clip_weights  = self.clip_weights.or(file_config.clip_weights);
+        let clip2_weights = self.clip2_weights.or(file_config.clip2_weights);
+        let vae_weights   = self.vae_weights.or(file_config.vae_weights);
+        let unet_weights  = self.unet_weights.or(file_config.unet_weights);
+        let tracing       = self.tracing;
+        let use_f16       = self.use_f16 || file_config.use_f16.unwrap_or(false);
+        let guidance_scale    = self.guidance_scale.or(file_config.guidance_scale);
+        let use_flash_attn    = self.use_flash_attn || file_config.use_flash_attn.unwrap_or(false);
+        let mask_path         = self.mask_path.or(file_config.mask_path);
+        let img2img           = self.img2img.or(file_config.img2img);
+        let img2img_strength  = self.img2img_strength.or(file_config.img2img_strength).unwrap_or(0.8);
+        let seed              = self.seed.or(file_config.seed);
+        let only_update_masked  = self.only_update_masked;
+        let intermediary_images = self.intermediary_images;
 
         if !(0. ..=1.).contains(&img2img_strength) {
             anyhow::bail!("img2img-strength should be between 0 and 1, got {img2img_strength}")
