@@ -6,6 +6,18 @@ pub mod error;
 pub mod gen;
 pub mod siglip;
 
+/// Shared error type for vision-language encoder models.
+pub type VisionEncoderResult<T> = clip::ClipResult<T>;
+
+/// Shared interface for vision-language encoder models (CLIP, SigLIP, …).
+///
+/// Implementors provide text and image encoding methods that return comparable
+/// feature vectors, allowing a single downstream similarity computation.
+pub trait VisionEncoder {
+    fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor>;
+    fn encode_image(&self, path: &std::path::Path) -> VisionEncoderResult<Tensor>;
+}
+
 /// Saves an image to disk using the image crate, this expects an input with shape
 /// (c, height, width).
 pub fn save_image<P: AsRef<std::path::Path>>(img: &Tensor, p: P) -> Result<()> {

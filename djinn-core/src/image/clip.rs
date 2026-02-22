@@ -209,6 +209,16 @@ impl Clip {
 
 }
 
+impl super::VisionEncoder for Clip {
+    fn encode_text(&self, text: &str) -> super::VisionEncoderResult<Tensor> {
+        Clip::encode_text(self, text)
+    }
+
+    fn encode_image(&self, path: &Path) -> super::VisionEncoderResult<Tensor> {
+        Clip::encode_image(self, path)
+    }
+}
+
 async fn load_tokenizer(hub: &Hub) -> ClipResult<PathBuf> {
     let mf = ModelFile::clip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
