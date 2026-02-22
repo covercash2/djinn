@@ -4,6 +4,7 @@ pub mod clip;
 pub mod config;
 pub mod error;
 pub mod gen;
+pub mod siglip;
 
 /// Saves an image to disk using the image crate, this expects an input with shape
 /// (c, height, width).
