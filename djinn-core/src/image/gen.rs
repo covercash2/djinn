@@ -14,6 +14,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt as _;
 
 use crate::device::Device;
+use super::error::Error;
 
 /// CLI arguments for Stable Diffusion image generation.
 ///
@@ -384,39 +385,43 @@ fn text_embeddings(
     dtype: DType,
     use_guide_scale: bool,
     first: bool,
-) -> anyhow::Result<Tensor> {
+) -> Result<Tensor, Error> {
     let tokenizer_file = if first {
         ModelFile::Tokenizer
     } else {
         ModelFile::Tokenizer2
     };
-    let tokenizer = tokenizer_file.get(tokenizer, sd_version, use_f16)?;
-    let tokenizer = Tokenizer::from_file(&tokenizer).map_err(|e| {
-        anyhow::anyhow!("failed to load tokenizer from file {:?}: {}", tokenizer, e)
-    })?;
+    let tokenizer_path = tokenizer_file.get(tokenizer, sd_version, use_f16)?;
+    let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        .map_err(|source| Error::TokenizerLoad { path: tokenizer_path.clone(), source })?;
     let pad_id = match &sd_config.clip.pad_with {
-        Some(padding) => *tokenizer.get_vocab(true).get(padding.as_str()).unwrap(),
-        None => *tokenizer.get_vocab(true).get("<|endoftext|>").unwrap(),
+        Some(padding) => *tokenizer
+            .get_vocab(true)
+            .get(padding.as_str())
+            .ok_or_else(|| Error::MissingToken { token: padding.to_string() })?,
+        None => *tokenizer
+            .get_vocab(true)
+            .get("<|endoftext|>")
+            .ok_or_else(|| Error::MissingToken { token: "<|endoftext|>".to_string() })?,
     };
-    println!("Running with prompt \"{prompt}\".");
+    tracing::info!("Running with prompt \"{prompt}\".");
     let mut tokens = tokenizer
         .encode(prompt, true)
-        .expect("failed to tokenize prompt: TODO HANDLE THIS")
+        .map_err(Error::Tokenize)?
         .get_ids()
         .to_vec();
     if tokens.len() > sd_config.clip.max_position_embeddings {
-        anyhow::bail!(
-            "the prompt is too long, {} > max-tokens ({})",
-            tokens.len(),
-            sd_config.clip.max_position_embeddings
-        )
+        return Err(Error::PromptTooLong {
+            len: tokens.len(),
+            max: sd_config.clip.max_position_embeddings,
+        });
     }
     while tokens.len() < sd_config.clip.max_position_embeddings {
         tokens.push(pad_id)
     }
     let tokens = Tensor::new(tokens.as_slice(), device)?.unsqueeze(0)?;
 
-    println!("Building the Clip transformer.");
+    tracing::info!("Building the Clip transformer.");
     let clip_weights_file = if first {
         ModelFile::Clip
     } else {
@@ -430,7 +435,7 @@ fn text_embeddings(
     let clip_config = if first {
         &sd_config.clip
     } else {
-        sd_config.clip2.as_ref().unwrap()
+        sd_config.clip2.as_ref().ok_or(Error::MissingClip2Config)?
     };
     let text_model =
         stable_diffusion::build_clip_transformer(clip_config, clip_weights, device, DType::F32)?;
@@ -439,15 +444,14 @@ fn text_embeddings(
     let text_embeddings = if use_guide_scale {
         let mut uncond_tokens = tokenizer
             .encode(uncond_prompt, true)
-            .map_err(|e| anyhow::anyhow!("failed to tokenize uncond_prompt: {}", e))?
+            .map_err(Error::Tokenize)?
             .get_ids()
             .to_vec();
         if uncond_tokens.len() > sd_config.clip.max_position_embeddings {
-            anyhow::bail!(
-                "the negative prompt is too long, {} > max-tokens ({})",
-                uncond_tokens.len(),
-                sd_config.clip.max_position_embeddings
-            )
+            return Err(Error::PromptTooLong {
+                len: uncond_tokens.len(),
+                max: sd_config.clip.max_position_embeddings,
+            });
         }
         while uncond_tokens.len() < sd_config.clip.max_position_embeddings {
             uncond_tokens.push(pad_id)
@@ -693,7 +697,7 @@ impl Args {
                     .first(*first)
                     .call()
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>, Error>>()?;
 
         let text_embeddings = Tensor::cat(&text_embeddings, D::Minus1)?;
         let text_embeddings = text_embeddings.repeat((bsize, 1, 1))?;
