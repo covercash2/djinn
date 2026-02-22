@@ -166,7 +166,12 @@ impl Clip {
         Ok(self.model.get_text_features(&input_ids)?)
     }
 
-    /// Loads and preprocesses an image, then returns a normalized feature vector (shape: `[1, projection_dim]`).
+    /// Loads and preprocesses an image using CLIP-specific per-channel mean/std
+    /// normalization, then returns a normalized feature vector (shape: `[1, projection_dim]`).
+    ///
+    /// This normalization differs from [`crate::image::load_image`], which normalizes
+    /// to the `[-1, 1]` range for diffusion models. Use this method when working with
+    /// CLIP; use [`crate::image::load_image`] for Stable Diffusion inputs.
     pub fn encode_image(&self, path: &Path) -> ClipResult<Tensor> {
         let reader = image::ImageReader::open(path).map_err(|source| ClipError::LoadImage {
             path: path.to_owned(),
