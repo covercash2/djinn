@@ -23,6 +23,7 @@ mod clip;
 mod mistral;
 mod server;
 mod siglip;
+mod vision_encoder;
 
 const DEFAULT_LOG_ENV: &str = "warn,djinn_server=debug,djinn_core=debug,axum=debug,axum::rejection=trace,candle_core=info,tower_http=debug";
 

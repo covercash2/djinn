@@ -124,6 +124,16 @@ impl SigLip {
     }
 }
 
+impl super::VisionEncoder for SigLip {
+    fn encode_text(&self, text: &str) -> super::VisionEncoderResult<Tensor> {
+        SigLip::encode_text(self, text)
+    }
+
+    fn encode_image(&self, path: &Path) -> super::VisionEncoderResult<Tensor> {
+        SigLip::encode_image(self, path)
+    }
+}
+
 async fn load_tokenizer(hub: &Hub) -> SigLipResult<PathBuf> {
     let mf = ModelFile::siglip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
