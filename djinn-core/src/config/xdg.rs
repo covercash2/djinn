@@ -51,3 +51,51 @@ where
     toml::from_str(&contents)
         .map_err(|source| Error::Parse { path: config_path, source })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+    use std::io::Write as _;
+
+    #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
+    struct TestConfig {
+        value: Option<String>,
+        count: Option<u32>,
+    }
+
+    #[test]
+    fn load_returns_default_when_file_does_not_exist() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("nonexistent.toml");
+        let config: TestConfig = load(Some(&path), "fallback.toml").unwrap();
+        assert_eq!(config, TestConfig::default());
+    }
+
+    #[test]
+    fn load_parses_valid_toml_from_explicit_path() {
+        let mut tmp_file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmp_file, r#"value = "hello""#).unwrap();
+        writeln!(tmp_file, "count = 42").unwrap();
+
+        let config: TestConfig = load(Some(tmp_file.path()), "fallback.toml").unwrap();
+        assert_eq!(config.value.as_deref(), Some("hello"));
+        assert_eq!(config.count, Some(42));
+    }
+
+    #[test]
+    fn load_returns_error_for_invalid_toml() {
+        let mut tmp_file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmp_file, "this is not valid toml = = =").unwrap();
+
+        let result: super::super::Result<TestConfig> = load(Some(tmp_file.path()), "fallback.toml");
+        assert!(result.is_err(), "expected a parse error");
+    }
+
+    #[test]
+    fn config_file_returns_path_under_config_dir() {
+        let dir = config_dir().unwrap();
+        let file = config_file("my-config.toml").unwrap();
+        assert_eq!(file, dir.join("my-config.toml"));
+    }
+}

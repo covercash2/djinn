@@ -85,3 +85,38 @@ pub struct GenConfig {
 pub fn load(path: Option<&Path>) -> Result<GenConfig> {
     crate::config::xdg::load(path, CONFIG_FILENAME)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    #[test]
+    fn load_returns_default_when_file_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("image-gen.toml");
+        let config = load(Some(&path)).unwrap();
+        assert!(config.prompt.is_none());
+        assert!(config.num_samples.is_none());
+    }
+
+    #[test]
+    fn load_parses_prompt_and_num_samples() {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, r#"prompt = "a red balloon""#).unwrap();
+        writeln!(f, "num_samples = 3").unwrap();
+
+        let config = load(Some(f.path())).unwrap();
+        assert_eq!(config.prompt.as_deref(), Some("a red balloon"));
+        assert_eq!(config.num_samples, Some(3));
+    }
+
+    #[test]
+    fn load_parses_use_f16_flag() {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, "use_f16 = true").unwrap();
+
+        let config = load(Some(f.path())).unwrap();
+        assert_eq!(config.use_f16, Some(true));
+    }
+}

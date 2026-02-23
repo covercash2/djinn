@@ -52,3 +52,53 @@ pub fn load_image<T: AsRef<std::path::Path>>(path: T, image_size: usize) -> anyh
         .affine(2. / 255., -1.)?;
     Ok(img)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_and_load_image_round_trip() {
+        // Build a small (3, 4, 4) u8 tensor representing a solid-colour image.
+        let pixels: Vec<u8> = (0u8..48).collect();
+        let img = Tensor::from_vec(pixels, (3usize, 4usize, 4usize), &Device::Cpu)
+            .unwrap()
+            .to_dtype(DType::U8)
+            .unwrap();
+
+        let tmp = tempfile::NamedTempFile::with_suffix(".png").unwrap();
+        save_image(&img, tmp.path()).expect("save_image should succeed");
+
+        // load_image normalises to f32 in [-1, 1]; just verify the shape.
+        let loaded = load_image(tmp.path(), 4).expect("load_image should succeed");
+        let (c, h, w) = loaded.dims3().unwrap();
+        assert_eq!((c, h, w), (3, 4, 4));
+    }
+
+    #[test]
+    fn save_image_rejects_wrong_channel_count() {
+        // A (4, 4, 4) tensor has 4 channels – save_image must reject it.
+        let pixels: Vec<u8> = vec![0u8; 64];
+        let img = Tensor::from_vec(pixels, (4usize, 4usize, 4usize), &Device::Cpu).unwrap();
+        let tmp = tempfile::NamedTempFile::with_suffix(".png").unwrap();
+        assert!(save_image(&img, tmp.path()).is_err());
+    }
+
+    #[test]
+    fn load_images_stacks_multiple_images() {
+        let pixels: Vec<u8> = (0u8..48).collect();
+        let img_tensor = Tensor::from_vec(pixels, (3usize, 4usize, 4usize), &Device::Cpu)
+            .unwrap()
+            .to_dtype(DType::U8)
+            .unwrap();
+
+        let tmp1 = tempfile::NamedTempFile::with_suffix(".png").unwrap();
+        let tmp2 = tempfile::NamedTempFile::with_suffix(".png").unwrap();
+        save_image(&img_tensor, tmp1.path()).unwrap();
+        save_image(&img_tensor, tmp2.path()).unwrap();
+
+        let stacked = load_images(&[tmp1.path(), tmp2.path()], 4).unwrap();
+        // Batch of 2 images → shape (2, 3, 4, 4).
+        assert_eq!(stacked.dims(), &[2, 3, 4, 4]);
+    }
+}
