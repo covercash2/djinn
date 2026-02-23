@@ -38,6 +38,9 @@ pub enum ClipError {
         source: image::ImageError,
     },
 
+    #[error("couldn't decode image from bytes: {0}")]
+    LoadImageBytes(image::ImageError),
+
     #[error(transparent)]
     Candle(#[from] candle_core::Error),
 }
@@ -150,7 +153,7 @@ impl Clip {
         Ok(self.model.get_text_features(&input_ids)?)
     }
 
-    /// Loads and preprocesses an image, then returns a normalized feature vector (shape: `[1, projection_dim]`).
+    /// Loads and preprocesses an image from a file path, then returns a normalized feature vector.
     pub fn encode_image(&self, path: &Path) -> ClipResult<Tensor> {
         let reader = image::ImageReader::open(path).map_err(|source| ClipError::LoadImage {
             path: path.to_owned(),
@@ -160,7 +163,16 @@ impl Clip {
             path: path.to_owned(),
             source,
         })?;
+        self.encode_dynamic_image(img)
+    }
 
+    /// Decodes image bytes and returns a normalized feature vector (shape: `[1, projection_dim]`).
+    pub fn encode_image_from_bytes(&self, data: &[u8]) -> ClipResult<Tensor> {
+        let img = image::load_from_memory(data).map_err(ClipError::LoadImageBytes)?;
+        self.encode_dynamic_image(img)
+    }
+
+    fn encode_dynamic_image(&self, img: image::DynamicImage) -> ClipResult<Tensor> {
         let img = img
             .resize_to_fill(
                 IMAGE_SIZE as u32,
@@ -190,7 +202,6 @@ impl Clip {
 
         Ok(self.model.get_image_features(&pixel_values)?)
     }
-
 }
 
 async fn load_tokenizer(hub: &Hub) -> ClipResult<PathBuf> {

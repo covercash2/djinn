@@ -11,6 +11,10 @@ pub enum Error {
     Json(#[from] JsonRejection),
     #[error(transparent)]
     Core(#[from] djinn_core::Error),
+    #[error("invalid base64 image: {0}")]
+    Base64(base64::DecodeError),
+    #[error(transparent)]
+    Clip(#[from] djinn_core::image::clip::ClipError),
 }
 
 impl IntoResponse for Error {
@@ -24,6 +28,14 @@ impl IntoResponse for Error {
             Error::Json(err) => (err.status(), err.body_text()),
             Error::Core(err) => {
                 tracing::error!(%err, "djinn_core error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Something went wrong D:".to_string(),
+                )
+            }
+            Error::Base64(err) => (StatusCode::BAD_REQUEST, format!("invalid base64: {err}")),
+            Error::Clip(err) => {
+                tracing::error!(%err, "CLIP error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Something went wrong D:".to_string(),

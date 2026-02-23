@@ -13,19 +13,35 @@ use crate::server::{Context, Json};
 
 pub const ROUTE_COMPLETE: &str = "/complete";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct CompleteRequest {
+    /// Text to continue
     prompt: String,
     #[serde(default, flatten)]
+    #[schema(inline)]
     config: RunConfig,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct CompleteResponse {
+    /// The original prompt
     prompt: String,
+    /// The generated continuation
     output: String,
 }
 
+/// Run a language-model completion.
+#[utoipa::path(
+    post,
+    path = "/complete",
+    request_body = CompleteRequest,
+    responses(
+        (status = 200, description = "Completion result", body = CompleteResponse),
+        (status = 400, description = "Invalid JSON request"),
+        (status = 500, description = "Inference error"),
+    ),
+    tag = "lm",
+)]
 #[instrument(skip(model_context))]
 pub async fn complete(
     State(model_context): State<Arc<Mutex<Context>>>,
