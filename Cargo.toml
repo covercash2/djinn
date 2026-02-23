@@ -13,7 +13,8 @@ ab_glyph = "0.2.29"
 accelerate-src = "0.3.2"
 anyhow = "1.0.97"
 async-stream = "0.3.6"
-axum = "0.8.3"
+axum = { version = "0.8.3", features = ["macros"] }
+base64 = "0.22"
 axum-streams = { version = "0.20.0", features = ["json"] }
 bon = "3.8.1"
 candle-core = { version = "0.8.4" }
@@ -49,4 +50,6 @@ tracing = "0.1.41"
 tracing-chrome = "0.7.2"
 tracing-log = "0.2.0"
 tracing-subscriber = "0.3.19"
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
 xdg = "2.5.2"

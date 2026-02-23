@@ -1,3 +1,4 @@
+use djinn_core::image::clip::{Clip, ClipArgs};
 use djinn_core::lm::config::ModelConfig;
 use djinn_core::lm::mistral::create_new_context;
 pub use server::{Config, HttpServer};
@@ -6,8 +7,10 @@ use tracing::instrument;
 
 use crate::server::{Context, HttpServerBuilder};
 
+mod clip;
 mod complete;
 mod error;
+mod openapi;
 mod server;
 
 pub use error::{Error, Result};
@@ -20,7 +23,15 @@ pub async fn run_server(config: Config) -> anyhow::Result<()> {
     let model_config = toml::from_str::<ModelConfig>(&contents)?;
     let model = create_new_context(&model_config).await?;
 
-    let context = Context { model };
+    tracing::debug!("loading CLIP model...");
+    let clip = Clip::new(ClipArgs {
+        tokenizer: std::path::PathBuf::new(),
+        device: candle_core::Device::Cpu,
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("failed to initialize CLIP: {e}"))?;
+
+    let context = Context { model, clip };
 
     tracing::debug!("starting server with config: {config:?}");
 

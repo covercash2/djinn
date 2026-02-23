@@ -59,6 +59,7 @@ pub struct ModelRun {
 
 /// Parameters to the model
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RunConfig {
     #[serde(default = "default_sample_len")]
     pub sample_len: usize,

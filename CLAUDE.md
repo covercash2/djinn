@@ -35,7 +35,7 @@ This is a Cargo workspace with these members:
 
 - **`djinn-core`** — Core ML library. Contains model loading, inference logic, device abstraction, and image processing. This is the heart of the project.
 - **`djinn-cli`** — Main binary entrypoint (`djinn`). Parses CLI args and dispatches to server or single-run inference.
-- **`djinn-server`** — Axum HTTP server that exposes `/complete` (POST) and `/health-check` (GET) endpoints. Serves an HTMX frontend from `./djinn-server/assets/`.
+- **`djinn-server`** — Axum HTTP server. Endpoints: `GET /health-check`, `POST /complete`, `POST /clip`. Swagger UI at `/swagger-ui`; OpenAPI JSON at `/api-doc/openapi.json`. Serves an HTMX frontend from `./djinn-server/assets/`.
 - **`ollama-cli`** — Standalone Ratatui TUI for interacting with an Ollama server. Has its own separate `Cargo.toml`/`Cargo.lock` and is not part of the main workspace.
 
 ### Key Data Flow
@@ -70,6 +70,7 @@ This is a Cargo workspace with these members:
 - `mac` — Enables Metal GPU and Accelerate framework for Apple Silicon
 - `cuda` — Enables CUDA GPU acceleration
 - `fixed-seed` — Uses a fixed seed (`299792458`) instead of a random one
+- `openapi` — Derives `utoipa::ToSchema` on core types (e.g. `RunConfig`); enabled automatically by `djinn-server`
 
 ### Config Files
 

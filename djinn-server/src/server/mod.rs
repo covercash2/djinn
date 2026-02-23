@@ -8,6 +8,7 @@ use axum::{
 };
 use derive_builder::Builder;
 use derive_new::new;
+use djinn_core::image::clip::Clip;
 use djinn_core::lm::model::ModelContext;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -17,8 +18,11 @@ use tokio::sync::Mutex;
 use tower::ServiceExt;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{instrument, Instrument, Level, Span};
+use utoipa_swagger_ui::SwaggerUi;
 
+use crate::clip::ROUTE_CLIP;
 use crate::complete::ROUTE_COMPLETE;
+use crate::openapi::ApiDoc;
 
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(crate::error::Error))]
@@ -49,10 +53,20 @@ pub struct HttpServer {
 
 pub struct Context {
     pub model: ModelContext,
+    pub clip: Clip,
 }
 
+/// Returns `200 OK` when the server is running.
+#[utoipa::path(
+    get,
+    path = "/health-check",
+    responses(
+        (status = 200, description = "Server is running", body = str),
+    ),
+    tag = "health",
+)]
 #[instrument]
-async fn health_check_handler() -> &'static str {
+pub(crate) async fn health_check_handler() -> &'static str {
     tracing::debug!("health checked");
     "OK"
 }
@@ -62,7 +76,11 @@ async fn not_found() -> (StatusCode, &'static str) {
 }
 
 fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
-    let router = Router::new()
+    use utoipa::OpenApi;
+
+    // API routes require shared state; resolve state first so the router
+    // becomes Router<()>, which can then be merged with stateless routers.
+    let api_router = Router::new()
         .route(
             &ServiceRoutes::HealthCheck.to_string(),
             get(health_check_handler),
@@ -70,6 +88,18 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
         .route(
             &ServiceRoutes::Complete.to_string(),
             post(crate::complete::complete),
+        )
+        .route(
+            &ServiceRoutes::Clip.to_string(),
+            post(crate::clip::clip_similarity),
+        )
+        .with_state(context);
+
+    let router = Router::new()
+        .merge(api_router)
+        .merge(
+            SwaggerUi::new("/swagger-ui")
+                .url("/api-doc/openapi.json", ApiDoc::openapi()),
         )
         .fallback_service(
             ServeDir::new("./djinn-server/assets")
@@ -107,8 +137,7 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
                         tracing::warn!(?status, content_type, "unsupported media type");
                     }
                 }),
-        )
-        .with_state(context);
+        );
 
     router.into_make_service()
 }
@@ -116,6 +145,7 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
 enum ServiceRoutes {
     HealthCheck,
     Complete,
+    Clip,
 }
 
 impl Display for ServiceRoutes {
@@ -123,6 +153,7 @@ impl Display for ServiceRoutes {
         match self {
             ServiceRoutes::HealthCheck => write!(f, "/health-check"),
             ServiceRoutes::Complete => write!(f, "{}", ROUTE_COMPLETE),
+            ServiceRoutes::Clip => write!(f, "{}", ROUTE_CLIP),
         }
     }
 }
