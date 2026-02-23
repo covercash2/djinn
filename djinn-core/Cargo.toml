@@ -58,3 +58,6 @@ mac = [
 	"candle-nn/metal",
 	"candle-transformers/metal",
 ]
+
+[dev-dependencies]
+tempfile = "3.25.0"

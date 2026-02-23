@@ -39,3 +39,29 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompt_too_long_error_includes_counts() {
+        let err = Error::PromptTooLong { len: 100, max: 77 };
+        let msg = err.to_string();
+        assert!(msg.contains("100"), "message should include the token count");
+        assert!(msg.contains("77"), "message should include the max");
+    }
+
+    #[test]
+    fn missing_token_error_includes_token_name() {
+        let err = Error::MissingToken { token: "<|endoftext|>".to_string() };
+        let msg = err.to_string();
+        assert!(msg.contains("<|endoftext|>"), "message should contain the token");
+    }
+
+    #[test]
+    fn missing_clip2_config_error_has_message() {
+        let err = Error::MissingClip2Config;
+        assert!(!err.to_string().is_empty());
+    }
+}
