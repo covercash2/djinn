@@ -14,7 +14,7 @@ pub enum Error {
     #[error("invalid base64 image: {0}")]
     Base64(base64::DecodeError),
     #[error(transparent)]
-    Clip(#[from] djinn_core::image::clip::ClipError),
+    VisionEncoder(#[from] djinn_core::image::VisionEncoderError),
 }
 
 impl IntoResponse for Error {
@@ -34,8 +34,8 @@ impl IntoResponse for Error {
                 )
             }
             Error::Base64(err) => (StatusCode::BAD_REQUEST, format!("invalid base64: {err}")),
-            Error::Clip(err) => {
-                tracing::error!(%err, "CLIP error");
+            Error::VisionEncoder(err) => {
+                tracing::error!(%err, "vision encoder error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Something went wrong D:".to_string(),

@@ -53,6 +53,6 @@ pub async fn clip_similarity(
     drop(lock);
 
     let similarity = cosine_similarity(&text_features, &image_features)
-        .map_err(djinn_core::image::clip::ClipError::Candle)?;
+        .map_err(djinn_core::image::VisionEncoderError::Candle)?;
     Ok(Json(ClipResponse { similarity }))
 }
