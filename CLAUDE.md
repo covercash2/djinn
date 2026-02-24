@@ -51,9 +51,11 @@ This is a Cargo workspace with these members:
   - `model.rs` — `ModelArchitecture` enum (Mistral, QMistral, Starcoder), `Model` enum, `ModelContext` (runs inference via `async_stream`)
   - `config.rs` — `ModelConfig` (variant, device, flash_attn, model_source), `RunConfig` (sampling params), `ModelRun`
   - `mistral/` — Mistral-specific HF Hub loading and context creation
-- `image/` — Image utilities and Stable Diffusion pipeline
-  - `mod.rs` — `save_image`, `load_image`, `load_images` (tensor ↔ file)
-  - `clip.rs` — CLIP model support
+- `image/` — Image utilities, vision encoders, and Stable Diffusion pipeline
+  - `mod.rs` — `save_image`, `load_image`, `load_images` (tensor ↔ file); `VisionEncoder` trait; shared `VisionEncoderError` / `VisionEncoderResult` used by all encoders
+  - `clip.rs` — CLIP encoder (`Clip`, `ClipArgs`); `ModelFile` (also holds `siglip_tokenizer`/`siglip_model` constructors)
+  - `siglip.rs` — SigLIP encoder (`SigLip`, `SigLipArgs`)
+  - `vision_encoder_ext.rs` — Free functions over `&dyn VisionEncoder`: `text_image_similarity`, `rank_texts_by_image`
   - `gen.rs` — Stable Diffusion image generation (v1.5, v2.1, SDXL, Turbo, inpainting variants); `Args` struct is the CLI entrypoint
   - `config.rs` — `GenConfig` (serde TOML struct); loaded from `~/.config/djinn/image-gen.toml`
   - `error.rs` — `Error` / `Result<T>` for the image gen pipeline (typed `thiserror` variants)

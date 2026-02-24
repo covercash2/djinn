@@ -6,12 +6,7 @@ use candle_transformers::models::clip::{ClipConfig, ClipModel};
 use tokenizers::Tokenizer;
 
 use crate::hf_hub_ext::Hub;
-use super::VisionEncoderError;
-
-/// Convenience alias for results returned by CLIP operations.
-pub type ClipResult<T> = super::VisionEncoderResult<T>;
-/// Backward-compatible alias so that downstream crates can still use `clip::ClipError`.
-pub type ClipError = super::VisionEncoderError;
+use super::{VisionEncoder, VisionEncoderError, VisionEncoderResult};
 
 pub struct ModelFile {
     pub name: String,
@@ -78,7 +73,7 @@ const SEQ_LEN: usize = 77;
 /// CLIP image normalization: mean per channel (R, G, B).
 const CLIP_MEAN: [f32; 3] = [0.48145466, 0.4578275, 0.40821073];
 /// CLIP image normalization: std per channel (R, G, B).
-const CLIP_STD: [f32; 3] = [0.26862954, 0.26130258, 0.27577711];
+const CLIP_STD: [f32; 3] = [0.26862954, 0.261_302_6, 0.275_777_1];
 
 pub struct Clip {
     tokenizer: Tokenizer,
@@ -87,7 +82,7 @@ pub struct Clip {
 }
 
 impl Clip {
-    pub async fn new(args: ClipArgs) -> ClipResult<Self> {
+    pub async fn new(args: ClipArgs) -> VisionEncoderResult<Self> {
         let hub = Hub::new().await.map_err(VisionEncoderError::InitHub)?;
 
         let tokenizer_file = if args.tokenizer.exists() {
@@ -118,7 +113,7 @@ impl Clip {
     }
 
     /// Encodes a text prompt into a normalized feature vector (shape: `[1, projection_dim]`).
-    pub fn encode_text(&self, text: &str) -> ClipResult<Tensor> {
+    pub fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         let pad_id = *self
             .tokenizer
             .get_vocab(true)
@@ -138,7 +133,7 @@ impl Clip {
     }
 
     /// Loads and preprocesses an image from a file path, then returns a normalized feature vector.
-    pub fn encode_image(&self, path: &Path) -> ClipResult<Tensor> {
+    pub fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
         let reader = image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
             path: path.to_owned(),
             source: image::ImageError::IoError(source),
@@ -151,12 +146,12 @@ impl Clip {
     }
 
     /// Decodes image bytes and returns a normalized feature vector (shape: `[1, projection_dim]`).
-    pub fn encode_image_from_bytes(&self, data: &[u8]) -> ClipResult<Tensor> {
+    pub fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor> {
         let img = image::load_from_memory(data).map_err(VisionEncoderError::LoadImageBytes)?;
         self.encode_dynamic_image(img)
     }
 
-    fn encode_dynamic_image(&self, img: image::DynamicImage) -> ClipResult<Tensor> {
+    fn encode_dynamic_image(&self, img: image::DynamicImage) -> VisionEncoderResult<Tensor> {
         let img = img
             .resize_to_fill(
                 IMAGE_SIZE as u32,
@@ -188,24 +183,24 @@ impl Clip {
     }
 }
 
-impl super::VisionEncoder for Clip {
-    fn encode_text(&self, text: &str) -> super::VisionEncoderResult<Tensor> {
+impl VisionEncoder for Clip {
+    fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         Clip::encode_text(self, text)
     }
 
-    fn encode_image(&self, path: &Path) -> super::VisionEncoderResult<Tensor> {
+    fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
         Clip::encode_image(self, path)
     }
 }
 
-async fn load_tokenizer(hub: &Hub) -> ClipResult<PathBuf> {
+async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::clip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
         .await
         .map_err(VisionEncoderError::DownloadTokenizer)
 }
 
-async fn load_model_weights(hub: &Hub) -> ClipResult<PathBuf> {
+async fn load_model_weights(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::clip_model();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
         .await

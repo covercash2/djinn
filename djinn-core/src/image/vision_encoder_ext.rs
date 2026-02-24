@@ -3,7 +3,7 @@
 //! Provides utility functions that operate on any [`VisionEncoder`] implementor
 //! without requiring access to the concrete encoder type.
 
-use super::{VisionEncoder, VisionEncoderResult};
+use super::{VisionEncoder, VisionEncoderError, VisionEncoderResult};
 use crate::tensor_ext::cosine_similarity;
 
 /// Compute the cosine similarity between a text prompt and an image using any
@@ -18,8 +18,8 @@ pub fn text_image_similarity(
 ) -> VisionEncoderResult<f32> {
     let text_feat = encoder.encode_text(text)?;
     let image_feat = encoder.encode_image(image_path)?;
-    Ok(cosine_similarity(&text_feat, &image_feat)
-        .map_err(super::VisionEncoderError::Candle)?)
+    cosine_similarity(&text_feat, &image_feat)
+        .map_err(VisionEncoderError::Candle)
 }
 
 /// Rank a slice of text prompts against a single image and return them sorted
@@ -35,7 +35,7 @@ pub fn rank_texts_by_image<'a>(
         .map(|&text| {
             let text_feat = encoder.encode_text(text)?;
             let sim = cosine_similarity(&text_feat, &image_feat)
-                .map_err(super::VisionEncoderError::Candle)?;
+                .map_err(VisionEncoderError::Candle)?;
             Ok((text, sim))
         })
         .collect::<VisionEncoderResult<_>>()?;

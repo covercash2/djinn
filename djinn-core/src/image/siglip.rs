@@ -7,10 +7,8 @@ use tokenizers::Tokenizer;
 
 use crate::hf_hub_ext::Hub;
 use super::clip::ModelFile;
-use super::VisionEncoderError;
+use super::{VisionEncoder, VisionEncoderError, VisionEncoderResult};
 
-/// Convenience alias for results returned by SigLIP operations.
-pub type SigLipResult<T> = super::VisionEncoderResult<T>;
 
 pub struct SigLipArgs {
     /// Path to a local tokenizer file; downloads from HF Hub when the path does not exist.
@@ -38,7 +36,7 @@ pub struct SigLip {
 }
 
 impl SigLip {
-    pub async fn new(args: SigLipArgs) -> SigLipResult<Self> {
+    pub async fn new(args: SigLipArgs) -> VisionEncoderResult<Self> {
         let hub = Hub::new().await.map_err(VisionEncoderError::InitHub)?;
 
         let tokenizer_file = if args.tokenizer.exists() {
@@ -69,7 +67,7 @@ impl SigLip {
     }
 
     /// Encodes a text prompt into a feature vector (shape: `[1, hidden_size]`).
-    pub fn encode_text(&self, text: &str) -> SigLipResult<Tensor> {
+    pub fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         let encoding = self
             .tokenizer
             .encode(text, true)
@@ -83,7 +81,7 @@ impl SigLip {
     }
 
     /// Loads and preprocesses an image, then returns a feature vector (shape: `[1, hidden_size]`).
-    pub fn encode_image(&self, path: &Path) -> SigLipResult<Tensor> {
+    pub fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
         let reader = image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
             path: path.to_owned(),
             source: image::ImageError::IoError(source),
@@ -124,24 +122,24 @@ impl SigLip {
     }
 }
 
-impl super::VisionEncoder for SigLip {
-    fn encode_text(&self, text: &str) -> super::VisionEncoderResult<Tensor> {
+impl VisionEncoder for SigLip {
+    fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         SigLip::encode_text(self, text)
     }
 
-    fn encode_image(&self, path: &Path) -> super::VisionEncoderResult<Tensor> {
+    fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
         SigLip::encode_image(self, path)
     }
 }
 
-async fn load_tokenizer(hub: &Hub) -> SigLipResult<PathBuf> {
+async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::siglip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
         .await
         .map_err(VisionEncoderError::DownloadTokenizer)
 }
 
-async fn load_model_weights(hub: &Hub) -> SigLipResult<PathBuf> {
+async fn load_model_weights(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::siglip_model();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
         .await
