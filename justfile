@@ -9,7 +9,7 @@ tui:
 # check for typos, lint, and test
 check:
 	typos
-	cargo clippy
+	cargo clippy -- -D warnings
 	cargo test --all
 
 # get the contents of the ollama TUI log

@@ -3,11 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use djinn_core::{
-    config::DEFAULT_CONFIG_DIR,
-    lm::config::ModelRun,
-    lm::{mistral::create_new_context, model::ModelContext},
-};
+use djinn_core::config::DEFAULT_CONFIG_DIR;
 use djinn_server::Config;
 use tracing::instrument;
 
@@ -63,14 +59,6 @@ impl TryFrom<ServerArgs> for Config {
         let full_address = SocketAddr::new(address, port);
         Ok(Config::new(full_address, path))
     }
-}
-
-#[instrument]
-async fn load_model(config_path: &PathBuf) -> anyhow::Result<ModelContext> {
-    let contents = tokio::fs::read_to_string(config_path).await?;
-    let run: ModelRun = toml::from_str(&contents)?;
-    let context: ModelContext = create_new_context(&run.model_config).await?;
-    Ok(context)
 }
 
 pub async fn run(args: ServerArgs) -> anyhow::Result<()> {

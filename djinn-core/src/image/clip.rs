@@ -5,50 +5,13 @@ use candle_nn::VarBuilder;
 use candle_transformers::models::clip::{ClipConfig, ClipModel};
 use tokenizers::Tokenizer;
 
-use crate::hf_hub_ext::{Hub, HubError};
-
-pub type ClipResult<T> = std::result::Result<T, ClipError>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum ClipError {
-    #[error("unable to load hub: {0}")]
-    InitHub(HubError),
-
-    #[error("couldn't download tokenizer: {0}")]
-    DownloadTokenizer(HubError),
-
-    #[error("couldn't load tokenizer from file {path}: {source}")]
-    LoadTokenizer {
-        path: PathBuf,
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
-
-    #[error("unable to encode text: {0}")]
-    TokenizerEncode(tokenizers::Error),
-
-    #[error("missing pad token in tokenizer")]
-    MissingPadToken,
-
-    #[error("couldn't download model weights: {0}")]
-    DownloadModel(HubError),
-
-    #[error("failed to load image from {path}: {source}")]
-    LoadImage {
-        path: PathBuf,
-        source: image::ImageError,
-    },
-
-    #[error("couldn't decode image from bytes: {0}")]
-    LoadImageBytes(image::ImageError),
-
-    #[error(transparent)]
-    Candle(#[from] candle_core::Error),
-}
+use crate::hf_hub_ext::Hub;
+use super::{VisionEncoder, VisionEncoderError, VisionEncoderResult};
 
 pub struct ModelFile {
-    name: String,
-    revision: String,
-    file: String,
+    pub name: String,
+    pub revision: String,
+    pub file: String,
 }
 
 impl ModelFile {
@@ -79,6 +42,22 @@ impl ModelFile {
             "model.safetensors",
         )
     }
+
+    pub fn siglip_tokenizer() -> Self {
+        Self::new(
+            "google/siglip-base-patch16-224",
+            "main",
+            "tokenizer.json",
+        )
+    }
+
+    pub fn siglip_model() -> Self {
+        Self::new(
+            "google/siglip-base-patch16-224",
+            "main",
+            "model.safetensors",
+        )
+    }
 }
 
 pub struct ClipArgs {
@@ -94,7 +73,7 @@ const SEQ_LEN: usize = 77;
 /// CLIP image normalization: mean per channel (R, G, B).
 const CLIP_MEAN: [f32; 3] = [0.48145466, 0.4578275, 0.40821073];
 /// CLIP image normalization: std per channel (R, G, B).
-const CLIP_STD: [f32; 3] = [0.26862954, 0.26130258, 0.27577711];
+const CLIP_STD: [f32; 3] = [0.26862954, 0.261_302_6, 0.275_777_1];
 
 pub struct Clip {
     tokenizer: Tokenizer,
@@ -103,8 +82,8 @@ pub struct Clip {
 }
 
 impl Clip {
-    pub async fn new(args: ClipArgs) -> ClipResult<Self> {
-        let hub = Hub::new().await.map_err(ClipError::InitHub)?;
+    pub async fn new(args: ClipArgs) -> VisionEncoderResult<Self> {
+        let hub = Hub::new().await.map_err(VisionEncoderError::InitHub)?;
 
         let tokenizer_file = if args.tokenizer.exists() {
             args.tokenizer
@@ -113,7 +92,7 @@ impl Clip {
         };
 
         let tokenizer = Tokenizer::from_file(tokenizer_file.as_path()).map_err(|source| {
-            ClipError::LoadTokenizer {
+            VisionEncoderError::LoadTokenizer {
                 path: tokenizer_file.clone(),
                 source,
             }
@@ -134,17 +113,17 @@ impl Clip {
     }
 
     /// Encodes a text prompt into a normalized feature vector (shape: `[1, projection_dim]`).
-    pub fn encode_text(&self, text: &str) -> ClipResult<Tensor> {
+    pub fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         let pad_id = *self
             .tokenizer
             .get_vocab(true)
             .get("<|endoftext|>")
-            .ok_or(ClipError::MissingPadToken)?;
+            .ok_or(VisionEncoderError::MissingPadToken)?;
 
         let encoding = self
             .tokenizer
             .encode(text, true)
-            .map_err(ClipError::TokenizerEncode)?;
+            .map_err(VisionEncoderError::TokenizerEncode)?;
 
         let mut ids = encoding.get_ids().to_vec();
         ids.resize(SEQ_LEN, pad_id);
@@ -154,12 +133,12 @@ impl Clip {
     }
 
     /// Loads and preprocesses an image from a file path, then returns a normalized feature vector.
-    pub fn encode_image(&self, path: &Path) -> ClipResult<Tensor> {
-        let reader = image::ImageReader::open(path).map_err(|source| ClipError::LoadImage {
+    pub fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
+        let reader = image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
             path: path.to_owned(),
             source: image::ImageError::IoError(source),
         })?;
-        let img = reader.decode().map_err(|source| ClipError::LoadImage {
+        let img = reader.decode().map_err(|source| VisionEncoderError::LoadImage {
             path: path.to_owned(),
             source,
         })?;
@@ -167,12 +146,12 @@ impl Clip {
     }
 
     /// Decodes image bytes and returns a normalized feature vector (shape: `[1, projection_dim]`).
-    pub fn encode_image_from_bytes(&self, data: &[u8]) -> ClipResult<Tensor> {
-        let img = image::load_from_memory(data).map_err(ClipError::LoadImageBytes)?;
+    pub fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor> {
+        let img = image::load_from_memory(data).map_err(VisionEncoderError::LoadImageBytes)?;
         self.encode_dynamic_image(img)
     }
 
-    fn encode_dynamic_image(&self, img: image::DynamicImage) -> ClipResult<Tensor> {
+    fn encode_dynamic_image(&self, img: image::DynamicImage) -> VisionEncoderResult<Tensor> {
         let img = img
             .resize_to_fill(
                 IMAGE_SIZE as u32,
@@ -204,16 +183,79 @@ impl Clip {
     }
 }
 
-async fn load_tokenizer(hub: &Hub) -> ClipResult<PathBuf> {
+impl VisionEncoder for Clip {
+    fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
+        Clip::encode_text(self, text)
+    }
+
+    fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
+        Clip::encode_image(self, path)
+    }
+}
+
+async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::clip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
         .await
-        .map_err(ClipError::DownloadTokenizer)
+        .map_err(VisionEncoderError::DownloadTokenizer)
 }
 
-async fn load_model_weights(hub: &Hub) -> ClipResult<PathBuf> {
+async fn load_model_weights(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::clip_model();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
         .await
-        .map_err(ClipError::DownloadModel)
+        .map_err(VisionEncoderError::DownloadModel)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clip_tokenizer_model_file_has_expected_fields() {
+        let mf = ModelFile::clip_tokenizer();
+        assert_eq!(mf.name, "openai/clip-vit-base-patch32");
+        assert_eq!(mf.file, "tokenizer.json");
+    }
+
+    #[test]
+    fn clip_model_file_has_expected_fields() {
+        let mf = ModelFile::clip_model();
+        assert_eq!(mf.name, "openai/clip-vit-base-patch32");
+        assert_eq!(mf.file, "model.safetensors");
+    }
+
+    #[test]
+    fn siglip_tokenizer_model_file_has_expected_fields() {
+        let mf = ModelFile::siglip_tokenizer();
+        assert_eq!(mf.name, "google/siglip-base-patch16-224");
+        assert_eq!(mf.file, "tokenizer.json");
+    }
+
+    #[test]
+    fn siglip_model_file_has_expected_fields() {
+        let mf = ModelFile::siglip_model();
+        assert_eq!(mf.name, "google/siglip-base-patch16-224");
+        assert_eq!(mf.file, "model.safetensors");
+    }
+
+    #[test]
+    fn clip_error_load_image_includes_path_in_message() {
+        let path = std::path::PathBuf::from("/tmp/nonexistent.png");
+        let err = VisionEncoderError::LoadImage {
+            path,
+            source: image::ImageError::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "not found",
+            )),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("nonexistent.png"), "error message should include the path: {msg}");
+    }
+
+    #[test]
+    fn clip_error_missing_pad_token_has_message() {
+        let err = VisionEncoderError::MissingPadToken;
+        assert!(!err.to_string().is_empty());
+    }
 }
