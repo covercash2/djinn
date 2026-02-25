@@ -30,6 +30,10 @@ fn default_seed() -> u64 {
     }
 }
 
+const fn default_seed_schema() -> u64 {
+    DEFAULT_SEED
+}
+
 #[cfg(not(feature = "fixed-seed"))]
 fn random_seed() -> u64 {
     use rand::prelude::*;
@@ -73,6 +77,7 @@ pub struct RunConfig {
     pub sample_len: usize,
     /// RNG seed for reproducible generation.
     #[serde(default = "default_seed")]
+    #[schemars(default = "default_seed_schema")]
     #[cfg_attr(feature = "clap", arg(long, default_value_t = DEFAULT_SEED, env = "DJINN_LM_SEED"))]
     pub seed: u64,
     /// Number of last tokens to consider for the repeat penalty.
