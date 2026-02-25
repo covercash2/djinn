@@ -8,7 +8,7 @@ tui:
 
 # generate JSON Schema files for all config types
 schema:
-	cargo run -p djinn-cli --bin schema-gen
+	cargo xtask schema
 
 # check for typos, lint, and test
 check:

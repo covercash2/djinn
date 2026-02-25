@@ -93,7 +93,7 @@ Run this after adding, removing, or renaming fields on any of:
 - `djinn_core::lm::config::ModelRun` → `configs/lm/model-run.schema.json`
 - `djinn_core::image::config::GenConfig` → `configs/image-gen.schema.json`
 
-When adding a **new** config type, also: derive `JsonSchema` on the type, add it to `djinn-cli/src/bin/schema-gen.rs`, and add a `#:schema <relative-path>` header to the TOML template.
+When adding a **new** config type, also: derive `JsonSchema` on the type, add it to `xtask/src/main.rs`, and add a `#:schema <relative-path>` header to the TOML template.
 
 Image generation config lives at `~/.config/djinn/image-gen.toml` (XDG). All fields are optional `Option<T>`. Priority order: config file < env var (`DJINN_SD_*`) < explicit CLI flag.
 

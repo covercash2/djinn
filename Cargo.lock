@@ -1017,11 +1017,8 @@ dependencies = [
  "djinn-server",
  "futures",
  "markdown",
- "project-root",
  "rand 0.9.2",
- "schemars",
  "serde",
- "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
@@ -5171,6 +5168,17 @@ name = "xdg"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "djinn-core",
+ "djinn-server",
+ "project-root",
+ "schemars",
+ "serde_json",
+]
 
 [[package]]
 name = "y4m"

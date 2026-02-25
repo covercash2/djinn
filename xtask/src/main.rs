@@ -1,11 +1,9 @@
-//! Generate JSON Schema files for all djinn config types.
+//! Build utilities for the djinn workspace.
 //!
-//! Run with:
-//!   cargo run -p djinn-cli --bin schema-gen
-//!
-//! Schema files are written relative to the workspace root under `configs/`.
+//! Invoked via the `cargo xtask` alias (see `.cargo/config.toml`):
+//!   cargo xtask schema
 
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 use djinn_core::{
     image::config::GenConfig,
@@ -16,7 +14,8 @@ use schemars::JsonSchema;
 
 fn write_schema<T: JsonSchema>(path: PathBuf) {
     let schema = schemars::schema_for!(T);
-    let json = serde_json::to_string_pretty(&schema).expect("schema serialization should not fail");
+    let json =
+        serde_json::to_string_pretty(&schema).expect("schema serialization should not fail");
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("failed to create schema output directory");
     }
@@ -24,7 +23,7 @@ fn write_schema<T: JsonSchema>(path: PathBuf) {
     println!("wrote {}", path.display());
 }
 
-fn main() {
+fn schema() {
     let root = project_root::get_project_root().expect("failed to locate workspace root");
 
     write_schema::<Config>(root.join("configs/server/server.schema.json"));
@@ -32,4 +31,17 @@ fn main() {
     write_schema::<RunConfig>(root.join("configs/lm/run-config.schema.json"));
     write_schema::<ModelRun>(root.join("configs/lm/model-run.schema.json"));
     write_schema::<GenConfig>(root.join("configs/image-gen.schema.json"));
+}
+
+fn main() {
+    let task = env::args().nth(1);
+    match task.as_deref() {
+        Some("schema") => schema(),
+        _ => {
+            eprintln!("usage: cargo xtask <task>");
+            eprintln!("tasks:");
+            eprintln!("  schema   generate JSON Schema files for all config types");
+            std::process::exit(1);
+        }
+    }
 }
