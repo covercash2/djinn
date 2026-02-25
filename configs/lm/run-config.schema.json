@@ -26,7 +26,7 @@
     },
     "seed": {
       "description": "RNG seed for reproducible generation.",
-      "default": 10053097322324143925,
+      "default": 299792458,
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
