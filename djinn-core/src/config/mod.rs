@@ -32,6 +32,10 @@ pub enum Error {
     /// A config file failed JSON Schema validation.
     #[error("schema validation failed for {path}:\n{message}")]
     Validation { path: PathBuf, message: String },
+
+    /// An unexpected internal error occurred during schema processing.
+    #[error("internal schema error: {0}")]
+    Internal(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -51,14 +55,14 @@ where
         .map_err(|source| Error::Parse { path: path.to_owned(), source })?;
 
     // Convert to serde_json::Value — infallible for all TOML primitive types.
-    let json_value =
-        serde_json::to_value(&toml_value).expect("TOML->JSON conversion should never fail");
+    let json_value = serde_json::to_value(&toml_value)
+        .map_err(|e| Error::Internal(format!("TOML->JSON conversion failed: {e}")))?;
 
     // Build schema from the type and validate.
-    let schema_json =
-        serde_json::to_value(schemars::schema_for!(T)).expect("schemars schema is valid JSON");
-    let validator =
-        jsonschema::validator_for(&schema_json).expect("schemars-generated schema is always valid");
+    let schema_json = serde_json::to_value(schemars::schema_for!(T))
+        .map_err(|e| Error::Internal(format!("schema serialization failed: {e}")))?;
+    let validator = jsonschema::validator_for(&schema_json)
+        .map_err(|e| Error::Internal(format!("invalid generated schema: {e}")))?;
 
     let errors: Vec<String> = validator
         .iter_errors(&json_value)
