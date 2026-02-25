@@ -1,0 +1,57 @@
+---
+source: djinn-core/src/image/config.rs
+expression: cfg
+---
+GenConfig {
+    prompt: Some(
+        "a beautiful mountain landscape at sunset, photorealistic",
+    ),
+    uncond_prompt: Some(
+        "blurry, ugly, deformed, low quality",
+    ),
+    device: Some(
+        Cpu,
+    ),
+    sd_version: Some(
+        V1_5,
+    ),
+    num_samples: Some(
+        1,
+    ),
+    bsize: Some(
+        1,
+    ),
+    n_steps: Some(
+        30,
+    ),
+    use_f16: Some(
+        false,
+    ),
+    use_flash_attn: Some(
+        false,
+    ),
+    guidance_scale: Some(
+        7.5,
+    ),
+    height: Some(
+        512,
+    ),
+    width: Some(
+        512,
+    ),
+    final_image: Some(
+        "output.png",
+    ),
+    sliced_attention_size: None,
+    unet_weights: None,
+    clip_weights: None,
+    clip2_weights: None,
+    vae_weights: None,
+    tokenizer: None,
+    img2img: None,
+    img2img_strength: None,
+    seed: Some(
+        42,
+    ),
+    mask_path: None,
+}

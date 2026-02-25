@@ -1,0 +1,23 @@
+# Template configuration for language model run parameters.
+# Load this file via:
+#   djinn config --model-name <model> --config-name run-config
+#
+# All fields below show their default values.
+
+## Number of tokens to generate.
+sample_len = 100
+
+## RNG seed for reproducible generation.
+seed = 299792458
+
+## Number of last tokens considered for the repeat penalty.
+repeat_last_n = 64
+
+## Penalty applied to repeated tokens (1.0 = no penalty).
+repeat_penalty = 1.1
+
+## Sampling temperature — lower values are more deterministic.
+temperature = 1e-7
+
+## Nucleus sampling probability cutoff (uncomment to enable).
+# top_p = 0.9

@@ -1,0 +1,47 @@
+# Template configuration for image generation.
+# Place this file (or a modified copy) at:
+#   $XDG_CONFIG_HOME/djinn/image-gen.toml  (typically ~/.config/djinn/image-gen.toml)
+#
+# Priority order (lowest → highest): config file → env var ($DJINN_SD_*) → CLI flag.
+# All fields are optional — remove any line you do not want to override.
+
+## ── Prompts ────────────────────────────────────────────────────────────────
+prompt = "a beautiful mountain landscape at sunset, photorealistic"
+uncond_prompt = "blurry, ugly, deformed, low quality"
+
+## ── Model ──────────────────────────────────────────────────────────────────
+# Supported values: v1_5 | v1_5_inpaint | v2_1 | xl | turbo
+sd_version = "v1_5"
+
+## ── Device ─────────────────────────────────────────────────────────────────
+# Supported values: Cpu | Cuda | Metal
+device = "Cpu"
+
+## ── Output ─────────────────────────────────────────────────────────────────
+final_image = "output.png"
+height = 512
+width = 512
+
+## ── Sampling ───────────────────────────────────────────────────────────────
+num_samples = 1
+bsize = 1
+n_steps = 30
+guidance_scale = 7.5
+seed = 42
+
+## ── Precision ──────────────────────────────────────────────────────────────
+use_f16 = false
+use_flash_attn = false
+
+## ── Advanced ───────────────────────────────────────────────────────────────
+# sliced_attention_size = 0
+# unet_weights = "/path/to/unet.safetensors"
+# clip_weights = "/path/to/clip.safetensors"
+# clip2_weights = "/path/to/clip2.safetensors"
+# vae_weights = "/path/to/vae.safetensors"
+# tokenizer = "/path/to/tokenizer.json"
+
+## ── img2img / inpainting ───────────────────────────────────────────────────
+# img2img = "/path/to/init_image.png"
+# img2img_strength = 0.8
+# mask_path = "/path/to/mask.png"
