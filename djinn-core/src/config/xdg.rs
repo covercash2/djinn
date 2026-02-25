@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 
-use super::{Error, Result};
+use super::{validate_and_load, Error, Result};
 
 /// Returns the djinn XDG config directory: `$XDG_CONFIG_HOME/djinn/`.
 ///
@@ -28,14 +28,14 @@ pub fn config_file(name: &str) -> Result<PathBuf> {
     Ok(config_dir()?.join(name))
 }
 
-/// Deserializes a TOML config file into `T`.
+/// Deserializes a TOML config file into `T`, validating against the JSON Schema for `T`.
 ///
 /// Uses `path` when provided; otherwise falls back to `default_filename` inside
 /// the djinn XDG config directory.  Returns `T::default()` when the file does
 /// not exist, so callers can always proceed to the env-var / CLI merge step.
 pub fn load<T>(path: Option<&Path>, default_filename: &str) -> Result<T>
 where
-    T: DeserializeOwned + Default,
+    T: schemars::JsonSchema + DeserializeOwned + Default,
 {
     let config_path = match path {
         Some(p) => p.to_path_buf(),
@@ -48,6 +48,6 @@ where
 
     let contents = std::fs::read_to_string(&config_path)
         .map_err(|source| Error::Read { path: config_path.clone(), source })?;
-    toml::from_str(&contents)
-        .map_err(|source| Error::Parse { path: config_path, source })
+
+    validate_and_load::<T>(&contents, &config_path)
 }

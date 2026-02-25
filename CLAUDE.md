@@ -78,6 +78,23 @@ This is a Cargo workspace with these members:
 
 Server configs live in `./configs/server/<name>.toml` and reference model configs at paths like `./configs/model/<model>.toml`.
 
+#### Schema Maintenance
+
+All config structs derive `schemars::JsonSchema`. Runtime validation (via `djinn_core::config::validate_and_load`) is always in sync with the Rust type — no manual step needed. The `configs/**/*.schema.json` files are for editor/Taplo tooling only and must be regenerated whenever a config struct changes:
+
+```sh
+just schema
+```
+
+Run this after adding, removing, or renaming fields on any of:
+- `djinn_server::Config` → `configs/server/server.schema.json`
+- `djinn_core::lm::config::ModelConfig` → `configs/model/model.schema.json`
+- `djinn_core::lm::config::RunConfig` → `configs/lm/run-config.schema.json`
+- `djinn_core::lm::config::ModelRun` → `configs/lm/model-run.schema.json`
+- `djinn_core::image::config::GenConfig` → `configs/image-gen.schema.json`
+
+When adding a **new** config type, also: derive `JsonSchema` on the type, add it to `djinn-cli/src/bin/schema-gen.rs`, and add a `#:schema <relative-path>` header to the TOML template.
+
 Image generation config lives at `~/.config/djinn/image-gen.toml` (XDG). All fields are optional `Option<T>`. Priority order: config file < env var (`DJINN_SD_*`) < explicit CLI flag.
 
 Example model config (`configs/model/q_mistral.toml`):

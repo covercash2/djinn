@@ -24,7 +24,7 @@ use crate::token_output_stream::TokenOutputStream;
 use super::config::RunConfig;
 
 /// The variant of the model to be loaded
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelArchitecture {
     /// Main Mistral version

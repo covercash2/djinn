@@ -32,7 +32,7 @@ const CONFIG_FILENAME: &str = "image-gen.toml";
 /// num_samples = 4
 /// final_image = "/tmp/output.png"
 /// ```
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, schemars::JsonSchema)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct GenConfig {
     /// Text prompt describing the image to generate.

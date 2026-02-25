@@ -25,7 +25,7 @@ pub trait Lm {
 
 /// Where to load the model from,
 /// either HuggingFaceHub or from the file system
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelSource {
     HuggingFaceHub {

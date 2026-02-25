@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ModelRun",
+  "description": "The results of a model run",
+  "type": "object",
+  "required": [
+    "model_config",
+    "prompt",
+    "run_config"
+  ],
+  "properties": {
+    "model_config": {
+      "$ref": "#/definitions/ModelConfig"
+    },
+    "prompt": {
+      "type": "string"
+    },
+    "run_config": {
+      "$ref": "#/definitions/RunConfig"
+    }
+  },
+  "definitions": {
+    "Device": {
+      "description": "A enum of supported devices to run models on",
+      "type": "string",
+      "enum": [
+        "Cpu",
+        "Cuda",
+        "Metal"
+      ]
+    },
+    "ModelArchitecture": {
+      "description": "The variant of the model to be loaded",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "distil_bert",
+            "starcoder"
+          ]
+        },
+        {
+          "description": "Main Mistral version",
+          "type": "string",
+          "enum": [
+            "mistral"
+          ]
+        },
+        {
+          "description": "Quantized Mistral",
+          "type": "string",
+          "enum": [
+            "q_mistral"
+          ]
+        }
+      ]
+    },
+    "ModelConfig": {
+      "description": "Configurations that are loaded on initialization of the model.",
+      "type": "object",
+      "required": [
+        "flash_attn",
+        "model_source",
+        "variant"
+      ],
+      "properties": {
+        "device": {
+          "default": "Cpu",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Device"
+            }
+          ]
+        },
+        "flash_attn": {
+          "description": "Set true to use flash attention. Only supported on CUDA",
+          "type": "boolean"
+        },
+        "model_source": {
+          "$ref": "#/definitions/ModelSource"
+        },
+        "variant": {
+          "$ref": "#/definitions/ModelArchitecture"
+        }
+      }
+    },
+    "ModelSource": {
+      "description": "Where to load the model from, either HuggingFaceHub or from the file system",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "hugging_face_hub"
+          ],
+          "properties": {
+            "hugging_face_hub": {
+              "type": "object",
+              "required": [
+                "revision"
+              ],
+              "properties": {
+                "revision": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "files"
+          ],
+          "properties": {
+            "files": {
+              "type": "object",
+              "required": [
+                "tokenizer_file",
+                "weight_files"
+              ],
+              "properties": {
+                "tokenizer_file": {
+                  "type": "string"
+                },
+                "weight_files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RunConfig": {
+      "description": "Parameters to the model\n\nWhen the `clap` feature is enabled this struct also implements [`clap::Args`], so it can be embedded directly in a CLI command.",
+      "type": "object",
+      "properties": {
+        "repeat_last_n": {
+          "description": "Number of last tokens to consider for the repeat penalty.",
+          "default": 64,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "repeat_penalty": {
+          "description": "Penalty applied to repeated tokens (1.0 = no penalty).",
+          "default": 1.100000023841858,
+          "type": "number",
+          "format": "float"
+        },
+        "sample_len": {
+          "description": "Number of tokens to generate.",
+          "default": 100,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "seed": {
+          "description": "RNG seed for reproducible generation.",
+          "default": 12709501869925137953,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "temperature": {
+          "description": "Sampling temperature (lower = more deterministic).",
+          "default": 1e-7,
+          "type": "number",
+          "format": "double"
+        },
+        "top_p": {
+          "description": "Nucleus sampling probability cutoff.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    }
+  }
+}

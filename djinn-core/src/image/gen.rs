@@ -109,7 +109,7 @@ pub struct Args {
 }
 
 /// Supported Stable Diffusion model versions.
-#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum StableDiffusionVersion {
     /// Stable Diffusion v1.5

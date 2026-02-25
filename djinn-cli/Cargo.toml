@@ -6,6 +6,10 @@ authors.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "schema-gen"
+path = "src/bin/schema-gen.rs"
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
@@ -15,8 +19,11 @@ djinn-core.workspace = true
 djinn-server.workspace = true
 futures.workspace = true
 markdown.workspace = true
+project-root.workspace = true
 rand.workspace = true
+schemars.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true

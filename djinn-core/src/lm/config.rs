@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::config;
+
 use crate::{
     device::Device,
     lm::{model::ModelArchitecture, ModelSource},
@@ -50,7 +52,7 @@ const fn default_top_p() -> Option<f64> {
 }
 
 /// The results of a model run
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ModelRun {
     pub prompt: String,
     pub model_config: ModelConfig,
@@ -61,7 +63,7 @@ pub struct ModelRun {
 ///
 /// When the `clap` feature is enabled this struct also implements
 /// [`clap::Args`], so it can be embedded directly in a CLI command.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RunConfig {
@@ -104,13 +106,15 @@ impl Default for RunConfig {
     }
 }
 
-pub fn load_config(config_path: impl AsRef<Path>) -> anyhow::Result<RunConfig> {
-    let config_str = std::fs::read_to_string(config_path)?;
-    Ok(toml::from_str(&config_str)?)
+pub fn load_config(config_path: impl AsRef<Path>) -> config::Result<RunConfig> {
+    let path = config_path.as_ref();
+    let contents = std::fs::read_to_string(path)
+        .map_err(|source| config::Error::Read { path: path.to_owned(), source })?;
+    config::validate_and_load::<RunConfig>(&contents, path)
 }
 
 /// Configurations that are loaded on initialization of the model.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ModelConfig {
     pub variant: ModelArchitecture,
     #[serde(default)]

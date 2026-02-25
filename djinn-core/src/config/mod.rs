@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use serde::de::DeserializeOwned;
 
 pub const DEFAULT_CONFIG_DIR: &str = "./configs";
 
@@ -26,6 +28,50 @@ pub enum Error {
         #[source]
         source: toml::de::Error,
     },
+
+    /// A config file failed JSON Schema validation.
+    #[error("schema validation failed for {path}:\n{message}")]
+    Validation { path: PathBuf, message: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Parse and validate a TOML config string against the JSON Schema derived from `T`.
+///
+/// Converts the TOML to JSON for schema validation, then deserializes `T` from the
+/// original TOML content.  Returns a [`Error::Validation`] with all collected
+/// errors when validation fails, or [`Error::Parse`] for syntax errors.
+pub fn validate_and_load<T>(content: &str, path: &Path) -> Result<T>
+where
+    T: schemars::JsonSchema + DeserializeOwned,
+{
+    // Parse TOML to a generic value (for JSON-Schema validation).
+    let toml_value: toml::Value = content
+        .parse()
+        .map_err(|source| Error::Parse { path: path.to_owned(), source })?;
+
+    // Convert to serde_json::Value — infallible for all TOML primitive types.
+    let json_value =
+        serde_json::to_value(&toml_value).expect("TOML->JSON conversion should never fail");
+
+    // Build schema from the type and validate.
+    let schema_json =
+        serde_json::to_value(schemars::schema_for!(T)).expect("schemars schema is valid JSON");
+    let validator =
+        jsonschema::validator_for(&schema_json).expect("schemars-generated schema is always valid");
+
+    let errors: Vec<String> = validator
+        .iter_errors(&json_value)
+        .map(|e| format!("  - {e} at {}", e.instance_path))
+        .collect();
+
+    if !errors.is_empty() {
+        return Err(Error::Validation {
+            path: path.to_owned(),
+            message: errors.join("\n"),
+        });
+    }
+
+    // Deserialize from TOML (preserves TOML semantics for edge cases like integers).
+    toml::from_str(content).map_err(|source| Error::Parse { path: path.to_owned(), source })
+}

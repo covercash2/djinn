@@ -1,3 +1,4 @@
+#:schema ./run-config.schema.json
 # Template configuration for language model run parameters.
 # Load this file via:
 #   djinn config --model-name <model> --config-name run-config

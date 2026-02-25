@@ -105,8 +105,8 @@ impl TryFrom<ConfigArgs> for ModelRun {
             )));
         }
 
-        let contents = std::fs::read_to_string(path)?;
-        let data: ModelRun = toml::from_str(&contents)?;
+        let contents = std::fs::read_to_string(&path)?;
+        let data: ModelRun = djinn_core::config::validate_and_load::<ModelRun>(&contents, &path)?;
 
         Ok(data)
     }

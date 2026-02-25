@@ -16,6 +16,7 @@ derive_builder.workspace = true
 djinn-core = { workspace = true, features = ["openapi"] }
 futures.workspace = true
 markdown.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
