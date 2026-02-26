@@ -2,6 +2,10 @@
 default:
   just --list
 
+# run the djinn server (loads configs/server/<name>.toml)
+server name="test":
+	cargo run --release --features djinn-core/mac -- server-config --name {{name}}
+
 # run the ollama-cli
 tui:
 	cargo run --bin ollama-cli -- tui

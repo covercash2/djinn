@@ -17,7 +17,7 @@ use djinn_core::{
 use server::ServerArgs;
 use tracing::Instrument;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod clip;
 mod mistral;
@@ -144,7 +144,6 @@ fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<FlushGuard>
                         .unwrap_or_else(|_| DEFAULT_LOG_ENV.into()),
                 )
                 .with(tracing_subscriber::fmt::layer().pretty())
-                .with(EnvFilter::from_default_env())
                 .init();
 
             tracing::info!("tracing started");
