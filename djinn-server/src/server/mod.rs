@@ -1,4 +1,5 @@
 use axum::{
+    error_handling::HandleErrorLayer,
     extract::{FromRequest, MatchedPath},
     handler::HandlerWithoutStateExt,
     http::{Request, StatusCode},
@@ -15,10 +16,12 @@ use std::{
     fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,
 };
 use tokio::sync::Mutex;
-use tower::ServiceExt;
+use tower::{timeout::TimeoutLayer, BoxError, ServiceBuilder, ServiceExt};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{instrument, Instrument, Level, Span};
 use utoipa_swagger_ui::SwaggerUi;
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
 use crate::clip::ROUTE_CLIP;
 use crate::complete::ROUTE_COMPLETE;
@@ -142,6 +145,13 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
                         tracing::warn!(?status, content_type, "unsupported media type");
                     }
                 }),
+        )
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(|_: BoxError| async {
+                    StatusCode::REQUEST_TIMEOUT
+                }))
+                .layer(TimeoutLayer::new(REQUEST_TIMEOUT)),
         );
 
     router.into_make_service()

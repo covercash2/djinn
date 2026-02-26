@@ -47,7 +47,7 @@ thiserror = "2.0.12"
 tokenizers = "0.21.1"
 tokio = { version = "1.44.2", features = ["full"] }
 tokio-stream = { version = "0.1.17", features = ["full"] }
-tower = { version = "0.5.2", features = ["log", "util"] }
+tower = { version = "0.5.2", features = ["log", "timeout", "util"] }
 tower-http = { version = "0.6.2", features = ["trace", "fs"]}
 toml = "0.8.20"
 tracing = "0.1.41"
