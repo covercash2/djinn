@@ -25,6 +25,25 @@ with an API
 and HTMX front-end
 for running models
 
+### Frontend
+
+`djinn-server` ships a small HTMX-powered UI served from `./djinn-server/assets/`.
+
+| Path | Description |
+|------|-------------|
+| `/` | Main page — prompt input + live completion via HTMX |
+| `/swagger-ui` | Interactive OpenAPI docs |
+| `/health-check` | Liveness probe |
+
+**How it works**
+
+1. `index.html` is served as a static file by `ServeDir`.
+2. The form POSTs to `/ui/complete` (form-encoded).
+3. The server runs inference and returns an HTML fragment.
+4. HTMX swaps the fragment into `#response` without a page reload.
+
+**HTMX version**: loaded from the [unpkg CDN](https://unpkg.com/htmx.org@2.0.4).
+
 # examples
 
 run the server on a Macbook M-series:

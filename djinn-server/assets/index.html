@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>djinn</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script
+    src="https://unpkg.com/htmx.org@2.0.4"
+    integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+    crossorigin="anonymous"
+  ></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="site-title">djinn</h1>
+    <p class="site-subtitle">AI language model playground</p>
+    <nav class="site-nav">
+      <a href="/swagger-ui" target="_blank" rel="noopener">API Docs</a>
+      <a href="/health-check" target="_blank" rel="noopener">Health Check</a>
+    </nav>
+  </header>
+
+  <main id="content">
+    <section class="prompt-section">
+      <h2>Language Model Completion</h2>
+      <form
+        hx-post="/ui/complete"
+        hx-target="#response"
+        hx-swap="innerHTML"
+        hx-indicator="#loading"
+        id="prompt-form"
+      >
+        <div id="prompt_parent">
+          <div id="prompt-input">
+            <label for="prompt" class="visually-hidden">Prompt</label>
+            <textarea
+              id="prompt"
+              name="prompt"
+              placeholder="Enter your prompt here…"
+              rows="6"
+              required
+            ></textarea>
+          </div>
+          <div class="prompt-actions">
+            <button type="submit" class="btn-primary">Generate</button>
+            <button type="reset" class="btn-secondary">Clear</button>
+          </div>
+        </div>
+        <div id="loading" class="htmx-indicator loading-indicator">
+          <span class="spinner" aria-hidden="true"></span>
+          Generating response…
+        </div>
+      </form>
+    </section>
+
+    <section id="response" aria-live="polite" aria-label="Model response">
+      <p class="placeholder">Your response will appear here.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      Powered by
+      <a href="https://htmx.org" target="_blank" rel="noopener">htmx</a>
+      &amp;
+      <a href="https://github.com/covercash2/djinn" target="_blank" rel="noopener">djinn</a>
+    </p>
+  </footer>
+</body>
+</html>

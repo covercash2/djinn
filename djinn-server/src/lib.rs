@@ -12,6 +12,7 @@ mod complete;
 mod error;
 mod openapi;
 mod server;
+mod ui;
 
 pub use error::{Error, Result};
 
