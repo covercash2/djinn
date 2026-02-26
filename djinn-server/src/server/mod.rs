@@ -23,6 +23,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::clip::ROUTE_CLIP;
 use crate::complete::ROUTE_COMPLETE;
 use crate::openapi::ApiDoc;
+use crate::ui::ROUTE_UI_COMPLETE;
 
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(crate::error::Error))]
@@ -93,6 +94,10 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
             &ServiceRoutes::Clip.to_string(),
             post(crate::clip::clip_similarity),
         )
+        .route(
+            &ServiceRoutes::UiComplete.to_string(),
+            post(crate::ui::ui_complete),
+        )
         .with_state(context);
 
     let router = Router::new()
@@ -146,6 +151,7 @@ enum ServiceRoutes {
     HealthCheck,
     Complete,
     Clip,
+    UiComplete,
 }
 
 impl Display for ServiceRoutes {
@@ -154,6 +160,7 @@ impl Display for ServiceRoutes {
             ServiceRoutes::HealthCheck => write!(f, "/health-check"),
             ServiceRoutes::Complete => write!(f, "{}", ROUTE_COMPLETE),
             ServiceRoutes::Clip => write!(f, "{}", ROUTE_CLIP),
+            ServiceRoutes::UiComplete => write!(f, "{}", ROUTE_UI_COMPLETE),
         }
     }
 }

@@ -1,25 +1,96 @@
+/* ── Reset / base ────────────────────────────────────────────────── */
 html {
-	margin: 0px;
+	margin: 0;
 	height: 100%;
 	width: 100%;
+	box-sizing: border-box;
+}
+
+*, *::before, *::after {
+	box-sizing: inherit;
 }
 
 body {
 	min-height: 100%;
 	width: 100%;
+	margin: 0;
+	font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+	background: #f8f8f8;
+	color: #1a1a1a;
+	display: flex;
+	flex-direction: column;
 }
 
+/* ── Accessibility helpers ───────────────────────────────────────── */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────── */
 #content {
 	max-width: 60%;
 	margin-left: 20%;
-	height: 100%;
-	min-height: 100%;
+	flex: 1;
+	padding: 1.5rem 0 3rem;
 }
 
-#proompt_parent {
+/* ── Site header ─────────────────────────────────────────────────── */
+.site-header {
+	background: #1a1a1a;
+	color: #f8f8f8;
+	padding: 1rem 10% 1rem 20%;
+	display: flex;
+	align-items: baseline;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.site-title {
+	margin: 0;
+	font-size: 1.6rem;
+	letter-spacing: 0.04em;
+}
+
+.site-subtitle {
+	margin: 0;
+	font-size: 0.95rem;
+	opacity: 0.7;
+	flex: 1;
+}
+
+.site-nav {
+	display: flex;
+	gap: 1rem;
+}
+
+.site-nav a {
+	color: #a0c4ff;
+	text-decoration: none;
+	font-size: 0.9rem;
+}
+
+.site-nav a:hover {
+	text-decoration: underline;
+}
+
+/* ── Prompt section ──────────────────────────────────────────────── */
+.prompt-section h2 {
+	margin-top: 0;
+	font-size: 1.2rem;
+}
+
+#prompt_parent {
 	display: flex;
 	flex-direction: column;
-	height: 100%;
+	gap: 0.75rem;
 }
 
 #prompt-input {
@@ -27,11 +98,149 @@ body {
 }
 
 #prompt {
-	display: flex;
-	flex-direction: column;
-	align-self: flex-end;
+	width: 100%;
+	min-height: 8rem;
+	padding: 0.75rem;
+	border: 1px solid #ccc;
+	border-radius: 6px;
+	font-size: 1rem;
+	font-family: inherit;
+	resize: vertical;
+	background: #fff;
 }
 
-#response {
-	height: 100%;
+#prompt:focus {
+	outline: 2px solid #4a90d9;
+	border-color: transparent;
 }
+
+.prompt-actions {
+	display: flex;
+	gap: 0.5rem;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn-primary,
+.btn-secondary {
+	padding: 0.5rem 1.25rem;
+	border: none;
+	border-radius: 6px;
+	font-size: 0.95rem;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.btn-primary {
+	background: #1a1a1a;
+	color: #f8f8f8;
+}
+
+.btn-primary:hover {
+	background: #333;
+}
+
+.btn-secondary {
+	background: #e5e5e5;
+	color: #1a1a1a;
+}
+
+.btn-secondary:hover {
+	background: #ccc;
+}
+
+/* ── Loading indicator ───────────────────────────────────────────── */
+.loading-indicator {
+	display: none;
+	align-items: center;
+	gap: 0.5rem;
+	color: #555;
+	font-size: 0.9rem;
+	margin-top: 0.5rem;
+}
+
+.htmx-request .loading-indicator,
+.htmx-request.loading-indicator {
+	display: flex;
+}
+
+.spinner {
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+	to { transform: rotate(360deg); }
+}
+
+/* ── Response area ───────────────────────────────────────────────── */
+#response {
+	margin-top: 2rem;
+}
+
+.placeholder {
+	color: #888;
+	font-style: italic;
+}
+
+.response-block {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 8px;
+	padding: 1.25rem 1.5rem;
+}
+
+.response-block h3 {
+	margin: 0 0 0.4rem;
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #555;
+}
+
+.response-prompt-text {
+	margin: 0 0 1.25rem;
+	padding: 0.6rem 0.8rem;
+	background: #f0f0f0;
+	border-radius: 4px;
+	font-size: 0.9rem;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.response-content {
+	line-height: 1.65;
+}
+
+.response-content p:first-child { margin-top: 0; }
+.response-content p:last-child  { margin-bottom: 0; }
+
+.error {
+	color: #c0392b;
+	padding: 0.5rem 0.75rem;
+	background: #fdecea;
+	border-radius: 4px;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+.site-footer {
+	text-align: center;
+	padding: 1rem;
+	font-size: 0.85rem;
+	color: #888;
+	border-top: 1px solid #e5e5e5;
+}
+
+.site-footer a {
+	color: #4a90d9;
+	text-decoration: none;
+}
+
+.site-footer a:hover {
+	text-decoration: underline;
+}
+
