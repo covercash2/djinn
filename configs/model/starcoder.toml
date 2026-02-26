@@ -1,3 +1,4 @@
+#:schema ./model.schema.json
 variant = "starcoder"
 flash_attn = false
 

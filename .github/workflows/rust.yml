@@ -23,5 +23,9 @@ jobs:
       uses: crate-ci/typos@v1.27.3
     - name: clippy
       run: cargo clippy -- -D warnings
+    - name: Check schema files are up to date
+      run: |
+        cargo xtask schema
+        git diff --exit-code configs/
     - name: test
       run: cargo test --all

@@ -1,3 +1,4 @@
+#:schema ./image-gen.schema.json
 # Template configuration for image generation.
 # Place this file (or a modified copy) at:
 #   $XDG_CONFIG_HOME/djinn/image-gen.toml  (typically ~/.config/djinn/image-gen.toml)

@@ -1,2 +1,3 @@
+#:schema ./server.schema.json
 socker_addr = "0.0.0.0:8080"
 model_config = "./configs/model/q_mistral.toml"

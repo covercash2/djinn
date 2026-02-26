@@ -6,6 +6,10 @@ default:
 tui:
 	cargo run --bin ollama-cli -- tui
 
+# generate JSON Schema files for all config types
+schema:
+	cargo xtask schema
+
 # check for typos, lint, and test
 check:
 	typos

@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GenConfig",
+  "description": "File-based configuration for image generation.\n\nAll fields are optional; unset fields fall back to the env-var and CLI layers.  See [`load`] and [`crate::config::xdg`] for the loading logic.\n\nWhen the `clap` feature is enabled this struct also implements [`clap::Args`], so it can be used directly as a CLI argument group.\n\nExample `~/.config/djinn/image-gen.toml`: ```toml sd_version = \"v1_5\" device = \"cpu\" use_f16 = true num_samples = 4 final_image = \"/tmp/output.png\" ```",
+  "type": "object",
+  "properties": {
+    "bsize": {
+      "description": "Batch size (images generated in parallel per step).",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "clip2_weights": {
+      "description": "Path to a local secondary CLIP weight file (.safetensors, SDXL only).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "clip_weights": {
+      "description": "Path to a local primary CLIP weight file (.safetensors).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "device": {
+      "description": "Compute device to run inference on.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Device"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "final_image": {
+      "description": "Output image file path.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "guidance_scale": {
+      "description": "Classifier-free guidance scale.",
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "height": {
+      "description": "Output image height in pixels.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "img2img": {
+      "description": "Path to an image used to initialize the latents (img2img / inpainting).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "img2img_strength": {
+      "description": "img2img transformation strength in the range 0.0–1.0.",
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "mask_path": {
+      "description": "Path to an inpainting mask image.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "n_steps": {
+      "description": "Number of diffusion denoising steps.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "num_samples": {
+      "description": "Number of images to generate sequentially.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "prompt": {
+      "description": "Text prompt describing the image to generate.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sd_version": {
+      "description": "Stable Diffusion model version.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StableDiffusionVersion"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "seed": {
+      "description": "RNG seed for reproducible generation.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "sliced_attention_size": {
+      "description": "Sliced attention size (0 = automatic).",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "tokenizer": {
+      "description": "Path to a local tokenizer file.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "uncond_prompt": {
+      "description": "Negative prompt (describe what to exclude from the image).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unet_weights": {
+      "description": "Path to a local UNet weight file (.safetensors). Skips HF Hub download.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "use_f16": {
+      "description": "Use FP16 weights to reduce VRAM usage.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "use_flash_attn": {
+      "description": "Use flash attention (requires CUDA).",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "vae_weights": {
+      "description": "Path to a local VAE weight file (.safetensors).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "width": {
+      "description": "Output image width in pixels.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "Device": {
+      "description": "A enum of supported devices to run models on",
+      "type": "string",
+      "enum": [
+        "Cpu",
+        "Cuda",
+        "Metal"
+      ]
+    },
+    "StableDiffusionVersion": {
+      "description": "Supported Stable Diffusion model versions.",
+      "oneOf": [
+        {
+          "description": "Stable Diffusion v1.5",
+          "type": "string",
+          "enum": [
+            "v1_5"
+          ]
+        },
+        {
+          "description": "Stable Diffusion v1.5 inpainting variant",
+          "type": "string",
+          "enum": [
+            "v1_5_inpaint"
+          ]
+        },
+        {
+          "description": "Stable Diffusion v2.1",
+          "type": "string",
+          "enum": [
+            "v2_1"
+          ]
+        },
+        {
+          "description": "Stable Diffusion v2 inpainting variant",
+          "type": "string",
+          "enum": [
+            "v2_inpaint"
+          ]
+        },
+        {
+          "description": "Stable Diffusion XL base",
+          "type": "string",
+          "enum": [
+            "xl"
+          ]
+        },
+        {
+          "description": "Stable Diffusion XL inpainting variant",
+          "type": "string",
+          "enum": [
+            "xl_inpaint"
+          ]
+        },
+        {
+          "description": "SDXL Turbo (single-step distilled)",
+          "type": "string",
+          "enum": [
+            "turbo"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -96,7 +96,7 @@ pub async fn load_config(path: impl AsRef<Path>) -> anyhow::Result<Config> {
     let path = path.as_ref();
     tracing::info!(?path, "loading config");
     let contents = tokio::fs::read_to_string(path).await?;
-    Ok(toml::from_str(&contents)?)
+    Ok(djinn_core::config::validate_and_load::<Config>(&contents, path)?)
 }
 
 #[cfg(test)]

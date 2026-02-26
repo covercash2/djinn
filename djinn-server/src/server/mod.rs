@@ -37,7 +37,7 @@ where
     }
 }
 
-#[derive(new, Clone, Debug, Serialize, Deserialize)]
+#[derive(new, Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Config {
     pub socker_addr: SocketAddr,
     pub model_config: PathBuf,

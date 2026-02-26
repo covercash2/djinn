@@ -1,3 +1,4 @@
+#:schema ./model.schema.json
 variant = "q_mistral"
 flash_attn = false
 
