@@ -43,7 +43,7 @@ pub enum Error {
 
     /// The derived JSON Schema could not be compiled into a validator.
     #[error("failed to compile derived JSON Schema")]
-    SchemaCompile(#[source] jsonschema::ValidationError<'static>),
+    SchemaCompile(#[source] Box<jsonschema::ValidationError<'static>>),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -68,7 +68,7 @@ where
     // Build schema from the type and validate.
     let schema_json =
         serde_json::to_value(schemars::schema_for!(T)).map_err(Error::SchemaSerialize)?;
-    let validator = jsonschema::validator_for(&schema_json).map_err(Error::SchemaCompile)?;
+    let validator = jsonschema::validator_for(&schema_json).map_err(|e| Error::SchemaCompile(Box::new(e)))?;
 
     let errors: Vec<String> = validator
         .iter_errors(&json_value)
