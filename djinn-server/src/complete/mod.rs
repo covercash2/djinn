@@ -1,17 +1,21 @@
+use std::convert::Infallible;
 use std::ops::DerefMut;
 use std::sync::Arc;
 
 use axum::extract::State;
+use axum::response::sse::{Event, Sse};
 use djinn_core::lm::config::RunConfig;
-use futures::{pin_mut, StreamExt};
+use futures::{pin_mut, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{instrument, Instrument};
 
 use crate::error::{Error, Result};
 use crate::server::{Context, Json};
 
 pub const ROUTE_COMPLETE: &str = "/complete";
+pub const ROUTE_COMPLETE_STREAM: &str = "/complete/stream";
 
 #[derive(Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct CompleteRequest {
@@ -28,6 +32,47 @@ pub struct CompleteResponse {
     prompt: String,
     /// The generated continuation
     output: String,
+}
+
+/// Stream language-model tokens as Server-Sent Events.
+///
+/// Each token is sent as `data: <token>`.  The final event is
+/// `event: done` with an empty data field.  On error the event name
+/// is `error` and the data contains the error message.
+#[instrument(skip(model_context))]
+pub async fn stream_complete(
+    State(model_context): State<Arc<Mutex<Context>>>,
+    Json(payload): Json<CompleteRequest>,
+) -> Sse<impl Stream<Item = std::result::Result<Event, Infallible>>> {
+    let (tx, rx) = tokio::sync::mpsc::channel(32);
+
+    tokio::spawn(async move {
+        let mut lock = model_context.lock().await;
+        let token_stream = lock.model.run(payload.prompt, payload.config);
+        pin_mut!(token_stream);
+
+        while let Some(result) = token_stream.next().await {
+            let event = match result {
+                Ok(token) => Event::default().data(token),
+                Err(e) => {
+                    tracing::error!(%e, "token stream error");
+                    let _ = tx
+                        .send(Ok(Event::default().event("error").data(e.to_string())))
+                        .await;
+                    return;
+                }
+            };
+            if tx.send(Ok(event)).await.is_err() {
+                return; // client disconnected
+            }
+        }
+
+        let _ = tx
+            .send(Ok(Event::default().event("done").data("")))
+            .await;
+    });
+
+    Sse::new(ReceiverStream::new(rx))
 }
 
 /// Run a language-model completion.

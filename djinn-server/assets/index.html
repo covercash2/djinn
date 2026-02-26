@@ -29,13 +29,7 @@
   <main id="content">
     <section class="prompt-section">
       <h2>Language Model Completion</h2>
-      <form
-        hx-post="/ui/complete"
-        hx-target="#response"
-        hx-swap="innerHTML"
-        hx-indicator="#loading"
-        id="prompt-form"
-      >
+      <form id="prompt-form">
         <div id="prompt_parent">
           <div id="prompt-input">
             <label for="prompt" class="visually-hidden">Prompt</label>
@@ -72,5 +66,81 @@
       <a href="https://github.com/covercash2/djinn" target="_blank" rel="noopener">djinn</a>
     </p>
   </footer>
+  <script>
+    (function () {
+      const form = document.getElementById('prompt-form');
+      const loading = document.getElementById('loading');
+      const responseSection = document.getElementById('response');
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const prompt = document.getElementById('prompt').value.trim();
+        if (!prompt) return;
+
+        loading.style.display = 'flex';
+        responseSection.innerHTML =
+          '<section class="response-block">' +
+            '<h3 class="response-prompt">Prompt</h3>' +
+            '<pre class="response-prompt-text" id="stream-prompt"></pre>' +
+            '<h3 class="response-output">Response</h3>' +
+            '<div class="response-content" id="stream-output" style="white-space:pre-wrap"></div>' +
+          '</section>';
+        document.getElementById('stream-prompt').textContent = prompt;
+        const output = document.getElementById('stream-output');
+
+        try {
+          const res = await fetch('/complete/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+          });
+
+          if (!res.ok) {
+            output.innerHTML = '<p class="error">Server error: ' + res.status + ' ' + res.statusText + '</p>';
+            return;
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buf += decoder.decode(value, { stream: true });
+
+            // Process complete SSE events (delimited by \n\n).
+            let boundary;
+            while ((boundary = buf.indexOf('\n\n')) !== -1) {
+              const eventText = buf.slice(0, boundary);
+              buf = buf.slice(boundary + 2);
+
+              let isError = false;
+              const dataLines = [];
+              for (const line of eventText.split('\n')) {
+                if (line.startsWith('data: ')) {
+                  dataLines.push(line.slice(6));
+                } else if (line === 'event: error') {
+                  isError = true;
+                }
+                // 'event: done' — stream ends naturally when the channel closes
+              }
+
+              if (isError) {
+                output.textContent += '\n[Error: ' + dataLines.join('\n') + ']';
+              } else if (dataLines.length) {
+                output.textContent += dataLines.join('\n');
+              }
+            }
+          }
+        } catch (err) {
+          output.innerHTML = '<p class="error">' + err.message + '</p>';
+        } finally {
+          loading.style.display = '';
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
