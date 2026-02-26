@@ -24,7 +24,7 @@ use utoipa_swagger_ui::SwaggerUi;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
 use crate::clip::ROUTE_CLIP;
-use crate::complete::ROUTE_COMPLETE;
+use crate::complete::{ROUTE_COMPLETE, ROUTE_COMPLETE_STREAM};
 use crate::openapi::ApiDoc;
 use crate::ui::ROUTE_UI_COMPLETE;
 
@@ -82,8 +82,8 @@ async fn not_found() -> (StatusCode, &'static str) {
 fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
     use utoipa::OpenApi;
 
-    // API routes require shared state; resolve state first so the router
-    // becomes Router<()>, which can then be merged with stateless routers.
+    // Timed routes: health-check, complete (blocking), clip, ui.
+    // The 1-second TimeoutLayer lives here so it does NOT affect the SSE stream.
     let api_router = Router::new()
         .route(
             &ServiceRoutes::HealthCheck.to_string(),
@@ -101,10 +101,26 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
             &ServiceRoutes::UiComplete.to_string(),
             post(crate::ui::ui_complete),
         )
+        .with_state(context.clone())
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(|_: BoxError| async {
+                    StatusCode::REQUEST_TIMEOUT
+                }))
+                .layer(TimeoutLayer::new(REQUEST_TIMEOUT)),
+        );
+
+    // Streaming route: no timeout — the connection stays open until generation finishes.
+    let stream_router = Router::new()
+        .route(
+            ROUTE_COMPLETE_STREAM,
+            post(crate::complete::stream_complete),
+        )
         .with_state(context);
 
     let router = Router::new()
         .merge(api_router)
+        .merge(stream_router)
         .merge(
             SwaggerUi::new("/swagger-ui")
                 .url("/api-doc/openapi.json", ApiDoc::openapi()),
@@ -145,13 +161,6 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
                         tracing::warn!(?status, content_type, "unsupported media type");
                     }
                 }),
-        )
-        .layer(
-            ServiceBuilder::new()
-                .layer(HandleErrorLayer::new(|_: BoxError| async {
-                    StatusCode::REQUEST_TIMEOUT
-                }))
-                .layer(TimeoutLayer::new(REQUEST_TIMEOUT)),
         );
 
     router.into_make_service()
