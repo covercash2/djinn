@@ -87,7 +87,7 @@ body {
 	font-size: 1.2rem;
 }
 
-#prompt_parent {
+#prompt-parent {
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
