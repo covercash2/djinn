@@ -7,7 +7,7 @@ use axum::Form;
 use futures::{pin_mut, StreamExt};
 use serde::Deserialize;
 use tokio::sync::Mutex;
-use tracing::instrument;
+use tracing::{instrument, Instrument};
 
 use crate::error::Result;
 use crate::server::Context;
@@ -35,7 +35,9 @@ pub async fn ui_complete(
 
     let config = djinn_core::lm::config::RunConfig::default();
 
-    let mut lock = context.lock().await;
+    let span = tracing::info_span!("ui_complete");
+    let mut lock = context.lock().instrument(span).await;
+    tracing::info!("got model lock");
     let ctx: &mut Context = lock.deref_mut();
 
     let stream = ctx.model.run(prompt.clone(), config);
@@ -58,6 +60,8 @@ pub async fn ui_complete(
     let rendered = markdown::to_html(&output);
     // `markdown::to_html` uses comrak with `allow_dangerous_html = false` by
     // default, so inline HTML from the model output is already sanitized.
+
+    tracing::info!("sending ui response for prompt of {} chars", prompt.len());
 
     Ok(Html(format!(
         r#"<section class="response-block">
