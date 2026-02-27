@@ -9,7 +9,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::server::Context;
 
 pub const ROUTE_UI_COMPLETE: &str = "/ui/complete";
@@ -43,9 +43,16 @@ pub async fn ui_complete(
 
     let mut output = String::new();
     while let Some(value) = stream.next().await {
-        value
-            .map(|token| output.push_str(&token))
-            .map_err(Error::from)?;
+        match value {
+            Ok(token) => output.push_str(&token),
+            Err(e) => {
+                // Return an HTML fragment so HTMX can render the error correctly.
+                let message = html_escape(&e.to_string());
+                return Ok(Html(format!(
+                    r#"<p class="error">Error while generating response: {message}</p>"#
+                )));
+            }
+        }
     }
 
     let rendered = markdown::to_html(&output);
