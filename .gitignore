@@ -14,3 +14,7 @@ target/
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Node / npm
+node_modules/
+package-lock.json

@@ -1,0 +1,13 @@
+{
+  "name": "djinn-server-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vitest tests for djinn-server frontend JavaScript",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}
