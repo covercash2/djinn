@@ -15,6 +15,8 @@ pub enum Error {
     Base64(base64::DecodeError),
     #[error(transparent)]
     VisionEncoder(#[from] djinn_core::image::VisionEncoderError),
+    #[error("multipart error: {0}")]
+    Multipart(String),
 }
 
 impl IntoResponse for Error {
@@ -41,6 +43,7 @@ impl IntoResponse for Error {
                     "Something went wrong D:".to_string(),
                 )
             }
+            Error::Multipart(msg) => (StatusCode::BAD_REQUEST, format!("multipart error: {msg}")),
         };
 
         (status, Json(ErrorResponse { message })).into_response()
