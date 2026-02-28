@@ -8,6 +8,7 @@ authors.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
 base64.workspace = true
 candle-core.workspace = true
 axum-streams.workspace = true

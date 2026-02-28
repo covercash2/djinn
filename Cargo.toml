@@ -13,7 +13,8 @@ ab_glyph = "0.2.29"
 accelerate-src = "0.3.2"
 anyhow = "1.0.97"
 async-stream = "0.3.6"
-axum = { version = "0.8.3", features = ["macros", "multipart"] }
+axum = { version = "0.8.3", features = ["macros"] }
+axum-extra = { version = "0.12.5", features = ["multipart"] }
 base64 = "0.22"
 axum-streams = { version = "0.20.0", features = ["json"] }
 bon = "3.8.1"
