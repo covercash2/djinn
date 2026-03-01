@@ -140,13 +140,28 @@ impl ClipRequest {
     async fn from_multipart(
         multipart: &mut Multipart,
     ) -> Result<std::result::Result<Self, ClipRequestError>> {
+        /// Maximum allowed size for uploaded images in bytes (10 MiB).
+        const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
         let mut prompt: Option<String> = None;
         let mut image_bytes: Option<Vec<u8>> = None;
 
-        while let Some(field) = multipart.next_field().await? {
+        while let Some(mut field) = multipart.next_field().await? {
             match field.name() {
                 Some("prompt") => prompt = Some(field.text().await?),
-                Some("image") => image_bytes = Some(field.bytes().await?.to_vec()),
+                Some("image") => {
+                    let mut bytes = Vec::new();
+                    while let Some(chunk) = field.chunk().await? {
+                        if bytes.len() + chunk.len() > MAX_IMAGE_BYTES {
+                            // Treat an oversized upload as absent so `validate`
+                            // returns a clear user-facing error.
+                            bytes.clear();
+                            break;
+                        }
+                        bytes.extend_from_slice(&chunk);
+                    }
+                    image_bytes = Some(bytes);
+                }
                 _ => {}
             }
         }
@@ -162,9 +177,15 @@ pub async fn ui_clip(
     State(context): State<Arc<Mutex<Context>>>,
     mut multipart: Multipart,
 ) -> Result<Html<String>> {
-    let request = match ClipRequest::from_multipart(&mut multipart).await? {
-        Ok(r) => r,
-        Err(e) => return Ok(e.to_html()),
+    let request = match ClipRequest::from_multipart(&mut multipart).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => return Ok(e.to_html()),
+        Err(_) => {
+            return Ok(Html(
+                r#"<p class="error">There was a problem processing your upload. Please check your file and try again.</p>"#
+                    .to_string(),
+            ));
+        }
     };
     let prompt = &request.prompt;
     let image_bytes = &request.image_bytes;

@@ -24,6 +24,10 @@
 
     if (!clipForm || !dropzone || !fileInput) return;
 
+    // Track a file dropped onto the dropzone (used as fallback when
+    // fileInput.files cannot be assigned).
+    var droppedFile = null;
+
     // Open file picker when the dropzone is clicked (except on the input itself).
     dropzone.addEventListener('click', function (e) {
       if (e.target !== fileInput) {
@@ -52,13 +56,25 @@
       dropzone.classList.remove('drag-over');
       var files = e.dataTransfer && e.dataTransfer.files;
       if (files && files.length > 0) {
-        fileInput.files = files;
+        droppedFile = files[0];
+        // Try to assign via DataTransfer so the native input is in sync.
+        // fileInput.files is read-only in some browsers; fall back to
+        // tracking the file separately and appending it during submit.
+        try {
+          var dt = new DataTransfer();
+          dt.items.add(droppedFile);
+          fileInput.files = dt.files;
+          droppedFile = null; // successfully assigned; no separate tracking needed
+        } catch (err) {
+          // Assignment not supported; droppedFile will be appended at submit.
+        }
         showPreview(files[0], filenameEl, previewEl);
       }
     });
 
     // Update preview when a file is selected via the native picker.
     fileInput.addEventListener('change', function () {
+      droppedFile = null; // clear drop-tracking when native picker is used
       if (fileInput.files && fileInput.files.length > 0) {
         showPreview(fileInput.files[0], filenameEl, previewEl);
       }
@@ -78,7 +94,7 @@
     // Submit: POST multipart form to /ui/clip, render HTML fragment response.
     clipForm.addEventListener('submit', function (e) {
       e.preventDefault();
-      handleClipSubmit(clipForm, clipLoading, clipResponse);
+      handleClipSubmit(clipForm, clipLoading, clipResponse, droppedFile);
     });
   }
 
@@ -93,13 +109,20 @@
       filenameEl.textContent = file.name;
       filenameEl.hidden = false;
     }
-    if (previewEl && (file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp|svg|tiff?)$/i.test(file.name))) {
-      var reader = new FileReader();
-      reader.onload = function (ev) {
-        previewEl.src = ev.target.result;
-        previewEl.hidden = false;
-      };
-      reader.readAsDataURL(file);
+    if (previewEl) {
+      var isImage = file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp|svg|tiff?)$/i.test(file.name);
+      if (isImage) {
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          previewEl.src = ev.target.result;
+          previewEl.hidden = false;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Clear any stale thumbnail when the selected file is not an image.
+        previewEl.src = '';
+        previewEl.hidden = true;
+      }
     }
   }
 
@@ -108,9 +131,16 @@
    * @param {HTMLFormElement} form
    * @param {HTMLElement} loadingEl
    * @param {HTMLElement} responseEl
+   * @param {File|null} droppedFile  File tracked from drag-and-drop (may be null)
    */
-  function handleClipSubmit(form, loadingEl, responseEl) {
+  function handleClipSubmit(form, loadingEl, responseEl, droppedFile) {
     var formData = new FormData(form);
+
+    // If the file was dropped and couldn't be assigned to fileInput.files,
+    // append it manually so it is included in the multipart upload.
+    if (droppedFile) {
+      formData.set('image', droppedFile);
+    }
 
     if (loadingEl) loadingEl.style.display = 'flex';
     if (responseEl) responseEl.innerHTML = '';
@@ -119,6 +149,9 @@
       method: 'POST',
       body: formData,
     }).then(function (res) {
+      if (!res.ok) {
+        return '<p class="error">Server error (' + res.status + '). Please try again.</p>';
+      }
       return res.text();
     }).then(function (html) {
       if (responseEl) responseEl.innerHTML = html;
