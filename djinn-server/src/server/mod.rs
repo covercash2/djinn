@@ -26,7 +26,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 use crate::clip::ROUTE_CLIP;
 use crate::complete::{ROUTE_COMPLETE, ROUTE_COMPLETE_STREAM};
 use crate::openapi::ApiDoc;
-use crate::ui::ROUTE_UI_COMPLETE;
+use crate::ui::{ROUTE_UI_CLIP, ROUTE_UI_COMPLETE};
 
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(crate::error::Error))]
@@ -101,6 +101,10 @@ fn build_service(context: Arc<Mutex<Context>>) -> IntoMakeService<Router> {
             &ServiceRoutes::UiComplete.to_string(),
             post(crate::ui::ui_complete),
         )
+        .route(
+            &ServiceRoutes::UiClip.to_string(),
+            post(crate::ui::ui_clip),
+        )
         .with_state(context.clone())
         .layer(
             ServiceBuilder::new()
@@ -171,6 +175,7 @@ enum ServiceRoutes {
     Complete,
     Clip,
     UiComplete,
+    UiClip,
 }
 
 impl Display for ServiceRoutes {
@@ -180,6 +185,7 @@ impl Display for ServiceRoutes {
             ServiceRoutes::Complete => write!(f, "{}", ROUTE_COMPLETE),
             ServiceRoutes::Clip => write!(f, "{}", ROUTE_CLIP),
             ServiceRoutes::UiComplete => write!(f, "{}", ROUTE_UI_COMPLETE),
+            ServiceRoutes::UiClip => write!(f, "{}", ROUTE_UI_CLIP),
         }
     }
 }

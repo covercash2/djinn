@@ -53,8 +53,45 @@
       </form>
     </section>
 
+    <section class="prompt-section clip-section">
+      <h2>Image–Text Similarity (CLIP)</h2>
+      <form id="clip-form" enctype="multipart/form-data">
+        <div id="clip-parent">
+          <div class="clip-dropzone" id="clip-dropzone" tabindex="0" role="button" aria-label="Drop image here or click to select">
+            <span class="clip-dropzone-icon" aria-hidden="true">🖼️</span>
+            <p class="clip-dropzone-text">Drop an image here, or <span class="clip-dropzone-link">click to select</span></p>
+            <input type="file" id="clip-image" name="image" accept="image/*" class="clip-file-input" required />
+            <p class="clip-dropzone-filename" id="clip-filename" hidden></p>
+            <img class="clip-preview" id="clip-preview" alt="Image preview" hidden />
+          </div>
+          <div id="clip-prompt-input">
+            <label for="clip-prompt" class="visually-hidden">Text prompt</label>
+            <input
+              type="text"
+              id="clip-prompt"
+              name="prompt"
+              placeholder="Enter a text prompt to compare (e.g. &quot;a photo of a cat&quot;)"
+              required
+            />
+          </div>
+          <div class="prompt-actions">
+            <button type="submit" class="btn-primary">Compare</button>
+            <button type="reset" class="btn-secondary" id="clip-reset">Clear</button>
+          </div>
+        </div>
+        <div id="clip-loading" class="loading-indicator">
+          <span class="spinner" aria-hidden="true"></span>
+          Computing similarity…
+        </div>
+      </form>
+    </section>
+
     <section id="response" aria-live="polite" aria-label="Model response">
       <p class="placeholder">Your response will appear here.</p>
+    </section>
+
+    <section id="clip-response" aria-live="polite" aria-label="CLIP similarity result">
+      <p class="placeholder">CLIP similarity result will appear here.</p>
     </section>
   </main>
 
@@ -66,6 +103,7 @@
       <a href="https://github.com/covercash2/djinn" target="_blank" rel="noopener">djinn</a>
     </p>
   </footer>
+  <script src="/clip.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

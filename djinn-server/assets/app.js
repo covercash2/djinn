@@ -9,6 +9,8 @@
  *   data: <token>          — one token of generated text
  *   event: error / data: … — generation error; displayed inline
  *   event: done / data:    — stream finished cleanly
+ *
+ * CLIP image-upload logic lives in clip.js.
  */
 
 (function () {
@@ -23,13 +25,11 @@
     const loading = doc.getElementById('loading');
     const responseSection = doc.getElementById('response');
 
-    if (!form || !loading || !responseSection) {
-      return;
+    if (form && loading && responseSection) {
+      form.addEventListener('submit', function (e) {
+        handleSubmit(e, loading, responseSection);
+      });
     }
-
-    form.addEventListener('submit', function (e) {
-      handleSubmit(e, loading, responseSection);
-    });
   }
 
   /**
