@@ -92,6 +92,69 @@ fn similarity_to_pct(similarity: f32) -> f32 {
     ((similarity + 1.0) / 2.0 * 100.0).clamp(0.0, 100.0)
 }
 
+/// Validated inputs collected from a `/ui/clip` multipart upload.
+#[derive(Debug, PartialEq)]
+struct ClipRequest {
+    prompt: String,
+    image_bytes: Vec<u8>,
+}
+
+/// Errors that arise when required multipart fields are absent or empty.
+#[derive(Debug, PartialEq)]
+enum ClipRequestError {
+    MissingPrompt,
+    MissingImage,
+}
+
+impl ClipRequestError {
+    fn to_html(&self) -> Html<String> {
+        let msg = match self {
+            Self::MissingPrompt => "Prompt must not be empty.",
+            Self::MissingImage => "Image must not be empty.",
+        };
+        Html(format!(r#"<p class="error">{msg}</p>"#))
+    }
+}
+
+impl ClipRequest {
+    /// Validate raw optional fields into a `ClipRequest`.
+    ///
+    /// Whitespace-only prompts and zero-length image buffers are treated as
+    /// absent so the user receives a clear error message.
+    fn validate(
+        prompt: Option<String>,
+        image_bytes: Option<Vec<u8>>,
+    ) -> std::result::Result<Self, ClipRequestError> {
+        let prompt = match prompt {
+            Some(p) if !p.trim().is_empty() => p.trim().to_string(),
+            _ => return Err(ClipRequestError::MissingPrompt),
+        };
+        let image_bytes = match image_bytes {
+            Some(b) if !b.is_empty() => b,
+            _ => return Err(ClipRequestError::MissingImage),
+        };
+        Ok(Self { prompt, image_bytes })
+    }
+
+    /// Parse fields from a multipart stream and validate them.
+    async fn from_multipart(
+        multipart: &mut Multipart,
+    ) -> Result<std::result::Result<Self, ClipRequestError>> {
+        let mut prompt: Option<String> = None;
+        let mut image_bytes: Option<Vec<u8>> = None;
+
+        while let Some(field) = multipart.next_field().await? {
+            match field.name() {
+                Some("prompt") => prompt = Some(field.text().await?),
+                Some("image") => image_bytes = Some(field.bytes().await?.to_vec()),
+                _ => {}
+            }
+        }
+
+        Ok(Self::validate(prompt, image_bytes))
+    }
+}
+
 /// Accept a multipart upload (prompt + image file) and return an HTML fragment
 /// with the CLIP cosine-similarity score for HTMX.
 #[instrument(skip(context))]
@@ -99,47 +162,12 @@ pub async fn ui_clip(
     State(context): State<Arc<Mutex<Context>>>,
     mut multipart: Multipart,
 ) -> Result<Html<String>> {
-    let mut prompt: Option<String> = None;
-    let mut image_bytes: Option<Vec<u8>> = None;
-
-    while let Some(field) = multipart
-        .next_field()
-        .await?
-    {
-        match field.name() {
-            Some("prompt") => {
-                let text = field
-                    .text()
-                    .await?;
-                prompt = Some(text);
-            }
-            Some("image") => {
-                let bytes = field
-                    .bytes()
-                    .await?;
-                image_bytes = Some(bytes.to_vec());
-            }
-            _ => {}
-        }
-    }
-
-    let prompt = match prompt {
-        Some(p) if !p.trim().is_empty() => p.trim().to_string(),
-        _ => {
-            return Ok(Html(
-                r#"<p class="error">Prompt must not be empty.</p>"#.to_string(),
-            ))
-        }
+    let request = match ClipRequest::from_multipart(&mut multipart).await? {
+        Ok(r) => r,
+        Err(e) => return Ok(e.to_html()),
     };
-
-    let image_bytes = match image_bytes {
-        Some(b) if !b.is_empty() => b,
-        _ => {
-            return Ok(Html(
-                r#"<p class="error">Image must not be empty.</p>"#.to_string(),
-            ))
-        }
-    };
+    let prompt = &request.prompt;
+    let image_bytes = &request.image_bytes;
 
     let lock = context.lock().await;
     let text_features = lock.clip.encode_text(&prompt)?;
@@ -203,5 +231,37 @@ mod tests {
         // Values outside [-1,1] are clamped.
         assert_eq!(similarity_to_pct(-2.0), 0.0);
         assert_eq!(similarity_to_pct(2.0), 100.0);
+    }
+
+    #[test]
+    fn clip_request_validate_requires_non_empty_prompt() {
+        assert_eq!(
+            ClipRequest::validate(None, Some(vec![1, 2, 3])),
+            Err(ClipRequestError::MissingPrompt)
+        );
+        assert_eq!(
+            ClipRequest::validate(Some("   ".to_string()), Some(vec![1, 2, 3])),
+            Err(ClipRequestError::MissingPrompt)
+        );
+    }
+
+    #[test]
+    fn clip_request_validate_requires_non_empty_image() {
+        assert_eq!(
+            ClipRequest::validate(Some("hello".to_string()), None),
+            Err(ClipRequestError::MissingImage)
+        );
+        assert_eq!(
+            ClipRequest::validate(Some("hello".to_string()), Some(vec![])),
+            Err(ClipRequestError::MissingImage)
+        );
+    }
+
+    #[test]
+    fn clip_request_validate_trims_prompt_whitespace() {
+        let req =
+            ClipRequest::validate(Some("  hello  ".to_string()), Some(vec![1, 2, 3])).unwrap();
+        assert_eq!(req.prompt, "hello");
+        assert_eq!(req.image_bytes, vec![1, 2, 3]);
     }
 }
