@@ -58,9 +58,10 @@ where
     T: schemars::JsonSchema + DeserializeOwned,
 {
     // Parse TOML to a generic value (for JSON-Schema validation).
-    let toml_value: toml::Value = content
-        .parse()
-        .map_err(|source| Error::Parse { path: path.to_owned(), source })?;
+    let toml_value: toml::Value = content.parse().map_err(|source| Error::Parse {
+        path: path.to_owned(),
+        source,
+    })?;
 
     // Convert to serde_json::Value — infallible for all TOML primitive types.
     let json_value = serde_json::to_value(&toml_value).map_err(Error::TomlToJson)?;
@@ -68,7 +69,8 @@ where
     // Build schema from the type and validate.
     let schema_json =
         serde_json::to_value(schemars::schema_for!(T)).map_err(Error::SchemaSerialize)?;
-    let validator = jsonschema::validator_for(&schema_json).map_err(|e| Error::SchemaCompile(Box::new(e)))?;
+    let validator =
+        jsonschema::validator_for(&schema_json).map_err(|e| Error::SchemaCompile(Box::new(e)))?;
 
     let errors: Vec<String> = validator
         .iter_errors(&json_value)
@@ -83,5 +85,33 @@ where
     }
 
     // Deserialize from TOML (preserves TOML semantics for edge cases like integers).
-    toml::from_str(content).map_err(|source| Error::Parse { path: path.to_owned(), source })
+    toml::from_str(content).map_err(|source| Error::Parse {
+        path: path.to_owned(),
+        source,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    struct Simple {
+        value: u32,
+    }
+
+    #[test]
+    fn invalid_toml_returns_parse_error() {
+        let result = validate_and_load::<Simple>("not valid = [[[", Path::new("test.toml"));
+        assert!(matches!(result, Err(Error::Parse { .. })));
+    }
+
+    #[test]
+    fn schema_mismatch_returns_validation_error() {
+        // "value" must be u32; passing a string triggers schema validation failure.
+        let result =
+            validate_and_load::<Simple>(r#"value = "not a number""#, Path::new("test.toml"));
+        assert!(matches!(result, Err(Error::Validation { .. })));
+    }
 }

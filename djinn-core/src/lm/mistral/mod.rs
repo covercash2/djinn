@@ -1,3 +1,6 @@
+// Requires HF Hub model download and GPU inference — excluded from coverage measurement.
+#![coverage(off)]
+
 use candle_core::{self as candle};
 use futures::pin_mut;
 use futures::StreamExt;

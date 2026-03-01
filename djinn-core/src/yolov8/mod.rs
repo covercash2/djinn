@@ -1,3 +1,6 @@
+// YOLOv8 inference — requires model weights and GPU. Excluded from coverage measurement.
+#![coverage(off)]
+
 pub mod args;
 pub mod model;
 

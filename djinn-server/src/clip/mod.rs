@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use base64::{engine::general_purpose::STANDARD, Engine};
+use djinn_core::image::VisionEncoder;
 use djinn_core::tensor_ext::cosine_similarity;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::error::{Error, Result};
-use crate::server::{Context, Json};
+use crate::server::Json;
 
 pub const ROUTE_CLIP: &str = "/clip";
 
@@ -40,18 +40,14 @@ pub struct ClipResponse {
     ),
     tag = "clip",
 )]
-#[instrument(skip(context))]
+#[instrument(skip(clip))]
 pub async fn clip_similarity(
-    State(context): State<Arc<Mutex<Context>>>,
+    State(clip): State<Arc<Box<dyn VisionEncoder>>>,
     Json(payload): Json<ClipRequest>,
 ) -> Result<Json<ClipResponse>> {
     let bytes = STANDARD.decode(&payload.image).map_err(Error::Base64)?;
-
-    let lock = context.lock().await;
-    let text_features = lock.clip.encode_text(&payload.prompt)?;
-    let image_features = lock.clip.encode_image_from_bytes(&bytes)?;
-    drop(lock);
-
+    let text_features = clip.encode_text(&payload.prompt)?;
+    let image_features = clip.encode_image_from_bytes(&bytes)?;
     let similarity = cosine_similarity(&text_features, &image_features)
         .map_err(djinn_core::image::VisionEncoderError::Candle)?;
     Ok(Json(ClipResponse { similarity }))

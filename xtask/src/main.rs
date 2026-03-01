@@ -14,8 +14,7 @@ use schemars::JsonSchema;
 
 fn write_schema<T: JsonSchema>(path: PathBuf) {
     let schema = schemars::schema_for!(T);
-    let json =
-        serde_json::to_string_pretty(&schema).expect("schema serialization should not fail");
+    let json = serde_json::to_string_pretty(&schema).expect("schema serialization should not fail");
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("failed to create schema output directory");
     }

@@ -3,7 +3,19 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
 /// A enum of supported devices to run models on
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    ValueEnum,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 pub enum Device {
     Cpu,
     Cuda,

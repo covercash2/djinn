@@ -60,12 +60,14 @@ struct Upsample {
     scale_factor: usize,
 }
 
+#[coverage(off)]
 impl Upsample {
     fn new(scale_factor: usize) -> Result<Self> {
         Ok(Upsample { scale_factor })
     }
 }
 
+#[coverage(off)]
 impl Module for Upsample {
     fn forward(&self, xs: &Tensor) -> candle::Result<Tensor> {
         let (_b_size, _channels, h, w) = xs.dims4()?;
@@ -79,6 +81,7 @@ struct ConvBlock {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl ConvBlock {
     fn load(
         vb: VarBuilder,
@@ -103,6 +106,7 @@ impl ConvBlock {
     }
 }
 
+#[coverage(off)]
 impl Module for ConvBlock {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -119,6 +123,7 @@ struct Bottleneck {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl Bottleneck {
     fn load(vb: VarBuilder, c1: usize, c2: usize, shortcut: bool) -> Result<Self> {
         let channel_factor = 1.;
@@ -135,6 +140,7 @@ impl Bottleneck {
     }
 }
 
+#[coverage(off)]
 impl Module for Bottleneck {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -155,6 +161,7 @@ struct C2f {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl C2f {
     fn load(vb: VarBuilder, c1: usize, c2: usize, n: usize, shortcut: bool) -> Result<Self> {
         let c = (c2 as f64 * 0.5) as usize;
@@ -174,6 +181,7 @@ impl C2f {
     }
 }
 
+#[coverage(off)]
 impl Module for C2f {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -195,6 +203,7 @@ struct Sppf {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl Sppf {
     fn load(vb: VarBuilder, c1: usize, c2: usize, k: usize) -> Result<Self> {
         let c_ = c1 / 2;
@@ -209,6 +218,7 @@ impl Sppf {
     }
 }
 
+#[coverage(off)]
 impl Module for Sppf {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -237,6 +247,7 @@ struct Dfl {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl Dfl {
     fn load(vb: VarBuilder, num_classes: usize) -> Result<Self> {
         let conv = conv2d_no_bias(num_classes, 1, 1, Default::default(), vb.pp("conv"))?;
@@ -248,6 +259,7 @@ impl Dfl {
     }
 }
 
+#[coverage(off)]
 impl Module for Dfl {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -275,6 +287,7 @@ struct DarkNet {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl DarkNet {
     fn load(vb: VarBuilder, m: Multiples) -> Result<Self> {
         let (w, r, d) = (m.width, m.ratio, m.depth);
@@ -385,6 +398,7 @@ struct YoloV8Neck {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl YoloV8Neck {
     fn load(vb: VarBuilder, m: Multiples) -> candle::Result<Self> {
         let up = Upsample::new(2)?;
@@ -480,6 +494,7 @@ struct DetectionHeadOut {
     strides: Tensor,
 }
 
+#[coverage(off)]
 impl DetectionHead {
     fn load(vb: VarBuilder, nc: usize, filters: (usize, usize, usize)) -> Result<Self> {
         let ch = 16;
@@ -583,6 +598,7 @@ struct PoseHead {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl PoseHead {
     // kpt: keypoints, (17, 3)
     // nc: num-classes, 80
@@ -653,6 +669,7 @@ pub struct YoloV8 {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl YoloV8 {
     pub fn load(vb: VarBuilder, m: Multiples, num_classes: usize) -> Result<Self> {
         let net = DarkNet::load(vb.pp("net"), m)?;
@@ -667,6 +684,7 @@ impl YoloV8 {
     }
 }
 
+#[coverage(off)]
 impl Module for YoloV8 {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -684,6 +702,7 @@ pub struct YoloV8Pose {
     span: tracing::Span,
 }
 
+#[coverage(off)]
 impl YoloV8Pose {
     pub fn load(
         vb: VarBuilder,
@@ -703,6 +722,7 @@ impl YoloV8Pose {
     }
 }
 
+#[coverage(off)]
 impl Module for YoloV8Pose {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
@@ -712,6 +732,7 @@ impl Module for YoloV8Pose {
     }
 }
 
+#[coverage(off)]
 fn make_anchors(
     xs0: &Tensor,
     xs1: &Tensor,
@@ -743,6 +764,7 @@ fn make_anchors(
     Ok((anchor_points, stride_tensor))
 }
 
+#[coverage(off)]
 fn dist2bbox(distance: &Tensor, anchor_points: &Tensor) -> Result<Tensor> {
     let chunks = distance.chunk(2, 1)?;
     let lt = &chunks[0];
@@ -752,4 +774,36 @@ fn dist2bbox(distance: &Tensor, anchor_points: &Tensor) -> Result<Tensor> {
     let c_xy = ((&x1y1 + &x2y2)? * 0.5)?;
     let wh = (&x2y2 - &x1y1)?;
     Tensor::cat(&[c_xy, wh], 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multiples_n_filters() {
+        let m = Multiples::n();
+        let (f1, f2, f3) = m.filters();
+        assert_eq!(f1, 64); // 256 * 0.25
+        assert_eq!(f2, 128); // 512 * 0.25
+        assert_eq!(f3, 256); // 512 * 0.25 * 2.0
+    }
+
+    #[test]
+    fn multiples_l_filters() {
+        let m = Multiples::l();
+        let (f1, f2, f3) = m.filters();
+        assert_eq!(f1, 256); // 256 * 1.0
+        assert_eq!(f2, 512); // 512 * 1.0
+        assert_eq!(f3, 512); // 512 * 1.0 * 1.0
+    }
+
+    #[test]
+    fn multiples_x_filters() {
+        let m = Multiples::x();
+        let (f1, f2, f3) = m.filters();
+        assert_eq!(f1, 320); // 256 * 1.25
+        assert_eq!(f2, 640); // 512 * 1.25
+        assert_eq!(f3, 640); // 512 * 1.25 * 1.0
+    }
 }

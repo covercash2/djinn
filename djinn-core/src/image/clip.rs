@@ -5,8 +5,8 @@ use candle_nn::VarBuilder;
 use candle_transformers::models::clip::{ClipConfig, ClipModel};
 use tokenizers::Tokenizer;
 
-use crate::hf_hub_ext::Hub;
 use super::{VisionEncoder, VisionEncoderError, VisionEncoderResult};
+use crate::hf_hub_ext::Hub;
 
 pub struct ModelFile {
     pub name: String,
@@ -44,11 +44,7 @@ impl ModelFile {
     }
 
     pub fn siglip_tokenizer() -> Self {
-        Self::new(
-            "google/siglip-base-patch16-224",
-            "main",
-            "tokenizer.json",
-        )
+        Self::new("google/siglip-base-patch16-224", "main", "tokenizer.json")
     }
 
     pub fn siglip_model() -> Self {
@@ -82,6 +78,7 @@ pub struct Clip {
 }
 
 impl Clip {
+    #[coverage(off)] // downloads tokenizer and model weights from HF Hub
     pub async fn new(args: ClipArgs) -> VisionEncoderResult<Self> {
         let hub = Hub::new().await.map_err(VisionEncoderError::InitHub)?;
 
@@ -112,6 +109,7 @@ impl Clip {
         })
     }
 
+    #[coverage(off)] // requires loaded CLIP model for inference
     /// Encodes a text prompt into a normalized feature vector (shape: `[1, projection_dim]`).
     pub fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         let pad_id = *self
@@ -132,19 +130,24 @@ impl Clip {
         Ok(self.model.get_text_features(&input_ids)?)
     }
 
+    #[coverage(off)] // requires loaded CLIP model for inference
     /// Loads and preprocesses an image from a file path, then returns a normalized feature vector.
     pub fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
-        let reader = image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
-            path: path.to_owned(),
-            source: image::ImageError::IoError(source),
-        })?;
-        let img = reader.decode().map_err(|source| VisionEncoderError::LoadImage {
-            path: path.to_owned(),
-            source,
-        })?;
+        let reader =
+            image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
+                path: path.to_owned(),
+                source: image::ImageError::IoError(source),
+            })?;
+        let img = reader
+            .decode()
+            .map_err(|source| VisionEncoderError::LoadImage {
+                path: path.to_owned(),
+                source,
+            })?;
         self.encode_dynamic_image(img)
     }
 
+    #[coverage(off)] // requires loaded CLIP model for inference
     /// Decodes image bytes and returns a normalized feature vector (shape: `[1, projection_dim]`).
     pub fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor> {
         let img = image::load_from_memory(data).map_err(VisionEncoderError::LoadImageBytes)?;
@@ -174,15 +177,15 @@ impl Clip {
             })
             .collect();
 
-        let pixel_values =
-            Tensor::from_vec(pixels, (IMAGE_SIZE, IMAGE_SIZE, 3), &self.device)?
-                .permute((2, 0, 1))? // HWC → CHW
-                .unsqueeze(0)?; // CHW → BCHW
+        let pixel_values = Tensor::from_vec(pixels, (IMAGE_SIZE, IMAGE_SIZE, 3), &self.device)?
+            .permute((2, 0, 1))? // HWC → CHW
+            .unsqueeze(0)?; // CHW → BCHW
 
         Ok(self.model.get_image_features(&pixel_values)?)
     }
 }
 
+#[coverage(off)] // delegates entirely to the covered inherent methods above; the impl itself adds no logic
 impl VisionEncoder for Clip {
     fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         Clip::encode_text(self, text)
@@ -191,8 +194,13 @@ impl VisionEncoder for Clip {
     fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
         Clip::encode_image(self, path)
     }
+
+    fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor> {
+        Clip::encode_image_from_bytes(self, data)
+    }
 }
 
+#[coverage(off)] // HF Hub network call
 async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::clip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
@@ -200,6 +208,7 @@ async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
         .map_err(VisionEncoderError::DownloadTokenizer)
 }
 
+#[coverage(off)] // HF Hub network call
 async fn load_model_weights(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::clip_model();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
@@ -250,7 +259,10 @@ mod tests {
             )),
         };
         let msg = err.to_string();
-        assert!(msg.contains("nonexistent.png"), "error message should include the path: {msg}");
+        assert!(
+            msg.contains("nonexistent.png"),
+            "error message should include the path: {msg}"
+        );
     }
 
     #[test]

@@ -14,11 +14,17 @@ tui:
 schema:
 	cargo xtask schema
 
-# check for typos, lint, and test
+# check for typos, lint, test, and enforce coverage threshold
 check:
 	typos
+	cargo fmt --check
 	cargo clippy -- -D warnings
-	cargo test --all
+	cargo llvm-cov nextest --all --fail-under-lines 30
+
+# generate HTML coverage report (opens at target/llvm-cov/html/index.html)
+coverage:
+	cargo llvm-cov nextest --all --html
+	@echo "Report: target/llvm-cov/html/index.html"
 
 # get the contents of the ollama TUI log
 open_log:

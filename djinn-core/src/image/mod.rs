@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use candle_core::{DType, Device, Result, Tensor};
 use crate::hf_hub_ext::HubError;
+use candle_core::{DType, Device, Result, Tensor};
 
 pub mod clip;
 pub mod config;
@@ -58,9 +58,10 @@ pub type VisionEncoderResult<T> = std::result::Result<T, VisionEncoderError>;
 /// feature vectors, allowing a single downstream similarity computation.
 ///
 /// Errors are reported as [`VisionEncoderResult`] / [`VisionEncoderError`].
-pub trait VisionEncoder {
+pub trait VisionEncoder: Send + Sync {
     fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor>;
     fn encode_image(&self, path: &std::path::Path) -> VisionEncoderResult<Tensor>;
+    fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor>;
 }
 
 /// Saves an image to disk using the image crate, this expects an input with shape
@@ -87,7 +88,8 @@ pub fn load_images<P: AsRef<std::path::Path>>(
     paths: &[P],
     image_size: usize,
 ) -> anyhow::Result<Tensor> {
-    paths.iter()
+    paths
+        .iter()
         .map(|p| load_image(p, image_size))
         .collect::<anyhow::Result<Vec<Tensor>>>()
         .and_then(|images| Tensor::stack(&images, 0).map_err(|e| anyhow::anyhow!(e)))
@@ -182,6 +184,11 @@ mod tests {
                 Ok(Tensor::new(self.image_vec.as_slice(), &Device::Cpu)
                     .expect("test tensor creation should not fail"))
             }
+
+            fn encode_image_from_bytes(&self, _data: &[u8]) -> VisionEncoderResult<Tensor> {
+                Ok(Tensor::new(self.image_vec.as_slice(), &Device::Cpu)
+                    .expect("test tensor creation should not fail"))
+            }
         }
 
         let encoder = MockEncoder {
@@ -194,6 +201,9 @@ mod tests {
 
         // Identical vectors → cosine similarity of 1.0
         let sim = crate::tensor_ext::cosine_similarity(&text_feat, &image_feat).unwrap();
-        assert!((sim - 1.0).abs() < 1e-5, "expected similarity ~1.0, got {sim}");
+        assert!(
+            (sim - 1.0).abs() < 1e-5,
+            "expected similarity ~1.0, got {sim}"
+        );
     }
 }

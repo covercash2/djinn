@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Result;
 
-use crate::device::Device;
 use super::gen::StableDiffusionVersion;
+use crate::device::Device;
 
 const CONFIG_FILENAME: &str = "image-gen.toml";
 
@@ -72,28 +72,49 @@ pub struct GenConfig {
     #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_WIDTH"))]
     pub width: Option<usize>,
     /// Output image file path.
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_FINAL_IMAGE", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_FINAL_IMAGE", value_name = "FILE")
+    )]
     pub final_image: Option<PathBuf>,
     /// Sliced attention size (0 = automatic).
     #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_SLICED_ATTENTION_SIZE"))]
     pub sliced_attention_size: Option<usize>,
     /// Path to a local UNet weight file (.safetensors). Skips HF Hub download.
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_UNET_WEIGHTS", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_UNET_WEIGHTS", value_name = "FILE")
+    )]
     pub unet_weights: Option<String>,
     /// Path to a local primary CLIP weight file (.safetensors).
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_CLIP_WEIGHTS", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_CLIP_WEIGHTS", value_name = "FILE")
+    )]
     pub clip_weights: Option<String>,
     /// Path to a local secondary CLIP weight file (.safetensors, SDXL only).
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_CLIP2_WEIGHTS", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_CLIP2_WEIGHTS", value_name = "FILE")
+    )]
     pub clip2_weights: Option<String>,
     /// Path to a local VAE weight file (.safetensors).
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_VAE_WEIGHTS", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_VAE_WEIGHTS", value_name = "FILE")
+    )]
     pub vae_weights: Option<String>,
     /// Path to a local tokenizer file.
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_TOKENIZER", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_TOKENIZER", value_name = "FILE")
+    )]
     pub tokenizer: Option<String>,
     /// Path to an image used to initialize the latents (img2img / inpainting).
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_IMG2IMG", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_IMG2IMG", value_name = "FILE")
+    )]
     pub img2img: Option<PathBuf>,
     /// img2img transformation strength in the range 0.0–1.0.
     #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_IMG2IMG_STRENGTH"))]
@@ -102,7 +123,10 @@ pub struct GenConfig {
     #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_SEED"))]
     pub seed: Option<u64>,
     /// Path to an inpainting mask image.
-    #[cfg_attr(feature = "clap", arg(long, env = "DJINN_SD_MASK_PATH", value_name = "FILE"))]
+    #[cfg_attr(
+        feature = "clap",
+        arg(long, env = "DJINN_SD_MASK_PATH", value_name = "FILE")
+    )]
     pub mask_path: Option<String>,
 }
 
@@ -175,8 +199,10 @@ mod tests {
 
     #[test]
     fn nonexistent_path_returns_default() {
-        let cfg =
-            load(Some(std::path::Path::new("/tmp/djinn-nonexistent-config-xyz.toml"))).unwrap();
+        let cfg = load(Some(std::path::Path::new(
+            "/tmp/djinn-nonexistent-config-xyz.toml",
+        )))
+        .unwrap();
         assert!(cfg.prompt.is_none());
     }
 }

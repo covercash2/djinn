@@ -52,16 +52,21 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect::<Vec<_>>();
-        for name in ["CompleteRequest", "CompleteResponse", "ClipRequest", "ClipResponse", "RunConfig"] {
+        for name in [
+            "CompleteRequest",
+            "CompleteResponse",
+            "ClipRequest",
+            "ClipResponse",
+            "RunConfig",
+        ] {
             assert!(schemas.contains(&name), "missing schema: {name}");
         }
     }
 
     #[tokio::test]
     async fn openapi_json_endpoint_returns_200() {
-        let app = axum::Router::new().merge(
-            SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()),
-        );
+        let app = axum::Router::new()
+            .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()));
 
         let response = app
             .oneshot(
@@ -77,7 +82,8 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).expect("response is valid JSON");
+        let json: serde_json::Value =
+            serde_json::from_slice(&body).expect("response is valid JSON");
         assert_eq!(json["info"]["title"], "djinn-server");
     }
 }

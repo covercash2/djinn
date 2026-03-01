@@ -1,3 +1,6 @@
+// HuggingFace Hub network access — requires live internet and auth token. Excluded from coverage measurement.
+#![coverage(off)]
+
 use std::path::PathBuf;
 
 use crate::error::Error;
@@ -39,7 +42,8 @@ impl Hub {
         repo.get(file).await.map_err(HubError::GetModel)
     }
 
-    #[allow(dead_code)] pub async fn get_model_safetensors(
+    #[allow(dead_code)]
+    pub async fn get_model_safetensors(
         &self,
         name: String,
         revision: Option<String>,

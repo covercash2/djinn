@@ -5,10 +5,9 @@ use candle_nn::VarBuilder;
 use candle_transformers::models::siglip::{Config as SigLipConfig, Model as SigLipModel};
 use tokenizers::Tokenizer;
 
-use crate::hf_hub_ext::Hub;
 use super::clip::ModelFile;
 use super::{VisionEncoder, VisionEncoderError, VisionEncoderResult};
-
+use crate::hf_hub_ext::Hub;
 
 pub struct SigLipArgs {
     /// Path to a local tokenizer file; downloads from HF Hub when the path does not exist.
@@ -36,6 +35,7 @@ pub struct SigLip {
 }
 
 impl SigLip {
+    #[coverage(off)] // downloads tokenizer and model weights from HF Hub
     pub async fn new(args: SigLipArgs) -> VisionEncoderResult<Self> {
         let hub = Hub::new().await.map_err(VisionEncoderError::InitHub)?;
 
@@ -66,6 +66,7 @@ impl SigLip {
         })
     }
 
+    #[coverage(off)] // requires loaded SigLIP model for inference
     /// Encodes a text prompt into a feature vector (shape: `[1, hidden_size]`).
     pub fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         let encoding = self
@@ -80,17 +81,32 @@ impl SigLip {
         Ok(self.model.get_text_features(&input_ids)?)
     }
 
+    #[coverage(off)] // requires loaded SigLIP model for inference
+    /// Decodes image bytes and returns a feature vector (shape: `[1, hidden_size]`).
+    pub fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor> {
+        let img = image::load_from_memory(data).map_err(VisionEncoderError::LoadImageBytes)?;
+        self.encode_dynamic_image(img)
+    }
+
+    #[coverage(off)] // requires loaded SigLIP model for inference
     /// Loads and preprocesses an image, then returns a feature vector (shape: `[1, hidden_size]`).
     pub fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
-        let reader = image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
-            path: path.to_owned(),
-            source: image::ImageError::IoError(source),
-        })?;
-        let img = reader.decode().map_err(|source| VisionEncoderError::LoadImage {
-            path: path.to_owned(),
-            source,
-        })?;
+        let reader =
+            image::ImageReader::open(path).map_err(|source| VisionEncoderError::LoadImage {
+                path: path.to_owned(),
+                source: image::ImageError::IoError(source),
+            })?;
+        let img = reader
+            .decode()
+            .map_err(|source| VisionEncoderError::LoadImage {
+                path: path.to_owned(),
+                source,
+            })?;
+        self.encode_dynamic_image(img)
+    }
 
+    #[coverage(off)] // requires loaded SigLIP model (calls self.model.get_image_features)
+    fn encode_dynamic_image(&self, img: image::DynamicImage) -> VisionEncoderResult<Tensor> {
         let img = img
             .resize_to_fill(
                 IMAGE_SIZE as u32,
@@ -113,15 +129,15 @@ impl SigLip {
             })
             .collect();
 
-        let pixel_values =
-            Tensor::from_vec(pixels, (IMAGE_SIZE, IMAGE_SIZE, 3), &self.device)?
-                .permute((2, 0, 1))? // HWC → CHW
-                .unsqueeze(0)?; // CHW → BCHW
+        let pixel_values = Tensor::from_vec(pixels, (IMAGE_SIZE, IMAGE_SIZE, 3), &self.device)?
+            .permute((2, 0, 1))? // HWC → CHW
+            .unsqueeze(0)?; // CHW → BCHW
 
         Ok(self.model.get_image_features(&pixel_values)?)
     }
 }
 
+#[coverage(off)] // delegates entirely to the covered inherent methods above
 impl VisionEncoder for SigLip {
     fn encode_text(&self, text: &str) -> VisionEncoderResult<Tensor> {
         SigLip::encode_text(self, text)
@@ -130,8 +146,13 @@ impl VisionEncoder for SigLip {
     fn encode_image(&self, path: &Path) -> VisionEncoderResult<Tensor> {
         SigLip::encode_image(self, path)
     }
+
+    fn encode_image_from_bytes(&self, data: &[u8]) -> VisionEncoderResult<Tensor> {
+        SigLip::encode_image_from_bytes(self, data)
+    }
 }
 
+#[coverage(off)] // HF Hub network call
 async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::siglip_tokenizer();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
@@ -139,6 +160,7 @@ async fn load_tokenizer(hub: &Hub) -> VisionEncoderResult<PathBuf> {
         .map_err(VisionEncoderError::DownloadTokenizer)
 }
 
+#[coverage(off)] // HF Hub network call
 async fn load_model_weights(hub: &Hub) -> VisionEncoderResult<PathBuf> {
     let mf = ModelFile::siglip_model();
     hub.get_model_file(mf.name, mf.revision, &mf.file)
@@ -160,7 +182,10 @@ mod tests {
     fn pixel_value_0_normalizes_to_minus_one() {
         // With mean=0.5 and std=0.5: (0/255 - 0.5) / 0.5 = -1.0
         let result = normalize_pixel(0, SIGLIP_MEAN[0], SIGLIP_STD[0]);
-        assert!((result - (-1.0)).abs() < 1e-5, "expected -1.0, got {result}");
+        assert!(
+            (result - (-1.0)).abs() < 1e-5,
+            "expected -1.0, got {result}"
+        );
     }
 
     #[test]

@@ -113,8 +113,10 @@ impl Default for RunConfig {
 
 pub fn load_config(config_path: impl AsRef<Path>) -> config::Result<RunConfig> {
     let path = config_path.as_ref();
-    let contents = std::fs::read_to_string(path)
-        .map_err(|source| config::Error::Read { path: path.to_owned(), source })?;
+    let contents = std::fs::read_to_string(path).map_err(|source| config::Error::Read {
+        path: path.to_owned(),
+        source,
+    })?;
     config::validate_and_load::<RunConfig>(&contents, path)
 }
 
