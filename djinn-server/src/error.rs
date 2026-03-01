@@ -46,3 +46,34 @@ impl IntoResponse for Error {
         (status, Json(ErrorResponse { message })).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::response::IntoResponse;
+    use djinn_core::image::VisionEncoderError;
+
+    #[test]
+    fn core_error_returns_500() {
+        let err = Error::Core(djinn_core::Error::Anyhow(anyhow::anyhow!("test")));
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn vision_encoder_error_returns_500() {
+        let err = Error::VisionEncoder(VisionEncoderError::MissingPadToken);
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn base64_error_returns_400() {
+        let decode_err =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, "not-base64!!!")
+                .unwrap_err();
+        let err = Error::Base64(decode_err);
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+}

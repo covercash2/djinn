@@ -1,10 +1,10 @@
 use std::convert::Infallible;
-use std::ops::DerefMut;
 use std::sync::Arc;
 
 use axum::extract::State;
 use axum::response::sse::{Event, Sse};
 use djinn_core::lm::config::RunConfig;
+use djinn_core::lm::LanguageModel;
 use futures::{pin_mut, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -12,7 +12,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{instrument, Instrument};
 
 use crate::error::{Error, Result};
-use crate::server::{Context, Json};
+use crate::server::Json;
 
 pub const ROUTE_COMPLETE: &str = "/complete";
 pub const ROUTE_COMPLETE_STREAM: &str = "/complete/stream";
@@ -39,16 +39,16 @@ pub struct CompleteResponse {
 /// Each token is sent as `data: <token>`.  The final event is
 /// `event: done` with an empty data field.  On error the event name
 /// is `error` and the data contains the error message.
-#[instrument(skip(model_context))]
+#[instrument(skip(model))]
 pub async fn stream_complete(
-    State(model_context): State<Arc<Mutex<Context>>>,
+    State(model): State<Arc<Mutex<Box<dyn LanguageModel>>>>,
     Json(payload): Json<CompleteRequest>,
 ) -> Sse<impl Stream<Item = std::result::Result<Event, Infallible>>> {
     let (tx, rx) = tokio::sync::mpsc::channel(32);
 
     tokio::spawn(async move {
-        let mut lock = model_context.lock().await;
-        let token_stream = lock.model.run(payload.prompt, payload.config);
+        let mut lock = model.lock().await;
+        let token_stream = lock.run(payload.prompt, payload.config);
         pin_mut!(token_stream);
 
         while let Some(result) = token_stream.next().await {
@@ -67,9 +67,7 @@ pub async fn stream_complete(
             }
         }
 
-        let _ = tx
-            .send(Ok(Event::default().event("done").data("")))
-            .await;
+        let _ = tx.send(Ok(Event::default().event("done").data(""))).await;
     });
 
     Sse::new(ReceiverStream::new(rx))
@@ -87,49 +85,38 @@ pub async fn stream_complete(
     ),
     tag = "lm",
 )]
-#[instrument(skip(model_context))]
+#[instrument(skip(model))]
 pub async fn complete(
-    State(model_context): State<Arc<Mutex<Context>>>,
+    State(model): State<Arc<Mutex<Box<dyn LanguageModel>>>>,
     Json(payload): Json<CompleteRequest>,
 ) -> Result<Json<CompleteResponse>> {
     let span = tracing::info_span!("complete JSON");
-
-    let mut lock = model_context.lock().instrument(span).await;
+    let mut lock = model.lock().instrument(span).await;
     tracing::info!("got model lock");
-
-    let context: &mut Context = lock.deref_mut();
-
-    let response = run_model(context, payload).await?;
-
+    let response = run_model(&mut lock, payload).await?;
     Ok(Json(response))
 }
 
-#[instrument(skip(model_context))]
+#[instrument(skip(model))]
 async fn run_model(
-    model_context: &mut Context,
+    model: &mut Box<dyn LanguageModel>,
     request: CompleteRequest,
 ) -> Result<CompleteResponse> {
     let prompt = request.prompt;
+    let stream = model.run(prompt.clone(), request.config);
 
-    let config = request.config;
-
-    // setup output stream
-    let stream = model_context.model.run(prompt.clone(), config);
-
-    // consume the stream
     pin_mut!(stream);
     let mut output = String::new();
     while let Some(value) = stream.next().await {
         value
-            .map(|string_token| {
-                output.push_str(&string_token);
-                tracing::trace!("{string_token}");
+            .map(|token| {
+                output.push_str(&token);
+                tracing::trace!("{token}");
             })
             .map_err(Error::from)?;
     }
+
     let response = CompleteResponse { prompt, output };
-
     tracing::info!("sending response: {response:?}");
-
     Ok(response)
 }

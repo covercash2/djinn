@@ -3,7 +3,7 @@ import { createRequire } from 'module';
 
 // Load app.js via CommonJS require so the module.exports guard is hit.
 const require = createRequire(import.meta.url);
-const { processEvent, readSseStream, fetchStream } = require('./app.js');
+const { processEvent, readSseStream, fetchStream } = require('../assets/app.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

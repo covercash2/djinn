@@ -1,3 +1,6 @@
+// YOLOv8 args — requires model weights at runtime. Excluded from coverage measurement.
+#![coverage(off)]
+
 use candle_core::{Module, Result, Tensor};
 use candle_nn::VarBuilder;
 use clap::{Parser, ValueEnum};

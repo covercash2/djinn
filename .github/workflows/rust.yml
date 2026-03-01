@@ -18,14 +18,43 @@ jobs:
     - name: Install nightly toolchain
       uses: dtolnay/rust-toolchain@nightly
       with:
-        components: clippy
+        components: clippy,rustfmt,llvm-tools
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-nextest,cargo-llvm-cov
     - name: typos
       uses: crate-ci/typos@v1.27.3
+    - name: fmt
+      run: cargo fmt --check
     - name: clippy
       run: cargo clippy -- -D warnings
     - name: Check schema files are up to date
       run: |
         cargo xtask schema
         git diff --exit-code configs/
-    - name: test
-      run: cargo test --all
+    - name: coverage
+      run: cargo llvm-cov nextest --all --fail-under-lines 30
+    - name: generate lcov
+      run: cargo llvm-cov --no-run --lcov --output-path lcov.info
+    - name: upload coverage
+      uses: codecov/codecov-action@v5
+      with:
+        files: lcov.info
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+
+  js-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: djinn-server/package-lock.json
+    - name: install
+      run: npm ci
+      working-directory: djinn-server
+    - name: vitest
+      run: npm test
+      working-directory: djinn-server

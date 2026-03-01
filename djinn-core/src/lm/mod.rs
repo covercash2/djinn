@@ -1,5 +1,6 @@
 //! Language Models and configurations
 use std::path::PathBuf;
+use std::pin::Pin;
 
 use config::RunConfig;
 use futures::Stream;
@@ -11,16 +12,16 @@ pub mod config;
 pub mod mistral;
 pub mod model;
 
-pub trait Lm {
-    // type Config;
-    type Weights;
-
+/// Abstraction over any language model that can stream token completions.
+///
+/// Implementors must be `Send + Sync` so they can live behind `Arc<Mutex<Context>>`.
+/// The returned stream must also be `Send` so it can be polled across tokio tasks.
+pub trait LanguageModel: Send + Sync {
     fn run(
         &mut self,
         prompt: String,
         config: RunConfig,
-        model: Self::Weights,
-    ) -> impl Stream<Item = Result<String>> + '_;
+    ) -> Pin<Box<dyn Stream<Item = Result<String>> + Send + '_>>;
 }
 
 /// Where to load the model from,

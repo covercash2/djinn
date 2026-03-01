@@ -1,5 +1,8 @@
 # `djinn-rs`
 
+[![CI](https://github.com/covercash2/djinn/actions/workflows/rust.yml/badge.svg)](https://github.com/covercash2/djinn/actions/workflows/rust.yml)
+[![codecov](https://codecov.io/gh/covercash2/djinn/graph/badge.svg)](https://codecov.io/gh/covercash2/djinn)
+
 a Rust playground
 for running language models
 and some other machine learning models.
@@ -22,27 +25,33 @@ core ML functionality and model implementations.
 
 an HTTP server
 with an API
-and HTMX front-end
+and streaming front-end
 for running models
 
 ### Frontend
 
-`djinn-server` ships a small HTMX-powered UI served from `./djinn-server/assets/`.
+`djinn-server` ships a small UI served from `./djinn-server/assets/`.
 
 | Path | Description |
 |------|-------------|
-| `/` | Main page — prompt input + live completion via HTMX |
+| `/` | Main page — prompt input + streaming completion |
 | `/swagger-ui` | Interactive OpenAPI docs |
 | `/health-check` | Liveness probe |
 
-**how it works**
+**How it works**
 
 1. `index.html` is served as a static file by `ServeDir`.
-2. the form POSTs to `/ui/complete` (form-encoded).
-3. the server runs inference and returns an HTML fragment.
-4. HTMX swaps the fragment into `#response` without a page reload.
+2. `app.js` intercepts form submission and POSTs the prompt as JSON to `/complete/stream`.
+3. The server streams tokens back as Server-Sent Events.
+4. Tokens are appended to the response area as they arrive.
 
-**HTMX version**: loaded from the [unpkg CDN](https://unpkg.com/htmx.org@2.0.4).
+# development
+
+```sh
+just check       # typos, clippy, tests
+just coverage    # HTML coverage report → target/llvm-cov/html/index.html
+just schema      # regenerate JSON Schema files after config struct changes
+```
 
 # examples
 

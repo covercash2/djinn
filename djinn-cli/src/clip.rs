@@ -26,6 +26,7 @@ pub struct Args {
     pub device: Device,
 }
 
+#[coverage(off)] // loads CLIP model from HF Hub and runs inference
 pub async fn run(args: Args) -> anyhow::Result<()> {
     let clip_args = ClipArgs {
         tokenizer: args.tokenizer.unwrap_or_default(),

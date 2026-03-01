@@ -13,8 +13,8 @@ use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt as _;
 
-use crate::device::Device;
 use super::error::Error;
+use crate::device::Device;
 
 /// CLI arguments for Stable Diffusion image generation.
 ///
@@ -109,7 +109,17 @@ pub struct Args {
 }
 
 /// Supported Stable Diffusion model versions.
-#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    clap::ValueEnum,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum StableDiffusionVersion {
     /// Stable Diffusion v1.5
@@ -238,6 +248,7 @@ enum ModelFile {
     Unet,
 }
 
+#[coverage(off)] // downloads model files from HF Hub
 impl ModelFile {
     /// download the model file from HuggingFace Hub
     fn get(
@@ -340,6 +351,7 @@ pub fn output_filename(
 
 /// decode the latents and save the generated image.
 /// save the generated image to disk.
+#[coverage(off)] // requires VAE model and GPU tensors
 #[builder]
 fn save_image(
     vae: &AutoEncoderKL,
@@ -371,6 +383,7 @@ fn save_image(
 ///
 /// When `use_guide_scale` is true, concatenates unconditional and conditional
 /// embeddings along the batch dimension for classifier-free guidance.
+#[coverage(off)] // requires CLIP model weights and HF Hub tokenizer download
 #[builder]
 fn text_embeddings(
     prompt: &str,
@@ -392,17 +405,24 @@ fn text_embeddings(
         ModelFile::Tokenizer2
     };
     let tokenizer_path = tokenizer_file.get(tokenizer, sd_version, use_f16)?;
-    let tokenizer = Tokenizer::from_file(&tokenizer_path)
-        .map_err(|source| Error::TokenizerLoad { path: tokenizer_path.clone(), source })?;
+    let tokenizer =
+        Tokenizer::from_file(&tokenizer_path).map_err(|source| Error::TokenizerLoad {
+            path: tokenizer_path.clone(),
+            source,
+        })?;
     let pad_id = match &sd_config.clip.pad_with {
         Some(padding) => *tokenizer
             .get_vocab(true)
             .get(padding.as_str())
-            .ok_or_else(|| Error::MissingToken { token: padding.to_string() })?,
+            .ok_or_else(|| Error::MissingToken {
+                token: padding.to_string(),
+            })?,
         None => *tokenizer
             .get_vocab(true)
             .get("<|endoftext|>")
-            .ok_or_else(|| Error::MissingToken { token: "<|endoftext|>".to_string() })?,
+            .ok_or_else(|| Error::MissingToken {
+                token: "<|endoftext|>".to_string(),
+            })?,
     };
     tracing::info!("Running with prompt \"{prompt}\".");
     let mut tokens = tokenizer
@@ -468,6 +488,7 @@ fn text_embeddings(
 }
 
 /// open an image from a file and load it into a [`Tensor`].
+#[coverage(off)] // requires an image file on disk and candle tensor ops
 fn image_preprocess(path: impl AsRef<Path>) -> anyhow::Result<Tensor> {
     let img = image::ImageReader::open(path)?.decode()?;
     let (height, width) = (img.height() as usize, img.width() as usize);
@@ -490,6 +511,7 @@ fn image_preprocess(path: impl AsRef<Path>) -> anyhow::Result<Tensor> {
 
 /// convert the mask image to a single channel tensor.
 /// also ensure the image is a multiple of 32 in both dimensions.
+#[coverage(off)] // requires an image file on disk and candle tensor ops
 fn mask_preprocess<T: AsRef<std::path::Path>>(path: T) -> anyhow::Result<Tensor> {
     let img = image::open(path)?.to_luma8();
     let (new_width, new_height) = {
@@ -517,6 +539,7 @@ fn mask_preprocess<T: AsRef<std::path::Path>>(path: T) -> anyhow::Result<Tensor>
 
 /// Generates the mask latents, scaled mask and mask_4 for inpainting. Returns a tuple of None if inpainting is not
 /// being used.
+#[coverage(off)] // requires VAE model and GPU tensors
 #[builder]
 fn inpainting_tensors(
     sd_version: StableDiffusionVersion,
@@ -571,44 +594,57 @@ fn inpainting_tensors(
 
 impl Args {
     /// Run the full Stable Diffusion pipeline and write the output image(s) to disk.
+    #[coverage(off)] // full SD pipeline — requires model weights, HF Hub, and GPU
     pub fn run(self) -> anyhow::Result<()> {
         // Load file config from the XDG path (or --config-file override).
         // clap has already merged env vars into `self`, so the priority chain is:
         //   config file  <  env var (via clap)  <  explicit CLI flag
         let file_config = super::config::load(self.config_file.as_deref())?;
 
-        let prompt = self.prompt
-            .or(file_config.prompt)
-            .ok_or_else(|| anyhow::anyhow!(
+        let prompt = self.prompt.or(file_config.prompt).ok_or_else(|| {
+            anyhow::anyhow!(
                 "prompt is required — pass --prompt, set DJINN_SD_PROMPT, \
                  or add `prompt = \"...\"` to the config file"
-            ))?;
-        let uncond_prompt = self.uncond_prompt.or(file_config.uncond_prompt).unwrap_or_default();
-        let device      = self.device.or(file_config.device).unwrap_or_default();
-        let height      = self.height.or(file_config.height);
-        let width       = self.width.or(file_config.width);
-        let n_steps     = self.n_steps.or(file_config.n_steps);
-        let tokenizer   = self.tokenizer.or(file_config.tokenizer);
-        let final_image = self.final_image.or(file_config.final_image)
+            )
+        })?;
+        let uncond_prompt = self
+            .uncond_prompt
+            .or(file_config.uncond_prompt)
+            .unwrap_or_default();
+        let device = self.device.or(file_config.device).unwrap_or_default();
+        let height = self.height.or(file_config.height);
+        let width = self.width.or(file_config.width);
+        let n_steps = self.n_steps.or(file_config.n_steps);
+        let tokenizer = self.tokenizer.or(file_config.tokenizer);
+        let final_image = self
+            .final_image
+            .or(file_config.final_image)
             .unwrap_or_else(|| PathBuf::from("sd_final.png"));
-        let sliced_attention_size = self.sliced_attention_size.or(file_config.sliced_attention_size);
+        let sliced_attention_size = self
+            .sliced_attention_size
+            .or(file_config.sliced_attention_size);
         let num_samples = self.num_samples.or(file_config.num_samples).unwrap_or(1);
-        let bsize       = self.bsize.or(file_config.bsize).unwrap_or(1);
-        let sd_version  = self.sd_version.or(file_config.sd_version)
+        let bsize = self.bsize.or(file_config.bsize).unwrap_or(1);
+        let sd_version = self
+            .sd_version
+            .or(file_config.sd_version)
             .unwrap_or(StableDiffusionVersion::V2_1);
-        let clip_weights  = self.clip_weights.or(file_config.clip_weights);
+        let clip_weights = self.clip_weights.or(file_config.clip_weights);
         let clip2_weights = self.clip2_weights.or(file_config.clip2_weights);
-        let vae_weights   = self.vae_weights.or(file_config.vae_weights);
-        let unet_weights  = self.unet_weights.or(file_config.unet_weights);
-        let tracing       = self.tracing;
-        let use_f16       = self.use_f16 || file_config.use_f16.unwrap_or(false);
-        let guidance_scale    = self.guidance_scale.or(file_config.guidance_scale);
-        let use_flash_attn    = self.use_flash_attn || file_config.use_flash_attn.unwrap_or(false);
-        let mask_path         = self.mask_path.or(file_config.mask_path);
-        let img2img           = self.img2img.or(file_config.img2img);
-        let img2img_strength  = self.img2img_strength.or(file_config.img2img_strength).unwrap_or(0.8);
-        let seed              = self.seed.or(file_config.seed);
-        let only_update_masked  = self.only_update_masked;
+        let vae_weights = self.vae_weights.or(file_config.vae_weights);
+        let unet_weights = self.unet_weights.or(file_config.unet_weights);
+        let tracing = self.tracing;
+        let use_f16 = self.use_f16 || file_config.use_f16.unwrap_or(false);
+        let guidance_scale = self.guidance_scale.or(file_config.guidance_scale);
+        let use_flash_attn = self.use_flash_attn || file_config.use_flash_attn.unwrap_or(false);
+        let mask_path = self.mask_path.or(file_config.mask_path);
+        let img2img = self.img2img.or(file_config.img2img);
+        let img2img_strength = self
+            .img2img_strength
+            .or(file_config.img2img_strength)
+            .unwrap_or(0.8);
+        let seed = self.seed.or(file_config.seed);
+        let only_update_masked = self.only_update_masked;
         let intermediary_images = self.intermediary_images;
 
         if !(0. ..=1.).contains(&img2img_strength) {
@@ -869,5 +905,42 @@ impl Args {
                 .call()?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sd_repo_ids() {
+        assert_eq!(
+            StableDiffusionVersion::V1_5.repo(),
+            "runwayml/stable-diffusion-v1-5"
+        );
+        assert_eq!(
+            StableDiffusionVersion::Xl.repo(),
+            "stabilityai/stable-diffusion-xl-base-1.0"
+        );
+        assert_eq!(
+            StableDiffusionVersion::Turbo.repo(),
+            "stabilityai/sdxl-turbo"
+        );
+        assert_eq!(
+            StableDiffusionVersion::XlInpaint.repo(),
+            "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
+        );
+    }
+
+    #[test]
+    fn sd_unet_file_f16_flag() {
+        assert_eq!(
+            StableDiffusionVersion::V1_5.unet_file(false),
+            "unet/diffusion_pytorch_model.safetensors"
+        );
+        assert_eq!(
+            StableDiffusionVersion::V1_5.unet_file(true),
+            "unet/diffusion_pytorch_model.fp16.safetensors"
+        );
     }
 }

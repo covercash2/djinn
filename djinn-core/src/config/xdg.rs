@@ -46,8 +46,10 @@ where
         return Ok(T::default());
     }
 
-    let contents = std::fs::read_to_string(&config_path)
-        .map_err(|source| Error::Read { path: config_path.clone(), source })?;
+    let contents = std::fs::read_to_string(&config_path).map_err(|source| Error::Read {
+        path: config_path.clone(),
+        source,
+    })?;
 
     validate_and_load::<T>(&contents, &config_path)
 }

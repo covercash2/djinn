@@ -4,13 +4,13 @@
   "type": "object",
   "required": [
     "model_config",
-    "socker_addr"
+    "socket_addr"
   ],
   "properties": {
     "model_config": {
       "type": "string"
     },
-    "socker_addr": {
+    "socket_addr": {
       "type": "string"
     }
   }

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(just check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo doc -p djinn-core --no-deps)",
+      "Bash(head:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo run:*)",
+      "Bash(curl -s \"https://huggingface.co/api/models/openai/clip-vit-base-patch32?blobs=true\" | python3 -c \"\nimport json, sys\ndata = json.load\\(sys.stdin\\)\nfor f in data.get\\('siblings', []\\):\n    print\\(f['rfilename']\\)\n\" 2>&1)",
+      "Bash(cargo test:*)",
+      "Bash(jj st:*)",
+      "Bash(jj log:*)",
+      "Bash(jj file:*)",
+      "Bash(jj diff:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(cargo build:*)",
+      "Bash(typos:*)",
+      "Bash(cargo xtask:*)",
+      "Bash(jj show:*)",
+      "Bash(jj status:*)",
+      "Bash(jj rebase:*)",
+      "Bash(gh api:*)",
+      "Bash(gh search:*)",
+      "Bash(cargo nextest *)",
+      "Bash(git fetch *)",
+      "Bash(npm test *)"
+    ]
+  },
+  "outputStyle": "default"
+}

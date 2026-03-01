@@ -21,10 +21,22 @@ use crate::error::Result;
 use crate::hf_hub_ext::hub_load_safetensors;
 use crate::token_output_stream::TokenOutputStream;
 
-use super::config::RunConfig;
+use super::{config::RunConfig, LanguageModel};
 
 /// The variant of the model to be loaded
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    ValueEnum,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelArchitecture {
     /// Main Mistral version
@@ -51,6 +63,7 @@ pub enum Model {
     },
 }
 
+#[coverage(off)] // requires constructing Model, which needs loaded weights
 impl Model {
     /// Get the End of Sequence token for a given model
     pub fn eos_token(&self) -> &'static str {
@@ -63,6 +76,7 @@ impl Model {
 }
 
 impl ModelArchitecture {
+    #[coverage(off)] // requires ApiRepo (HF Hub) and GPU device
     pub async fn load_weights(
         &self,
         repo: &ApiRepo,
@@ -84,6 +98,7 @@ impl ModelArchitecture {
         .to_string()
     }
 
+    #[coverage(off)] // HF Hub network call
     pub async fn hf_files(&self, repo: &ApiRepo) -> anyhow::Result<Vec<PathBuf>> {
         match self {
             ModelArchitecture::Mistral => {
@@ -97,6 +112,7 @@ impl ModelArchitecture {
         }
     }
 
+    #[coverage(off)] // HF Hub + VarBuilder — requires model weights
     pub async fn load_model<P: AsRef<Path>>(
         &self,
         files: &[P],
@@ -146,6 +162,7 @@ impl ModelArchitecture {
     }
 }
 
+#[coverage(off)] // requires loaded model weights for forward pass and kv-cache ops
 impl Model {
     #[instrument(skip(self))]
     fn forward(
@@ -204,6 +221,7 @@ pub struct ModelContext {
     device: Device,
 }
 
+#[coverage(off)] // requires loaded tokenizer + model weights
 impl ModelContext {
     pub fn run(
         &mut self,
@@ -282,5 +300,42 @@ impl ModelContext {
                 generated_tokens as f64 / dt.as_secs_f64(),
             );
         }
+    }
+}
+
+#[coverage(off)] // pure delegation to ModelContext::run above
+impl LanguageModel for ModelContext {
+    fn run(
+        &mut self,
+        prompt: String,
+        config: RunConfig,
+    ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = crate::error::Result<String>> + Send + '_>>
+    {
+        Box::pin(ModelContext::run(self, prompt, config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hf_repo_id_all_variants() {
+        assert_eq!(
+            ModelArchitecture::Mistral.hf_repo_id(),
+            "milstralai/Mistral-7B-v0.1"
+        );
+        assert_eq!(
+            ModelArchitecture::QMistral.hf_repo_id(),
+            "lmz/candle-mistral"
+        );
+        assert_eq!(
+            ModelArchitecture::DistilBert.hf_repo_id(),
+            "distilbert/distilbert-base-cased-distilled-squad"
+        );
+        assert_eq!(
+            ModelArchitecture::Starcoder.hf_repo_id(),
+            "bigcode/starcoder2-3b"
+        );
     }
 }

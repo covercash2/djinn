@@ -22,10 +22,7 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    crane.url = "github:ipetkov/crane";
   };
 
   # The main content of the flake - what it provides to users
@@ -40,20 +37,14 @@
         # Define the Rust compiler and tools.
         # https://github.com/oxalica/rust-overlay#rust-binrust-toolchainstable
         rustToolchain = pkgs.rust-bin.nightly."2025-02-01".default.override {
-          extensions = [ "clippy" "rustfmt" "rust-src" ];
+          extensions = [ "clippy" "rustfmt" "rust-src" "llvm-tools-preview" ];
         };
 
         # Get system-specific dependencies
         systemDependencies = if pkgs.stdenv.isDarwin then
           with pkgs; [
-            # Metal is Apple's GPU computing framework
-            darwin.apple_sdk.frameworks.Metal
-            darwin.apple_sdk.frameworks.Foundation
-            # Accelerate framework provides optimized math operations
-            darwin.apple_sdk.frameworks.Accelerate
-            darwin.apple_sdk.frameworks.CoreGraphics
-            darwin.apple_sdk.frameworks.CoreVideo
-            darwin.libobjc
+            # Apple SDK provides Metal, Accelerate, and all other frameworks
+            apple-sdk_15
           ] else if pkgs.stdenv.isLinux then
             with pkgs; [
               # Linux specific
@@ -165,6 +156,8 @@
           packages = with pkgs; [
             cargo-audit
             cargo-expand
+            cargo-llvm-cov
+            cargo-nextest
             cargo-udeps
             cargo-watch
             just
