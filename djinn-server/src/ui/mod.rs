@@ -170,15 +170,15 @@ pub async fn ui_clip(
     let image_bytes = &request.image_bytes;
 
     let lock = context.lock().await;
-    let text_features = lock.clip.encode_text(&prompt)?;
-    let image_features = lock.clip.encode_image_from_bytes(&image_bytes)?;
+    let text_features = lock.clip.encode_text(prompt)?;
+    let image_features = lock.clip.encode_image_from_bytes(image_bytes)?;
     drop(lock);
 
     let similarity =
         djinn_core::tensor_ext::cosine_similarity(&text_features, &image_features)
             .map_err(djinn_core::image::VisionEncoderError::Candle)?;
 
-    let prompt_escaped = html_escape(&prompt);
+    let prompt_escaped = html_escape(prompt);
     Ok(Html(format!(
         r#"<section class="response-block">
   <h3 class="response-prompt">Prompt</h3>
