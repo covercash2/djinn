@@ -10,7 +10,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use tracing::{instrument, Instrument};
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::server::Context;
 
 pub const ROUTE_UI_COMPLETE: &str = "/ui/complete";
@@ -104,22 +104,19 @@ pub async fn ui_clip(
 
     while let Some(field) = multipart
         .next_field()
-        .await
-        .map_err(|e| Error::Multipart(e.to_string()))?
+        .await?
     {
         match field.name() {
             Some("prompt") => {
                 let text = field
                     .text()
-                    .await
-                    .map_err(|e| Error::Multipart(e.to_string()))?;
+                    .await?;
                 prompt = Some(text);
             }
             Some("image") => {
                 let bytes = field
                     .bytes()
-                    .await
-                    .map_err(|e| Error::Multipart(e.to_string()))?;
+                    .await?;
                 image_bytes = Some(bytes.to_vec());
             }
             _ => {}
