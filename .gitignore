@@ -17,3 +17,10 @@ target/
 
 # Node / npm
 node_modules/
+
+# Local agent settings
+.claude/settings.local.json
+
+# Python (no longer used, keep stray bytecode out)
+__pycache__/
+*.pyc

@@ -96,7 +96,9 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    // `value` is never read; it exists so the generated schema requires it.
     #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
     struct Simple {
         value: u32,
     }

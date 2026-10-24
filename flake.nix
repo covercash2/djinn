@@ -32,11 +32,24 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
+          # CUDA and the NVIDIA driver are unfree. Allow only those,
+          # not every unfree package.
+          config.allowUnfreePredicate = pkg:
+            let
+              name = nixpkgs.lib.getName pkg;
+              license = pkg.meta.license or [ ];
+              licenses = if builtins.isList license then license else [ license ];
+            in
+            nixpkgs.lib.hasPrefix "cuda" name
+            || nixpkgs.lib.hasPrefix "libcu" name
+            || nixpkgs.lib.hasPrefix "libnv" name
+            || nixpkgs.lib.hasPrefix "nvidia" name
+            || builtins.any (l: (l.shortName or "") == "CUDA EULA" || (l.shortName or "") == "NVidia OptiX EULA") licenses;
         };
 
         # Define the Rust compiler and tools.
         # https://github.com/oxalica/rust-overlay#rust-binrust-toolchainstable
-        rustToolchain = pkgs.rust-bin.nightly."2025-02-01".default.override {
+        rustToolchain = pkgs.rust-bin.nightly."2026-03-01".default.override {
           extensions = [ "clippy" "rustfmt" "rust-src" "llvm-tools-preview" ];
         };
 

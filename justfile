@@ -1,6 +1,6 @@
 # list recipes by default
 default:
-  just --list
+	just --list
 
 # run the djinn server (loads configs/server/<name>.toml)
 server name="test":
@@ -18,7 +18,7 @@ schema:
 check:
 	typos
 	cargo fmt --check
-	cargo clippy -- -D warnings
+	cargo clippy --workspace --all-targets -- -D warnings
 	cargo llvm-cov nextest --all --fail-under-lines 30
 
 # generate HTML coverage report (opens at target/llvm-cov/html/index.html)
@@ -28,8 +28,8 @@ coverage:
 
 # get the contents of the ollama TUI log
 open_log:
-	cat  ~/.local/state/ollama_tui/tui.log
+	cat ~/.local/state/ollama_tui/tui.log
 
 # list modelfiles on this machine
 list_modelfiles:
-  ls ~/.local/share/ollama_tui/modelfile/
+	ls ~/.local/share/ollama_tui/modelfile/
