@@ -1,18 +1,10 @@
-#![feature(coverage_attribute)]
+//! Shared, dependency-light code for the djinn workspace: config loading and
+//! validation, and the serializable config types.
+//!
+//! This crate must stay free of the inference stack (candle, tokenizers, hf-hub);
+//! model execution lives in `djinn-models`.
 
-#[cfg(feature = "mac")]
-extern crate accelerate_src;
-
-mod coco_classes;
+pub mod chat;
 pub mod config;
 pub mod device;
-mod error;
-mod font;
-mod hf_hub_ext;
-pub mod image;
 pub mod lm;
-pub mod tensor_ext;
-mod token_output_stream;
-pub mod yolov8;
-
-pub use error::Error;

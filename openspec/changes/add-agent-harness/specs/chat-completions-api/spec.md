@@ -66,7 +66,7 @@ produced before the call.
 - **WHEN** a `tool` message references a `tool_call_id` that no earlier assistant message produced
 - **THEN** the response is 400
 
-#### Scenario: Unparseable tool call
+#### Scenario: Unparsable tool call
 - **WHEN** the model emits tool-call markup whose JSON cannot be parsed
 - **THEN** the markup is returned as ordinary `content` with `finish_reason` `stop` and is not silently dropped
 
@@ -79,8 +79,8 @@ delivered complete in the final chunk's `delta.tool_calls`, not as partial
 fragments.
 
 #### Scenario: Text streams as it is generated
-- **WHEN** a client requests `stream: true` and the model produces `Hel` then `lo`
-- **THEN** the client receives chunks with delta content `Hel` and `lo`, then a chunk with `finish_reason` `stop`, then `[DONE]`
+- **WHEN** a client requests `stream: true` and the model produces `Hi` then ` there`
+- **THEN** the client receives chunks with delta content `Hi` and ` there`, then a chunk with `finish_reason` `stop`, then `[DONE]`
 
 #### Scenario: Tool call markup is not streamed as text
 - **WHEN** the model begins a tool call while streaming

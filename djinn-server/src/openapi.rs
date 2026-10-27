@@ -6,19 +6,23 @@ use utoipa::OpenApi;
     paths(
         crate::server::health_check_handler,
         crate::complete::complete,
-        crate::clip::clip_similarity,
+        crate::chat::chat_completions,
+        crate::chat::list_models,
     ),
     components(schemas(
         crate::complete::CompleteRequest,
         crate::complete::CompleteResponse,
-        crate::clip::ClipRequest,
-        crate::clip::ClipResponse,
         djinn_core::lm::config::RunConfig,
+        djinn_core::chat::ChatRequest,
+        djinn_core::chat::ChatResponse,
+        djinn_core::chat::ChatChunk,
+        djinn_core::chat::ModelList,
+        djinn_core::chat::ErrorBody,
     )),
     tags(
         (name = "health", description = "Server health"),
         (name = "lm", description = "Language model completion"),
-        (name = "clip", description = "Image-text similarity via CLIP"),
+        (name = "chat", description = "OpenAI-compatible chat completions"),
     ),
 )]
 pub struct ApiDoc;
@@ -38,7 +42,12 @@ mod tests {
         let paths: Vec<&str> = spec.paths.paths.keys().map(String::as_str).collect();
         assert!(paths.contains(&"/health-check"), "missing /health-check");
         assert!(paths.contains(&"/complete"), "missing /complete");
-        assert!(paths.contains(&"/clip"), "missing /clip");
+        assert!(
+            paths.contains(&"/v1/chat/completions"),
+            "missing /v1/chat/completions"
+        );
+        assert!(paths.contains(&"/v1/models"), "missing /v1/models");
+        assert!(!paths.contains(&"/clip"), "/clip should be removed");
     }
 
     #[test]
@@ -52,13 +61,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect::<Vec<_>>();
-        for name in [
-            "CompleteRequest",
-            "CompleteResponse",
-            "ClipRequest",
-            "ClipResponse",
-            "RunConfig",
-        ] {
+        for name in ["CompleteRequest", "CompleteResponse", "RunConfig"] {
             assert!(schemas.contains(&name), "missing schema: {name}");
         }
     }

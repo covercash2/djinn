@@ -124,10 +124,10 @@ pub fn load_config(config_path: impl AsRef<Path>) -> config::Result<RunConfig> {
 #[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ModelConfig {
     pub variant: ModelArchitecture,
+    /// Device to run on. When omitted, the best device compiled into the build is used
+    /// (CUDA or Metal if enabled, otherwise CPU).
     #[serde(default)]
-    pub device: Device,
-    /// Set true to use flash attention. Only supported on CUDA
-    pub flash_attn: bool,
+    pub device: Option<Device>,
     pub model_source: ModelSource,
 }
 
@@ -179,6 +179,92 @@ mod tests {
         assert_eq!(cfg.sample_len, 50);
         assert_eq!(cfg.repeat_penalty, DEFAULT_REPEAT_PENALTY);
         assert_eq!(cfg.temperature, DEFAULT_TEMPERATURE);
+    }
+
+    #[test]
+    fn every_shipped_model_config_is_valid() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../configs/model");
+        let mut checked = Vec::new();
+        for entry in std::fs::read_dir(&dir).expect("configs/model exists") {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|ext| ext == "toml") {
+                let contents = std::fs::read_to_string(&path).unwrap();
+                config::validate_and_load::<ModelConfig>(&contents, &path)
+                    .unwrap_or_else(|e| panic!("{} is invalid: {e}", path.display()));
+                checked.push(path.file_name().unwrap().to_string_lossy().into_owned());
+            }
+        }
+        checked.sort();
+        assert!(
+            checked.contains(&"qwen2_5_instruct.toml".to_owned())
+                && checked.contains(&"qwen2_5_instruct_0_5b.toml".to_owned()),
+            "expected the Qwen configs, found {checked:?}"
+        );
+    }
+
+    #[test]
+    fn qwen_config_names_the_gguf_file_and_tokenizer_repo() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../configs/model/qwen2_5_instruct.toml");
+        let config: ModelConfig = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(config.variant, ModelArchitecture::Qwen25Instruct);
+        let ModelSource::HuggingFaceHub {
+            repo_id,
+            weights_file,
+            tokenizer_repo,
+            ..
+        } = config.model_source
+        else {
+            panic!("expected a hub source");
+        };
+        assert_eq!(repo_id.as_deref(), Some("Qwen/Qwen2.5-1.5B-Instruct-GGUF"));
+        assert_eq!(
+            weights_file.as_deref(),
+            Some("qwen2.5-1.5b-instruct-q4_k_m.gguf")
+        );
+        assert_eq!(
+            tokenizer_repo.as_deref(),
+            Some("Qwen/Qwen2.5-1.5B-Instruct")
+        );
+    }
+
+    #[test]
+    fn a_config_naming_the_removed_base_model_is_rejected_listing_the_valid_variants() {
+        let contents =
+            "variant = \"q_mistral\"\n[model_source.hugging_face_hub]\nrevision = \"main\"\n";
+        let error = config::validate_and_load::<ModelConfig>(contents, Path::new("old.toml"))
+            .expect_err("q_mistral is no longer a variant");
+        let shown = error.to_string();
+        assert!(
+            shown.contains("qwen2_5_instruct"),
+            "should list the valid variants: {shown}"
+        );
+    }
+
+    #[test]
+    fn leftover_flash_attn_keys_in_old_configs_are_ignored() {
+        let config: ModelConfig = toml::from_str(
+            "variant = \"qwen2_5_instruct\"\nflash_attn = false\n[model_source.hugging_face_hub]\nrevision = \"main\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.variant, ModelArchitecture::Qwen25Instruct);
+    }
+
+    #[test]
+    fn old_style_hub_source_without_the_new_fields_still_parses() {
+        let config: ModelConfig = toml::from_str(
+            "variant = \"qwen2_5_instruct\"\n[model_source.hugging_face_hub]\nrevision = \"main\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.device, None);
+        assert!(matches!(
+            config.model_source,
+            ModelSource::HuggingFaceHub {
+                repo_id: None,
+                weights_file: None,
+                ..
+            }
+        ));
     }
 
     #[test]

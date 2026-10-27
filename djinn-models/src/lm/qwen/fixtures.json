@@ -1,0 +1,386 @@
+[
+ {
+  "name": "plain_user_only",
+  "messages": [
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "tools": [],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nhi<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "custom_system",
+  "messages": [
+   {
+    "role": "system",
+    "content": "Be terse."
+   },
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "tools": [],
+  "expected": "<|im_start|>system\nBe terse.<|im_end|>\n<|im_start|>user\nhi<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "multi_turn",
+  "messages": [
+   {
+    "role": "user",
+    "content": "What is Rust?"
+   },
+   {
+    "role": "assistant",
+    "content": "A systems language."
+   },
+   {
+    "role": "user",
+    "content": "Who made it?"
+   }
+  ],
+  "tools": [],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhat is Rust?<|im_end|>\n<|im_start|>assistant\nA systems language.<|im_end|>\n<|im_start|>user\nWho made it?<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "system_later_in_conversation",
+  "messages": [
+   {
+    "role": "user",
+    "content": "a"
+   },
+   {
+    "role": "system",
+    "content": "mid"
+   },
+   {
+    "role": "user",
+    "content": "b"
+   }
+  ],
+  "tools": [],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\na<|im_end|>\n<|im_start|>system\nmid<|im_end|>\n<|im_start|>user\nb<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "tools_default_system",
+  "messages": [
+   {
+    "role": "user",
+    "content": "2+2?"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "calculator",
+     "description": "Evaluate an arithmetic expression",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "expression": {
+        "type": "string",
+        "description": "e.g. 2+2"
+       }
+      },
+      "required": [
+       "expression"
+      ]
+     }
+    }
+   }
+  ],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"description\": \"Evaluate an arithmetic expression\", \"parameters\": {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\", \"description\": \"e.g. 2+2\"}}, \"required\": [\"expression\"]}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n<|im_start|>user\n2+2?<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "tools_custom_system_two_tools",
+  "messages": [
+   {
+    "role": "system",
+    "content": "Use tools."
+   },
+   {
+    "role": "user",
+    "content": "time?"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "calculator",
+     "description": "Evaluate an arithmetic expression",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "expression": {
+        "type": "string",
+        "description": "e.g. 2+2"
+       }
+      },
+      "required": [
+       "expression"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "current_time",
+     "description": "Get the current UTC time",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    }
+   }
+  ],
+  "expected": "<|im_start|>system\nUse tools.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"description\": \"Evaluate an arithmetic expression\", \"parameters\": {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\", \"description\": \"e.g. 2+2\"}}, \"required\": [\"expression\"]}}}\n{\"type\": \"function\", \"function\": {\"name\": \"current_time\", \"description\": \"Get the current UTC time\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n<|im_start|>user\ntime?<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "tool_round_trip",
+  "messages": [
+   {
+    "role": "user",
+    "content": "What is 17*23?"
+   },
+   {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+       "name": "calculator",
+       "arguments": "{\"expression\": \"17*23\"}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_1",
+    "content": "391"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "calculator",
+     "description": "Evaluate an arithmetic expression",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "expression": {
+        "type": "string",
+        "description": "e.g. 2+2"
+       }
+      },
+      "required": [
+       "expression"
+      ]
+     }
+    }
+   }
+  ],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"description\": \"Evaluate an arithmetic expression\", \"parameters\": {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\", \"description\": \"e.g. 2+2\"}}, \"required\": [\"expression\"]}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n<|im_start|>user\nWhat is 17*23?<|im_end|>\n<|im_start|>assistant\n<tool_call>\n{\"name\": \"calculator\", \"arguments\": {\"expression\": \"17*23\"}}\n</tool_call><|im_end|>\n<|im_start|>user\n<tool_response>\n391\n</tool_response><|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "assistant_text_and_tool_call",
+  "messages": [
+   {
+    "role": "user",
+    "content": "What is 2+2?"
+   },
+   {
+    "role": "assistant",
+    "content": "Let me check.",
+    "tool_calls": [
+     {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+       "name": "calculator",
+       "arguments": "{\"expression\": \"2+2\"}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_1",
+    "content": "4"
+   },
+   {
+    "role": "assistant",
+    "content": "It is 4."
+   },
+   {
+    "role": "user",
+    "content": "thanks"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "calculator",
+     "description": "Evaluate an arithmetic expression",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "expression": {
+        "type": "string",
+        "description": "e.g. 2+2"
+       }
+      },
+      "required": [
+       "expression"
+      ]
+     }
+    }
+   }
+  ],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"description\": \"Evaluate an arithmetic expression\", \"parameters\": {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\", \"description\": \"e.g. 2+2\"}}, \"required\": [\"expression\"]}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\nLet me check.\n<tool_call>\n{\"name\": \"calculator\", \"arguments\": {\"expression\": \"2+2\"}}\n</tool_call><|im_end|>\n<|im_start|>user\n<tool_response>\n4\n</tool_response><|im_end|>\n<|im_start|>assistant\nIt is 4.<|im_end|>\n<|im_start|>user\nthanks<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "two_tool_calls_two_results_merged",
+  "messages": [
+   {
+    "role": "user",
+    "content": "both please"
+   },
+   {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+       "name": "calculator",
+       "arguments": "{\"expression\": \"1+1\"}"
+      }
+     },
+     {
+      "id": "call_2",
+      "type": "function",
+      "function": {
+       "name": "current_time",
+       "arguments": "{}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_1",
+    "content": "2"
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_2",
+    "content": "2026-10-26T00:00:00Z"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "calculator",
+     "description": "Evaluate an arithmetic expression",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "expression": {
+        "type": "string",
+        "description": "e.g. 2+2"
+       }
+      },
+      "required": [
+       "expression"
+      ]
+     }
+    }
+   },
+   {
+    "type": "function",
+    "function": {
+     "name": "current_time",
+     "description": "Get the current UTC time",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    }
+   }
+  ],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"description\": \"Evaluate an arithmetic expression\", \"parameters\": {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\", \"description\": \"e.g. 2+2\"}}, \"required\": [\"expression\"]}}}\n{\"type\": \"function\", \"function\": {\"name\": \"current_time\", \"description\": \"Get the current UTC time\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n<|im_start|>user\nboth please<|im_end|>\n<|im_start|>assistant\n<tool_call>\n{\"name\": \"calculator\", \"arguments\": {\"expression\": \"1+1\"}}\n</tool_call>\n<tool_call>\n{\"name\": \"current_time\", \"arguments\": {}}\n</tool_call><|im_end|>\n<|im_start|>user\n<tool_response>\n2\n</tool_response>\n<tool_response>\n2026-10-26T00:00:00Z\n</tool_response><|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "unicode_and_nested_args",
+  "messages": [
+   {
+    "role": "user",
+    "content": "café ☃"
+   },
+   {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+       "name": "calculator",
+       "arguments": "{\"expression\": \"1.5*2\", \"meta\": {\"tags\": [\"a\", \"b\"], \"n\": 1, \"x\": 2.5, \"ok\": true, \"none\": null, \"s\": \"café\"}}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_1",
+    "content": "3.0"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "calculator",
+     "description": "Evaluate an arithmetic expression",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "expression": {
+        "type": "string",
+        "description": "e.g. 2+2"
+       }
+      },
+      "required": [
+       "expression"
+      ]
+     }
+    }
+   }
+  ],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"description\": \"Evaluate an arithmetic expression\", \"parameters\": {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\", \"description\": \"e.g. 2+2\"}}, \"required\": [\"expression\"]}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call><|im_end|>\n<|im_start|>user\ncafé ☃<|im_end|>\n<|im_start|>assistant\n<tool_call>\n{\"name\": \"calculator\", \"arguments\": {\"expression\": \"1.5*2\", \"meta\": {\"tags\": [\"a\", \"b\"], \"n\": 1, \"x\": 2.5, \"ok\": true, \"none\": null, \"s\": \"café\"}}}\n</tool_call><|im_end|>\n<|im_start|>user\n<tool_response>\n3.0\n</tool_response><|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "name": "empty_user_content",
+  "messages": [
+   {
+    "role": "user",
+    "content": ""
+   }
+  ],
+  "tools": [],
+  "expected": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|im_end|>\n<|im_start|>assistant\n"
+ }
+]

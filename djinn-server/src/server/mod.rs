@@ -8,8 +8,7 @@ use axum::{
 };
 use derive_builder::Builder;
 use derive_new::new;
-use djinn_core::image::VisionEncoder;
-use djinn_core::lm::LanguageModel;
+use djinn_models::lm::LanguageModel;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,
@@ -22,7 +21,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 
-use crate::clip::ROUTE_CLIP;
+use crate::chat::{ChatState, ROUTE_CHAT, ROUTE_MODELS};
 use crate::complete::{ROUTE_COMPLETE, ROUTE_COMPLETE_STREAM};
 use crate::openapi::ApiDoc;
 
@@ -55,7 +54,8 @@ pub struct HttpServer {
 #[derive(Clone)]
 pub struct AppState {
     pub model: Arc<Mutex<Box<dyn LanguageModel>>>,
-    pub clip: Arc<Box<dyn VisionEncoder>>,
+    /// Identifier of the loaded model, cached so listing models never waits for a generation.
+    pub model_id: Arc<str>,
 }
 
 /// Returns `200 OK` when the server is running.
@@ -80,18 +80,20 @@ async fn not_found() -> (StatusCode, &'static str) {
 pub(crate) fn build_router(state: AppState) -> Router {
     use utoipa::OpenApi;
 
-    // Fast routes: health-check and clip don't run inference, so a 1s timeout is appropriate.
-    // Clip gets Arc<Box<dyn VisionEncoder>> — no mutex needed since VisionEncoder is &self.
+    let chat_state = ChatState {
+        model: state.model.clone(),
+        model_id: state.model_id.clone(),
+    };
+
+    // Fast routes: neither the health check nor the model list runs inference, so a 1s timeout is
+    // appropriate.
     let fast_router = Router::new()
         .route(
             &ServiceRoutes::HealthCheck.to_string(),
             get(health_check_handler),
         )
-        .route(
-            &ServiceRoutes::Clip.to_string(),
-            post(crate::clip::clip_similarity),
-        )
-        .with_state(state.clip)
+        .route(ROUTE_MODELS, get(crate::chat::list_models))
+        .with_state(chat_state.clone())
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|_: BoxError| async {
@@ -113,9 +115,15 @@ pub(crate) fn build_router(state: AppState) -> Router {
         )
         .with_state(state.model);
 
+    // Chat is an inference route too: no timeout, same single-model lock.
+    let chat_router = Router::new()
+        .route(ROUTE_CHAT, post(crate::chat::chat_completions))
+        .with_state(chat_state);
+
     let router = Router::new()
         .merge(fast_router)
         .merge(inference_router)
+        .merge(chat_router)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .fallback(not_found)
         .layer(
@@ -154,7 +162,6 @@ pub(crate) fn build_router(state: AppState) -> Router {
 enum ServiceRoutes {
     HealthCheck,
     Complete,
-    Clip,
 }
 
 impl Display for ServiceRoutes {
@@ -162,7 +169,6 @@ impl Display for ServiceRoutes {
         match self {
             ServiceRoutes::HealthCheck => write!(f, "/health-check"),
             ServiceRoutes::Complete => write!(f, "{}", ROUTE_COMPLETE),
-            ServiceRoutes::Clip => write!(f, "{}", ROUTE_CLIP),
         }
     }
 }
@@ -191,8 +197,7 @@ impl HttpServer {
 pub(crate) mod tests {
     use super::*;
     use axum::http::{self, Request};
-    use candle_core::{Device, Tensor};
-    use djinn_core::{image::VisionEncoderResult, lm::config::RunConfig};
+    use djinn_core::lm::config::RunConfig;
     use futures::stream;
     use std::pin::Pin;
     use tokio_stream::Stream;
@@ -207,25 +212,9 @@ pub(crate) mod tests {
             &mut self,
             _prompt: String,
             _config: RunConfig,
-        ) -> Pin<Box<dyn Stream<Item = Result<String, djinn_core::Error>> + Send + '_>> {
+        ) -> Pin<Box<dyn Stream<Item = Result<String, djinn_models::Error>> + Send + '_>> {
             let tokens = self.tokens.clone();
             Box::pin(stream::iter(tokens.into_iter().map(Ok)))
-        }
-    }
-
-    pub(crate) struct MockVisionEncoder;
-
-    impl VisionEncoder for MockVisionEncoder {
-        fn encode_text(&self, _text: &str) -> VisionEncoderResult<Tensor> {
-            Ok(Tensor::new(&[1.0f32, 0.0, 0.0], &Device::Cpu).unwrap())
-        }
-
-        fn encode_image(&self, _path: &std::path::Path) -> VisionEncoderResult<Tensor> {
-            Ok(Tensor::new(&[1.0f32, 0.0, 0.0], &Device::Cpu).unwrap())
-        }
-
-        fn encode_image_from_bytes(&self, _data: &[u8]) -> VisionEncoderResult<Tensor> {
-            Ok(Tensor::new(&[1.0f32, 0.0, 0.0], &Device::Cpu).unwrap())
         }
     }
 
@@ -234,7 +223,7 @@ pub(crate) mod tests {
             model: Arc::new(Mutex::new(Box::new(MockLanguageModel {
                 tokens: tokens.into_iter().map(str::to_owned).collect(),
             }))),
-            clip: Arc::new(Box::new(MockVisionEncoder)),
+            model_id: "test-model".into(),
         }
     }
 
@@ -249,9 +238,9 @@ pub(crate) mod tests {
             &mut self,
             _prompt: String,
             _config: RunConfig,
-        ) -> Pin<Box<dyn Stream<Item = Result<String, djinn_core::Error>> + Send + '_>> {
+        ) -> Pin<Box<dyn Stream<Item = Result<String, djinn_models::Error>> + Send + '_>> {
             Box::pin(stream::once(async {
-                Err(djinn_core::Error::Anyhow(anyhow::anyhow!("model error")))
+                Err(djinn_models::Error::Anyhow(anyhow::anyhow!("model error")))
             }))
         }
     }
@@ -259,7 +248,7 @@ pub(crate) mod tests {
     fn error_test_app() -> Router {
         build_router(AppState {
             model: Arc::new(Mutex::new(Box::new(ErrorLanguageModel))),
-            clip: Arc::new(Box::new(MockVisionEncoder)),
+            model_id: "test-model".into(),
         })
     }
 
@@ -375,51 +364,34 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn clip_invalid_base64_returns_400() {
+    async fn clip_route_is_removed() {
         let app = test_app(vec![]);
-        let body = serde_json::json!({
-            "prompt": "a dog",
-            "image": "not-valid-base64!!!"
-        })
-        .to_string();
         let request = Request::builder()
             .method("POST")
             .uri("/clip")
             .header(http::header::CONTENT_TYPE, "application/json")
-            .body(axum::body::Body::from(body))
+            .body(axum::body::Body::from("{}"))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
-    async fn clip_valid_request_returns_similarity() {
+    async fn root_path_is_not_found() {
         let app = test_app(vec![]);
-        let image_b64 = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            b"fake image bytes",
-        );
-        let body = serde_json::json!({
-            "prompt": "a dog",
-            "image": image_b64,
-        })
-        .to_string();
         let request = Request::builder()
-            .method("POST")
-            .uri("/clip")
-            .header(http::header::CONTENT_TYPE, "application/json")
-            .body(axum::body::Body::from(body))
+            .uri("/")
+            .body(axum::body::Body::empty())
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), http::StatusCode::OK);
+        assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
         let bytes = http_body_util::BodyExt::collect(response.into_body())
             .await
             .unwrap()
             .to_bytes();
-        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert!(json["similarity"].is_number());
+        assert_eq!(&bytes[..], b"Not found");
     }
 
     #[tokio::test]

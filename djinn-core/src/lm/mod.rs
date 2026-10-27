@@ -1,28 +1,13 @@
-//! Language Models and configurations
+//! Language model configuration types.
+//!
+//! Model execution lives in the `djinn-models` crate; this module only holds the
+//! serializable config surface so that it can be shared without the inference stack.
 use std::path::PathBuf;
-use std::pin::Pin;
 
-use config::RunConfig;
-use futures::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
-
 pub mod config;
-pub mod mistral;
 pub mod model;
-
-/// Abstraction over any language model that can stream token completions.
-///
-/// Implementors must be `Send + Sync` so they can live behind `Arc<Mutex<Context>>`.
-/// The returned stream must also be `Send` so it can be polled across tokio tasks.
-pub trait LanguageModel: Send + Sync {
-    fn run(
-        &mut self,
-        prompt: String,
-        config: RunConfig,
-    ) -> Pin<Box<dyn Stream<Item = Result<String>> + Send + '_>>;
-}
 
 /// Where to load the model from,
 /// either HuggingFaceHub or from the file system
@@ -31,9 +16,32 @@ pub trait LanguageModel: Send + Sync {
 pub enum ModelSource {
     HuggingFaceHub {
         revision: String,
+        /// Hub repository holding the weights. Defaults to the architecture's standard repository.
+        #[serde(default)]
+        repo_id: Option<String>,
+        /// File to download from the repository (for GGUF models). Defaults to the
+        /// architecture's standard file.
+        #[serde(default)]
+        weights_file: Option<String>,
+        /// Hub repository to take `tokenizer.json` from, when it is not in `repo_id`
+        /// (GGUF repositories usually do not ship a usable tokenizer).
+        #[serde(default)]
+        tokenizer_repo: Option<String>,
     },
     Files {
         weight_files: Vec<PathBuf>,
         tokenizer_file: PathBuf,
     },
+}
+
+impl ModelSource {
+    /// The Hugging Face Hub at `revision`, with every other setting at its default.
+    pub fn hub(revision: impl Into<String>) -> Self {
+        ModelSource::HuggingFaceHub {
+            revision: revision.into(),
+            repo_id: None,
+            weights_file: None,
+            tokenizer_repo: None,
+        }
+    }
 }

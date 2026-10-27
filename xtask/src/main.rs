@@ -5,10 +5,7 @@
 
 use std::{env, fs, path::PathBuf};
 
-use djinn_core::{
-    image::config::GenConfig,
-    lm::config::{ModelConfig, ModelRun, RunConfig},
-};
+use djinn_core::lm::config::{ModelConfig, ModelRun, RunConfig};
 use djinn_server::Config;
 use schemars::JsonSchema;
 
@@ -29,7 +26,6 @@ fn schema() {
     write_schema::<ModelConfig>(root.join("configs/model/model.schema.json"));
     write_schema::<RunConfig>(root.join("configs/lm/run-config.schema.json"));
     write_schema::<ModelRun>(root.join("configs/lm/model-run.schema.json"));
-    write_schema::<GenConfig>(root.join("configs/image-gen.schema.json"));
 }
 
 fn main() {

@@ -1,10 +1,13 @@
+# pass recipe arguments to the shell exactly as typed (see the `agent` recipe)
+set positional-arguments
+
 # list recipes by default
 default:
 	just --list
 
 # run the djinn server (loads configs/server/<name>.toml)
 server name="test":
-	cargo run --release --features djinn-core/mac -- server-config --name {{name}}
+	cargo run --release --features djinn-models/mac -- server-config --name {{name}}
 
 # run the ollama-cli
 tui:
@@ -14,9 +17,27 @@ tui:
 schema:
 	cargo xtask schema
 
+# djinn-core must stay free of the inference stack (model execution lives in djinn-models)
+check-core-deps:
+	#!/usr/bin/env sh
+	if cargo tree -p djinn-core --prefix none | grep -E "^(candle-|tokenizers |hf-hub )"; then
+		echo "error: djinn-core must not depend on candle, tokenizers, or hf-hub" >&2
+		exit 1
+	fi
+
+# djinn-agent must not depend on the inference stack or the server (it talks to any backend over HTTP)
+check-agent-deps:
+	#!/usr/bin/env sh
+	if cargo tree -p djinn-agent --prefix none | grep -E "^(candle-|djinn-models |djinn-server )"; then
+		echo "error: djinn-agent must not depend on candle, djinn-models, or djinn-server" >&2
+		exit 1
+	fi
+
 # check for typos, lint, test, and enforce coverage threshold
 check:
 	typos
+	just check-core-deps
+	just check-agent-deps
 	cargo fmt --check
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo llvm-cov nextest --all --fail-under-lines 30
@@ -25,6 +46,10 @@ check:
 coverage:
 	cargo llvm-cov nextest --all --html
 	@echo "Report: target/llvm-cov/html/index.html"
+
+# run the agent REPL (flags after the recipe name are passed through, e.g. `just agent --once "What is 2+2?"`)
+agent *args:
+	@cargo run -q -p djinn-agent -- "$@"
 
 # get the contents of the ollama TUI log
 open_log:

@@ -1,6 +1,0 @@
-#:schema ./model.schema.json
-variant = "starcoder"
-flash_attn = false
-
-[model_source.hugging_face_hub]
-revision = "main"
