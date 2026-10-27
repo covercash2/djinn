@@ -25,25 +25,18 @@ core ML functionality and model implementations.
 
 an HTTP server
 with an API
-and streaming front-end
+and SSE streaming
 for running models
 
-### Frontend
-
-`djinn-server` ships a small UI served from `./djinn-server/assets/`.
+### Routes
 
 | Path | Description |
 |------|-------------|
-| `/` | Main page — prompt input + streaming completion |
+| `POST /complete` | Run a completion, JSON response |
+| `POST /complete/stream` | Run a completion, streamed as Server-Sent Events |
+| `POST /clip` | CLIP text/image similarity |
 | `/swagger-ui` | Interactive OpenAPI docs |
 | `/health-check` | Liveness probe |
-
-**How it works**
-
-1. `index.html` is served as a static file by `ServeDir`.
-2. `app.js` intercepts form submission and POSTs the prompt as JSON to `/complete/stream`.
-3. The server streams tokens back as Server-Sent Events.
-4. Tokens are appended to the response area as they arrive.
 
 # development
 

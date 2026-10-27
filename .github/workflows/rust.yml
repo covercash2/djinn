@@ -42,19 +42,3 @@ jobs:
         files: lcov.info
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: false
-
-  js-test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: 'npm'
-        cache-dependency-path: djinn-server/package-lock.json
-    - name: install
-      run: npm ci
-      working-directory: djinn-server
-    - name: vitest
-      run: npm test
-      working-directory: djinn-server
