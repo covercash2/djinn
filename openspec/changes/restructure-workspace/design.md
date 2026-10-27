@@ -50,7 +50,9 @@ compiles; do not downgrade it.
 - No renaming of public config fields or TOML keys. Existing
   `configs/model/q_mistral.toml` and `configs/server/test.toml` must keep
   loading unchanged.
-- No upgrade of candle (stays 0.8.4) and no change to the pinned toolchain.
+- No candle upgrade in this change (it stays at its current version; change 2,
+  `add-agent-harness`, upgrades it once candle is confined to `djinn-models`), and
+  no change to the pinned toolchain.
 - No changes to `ollama-cli`.
 
 ## Decisions
