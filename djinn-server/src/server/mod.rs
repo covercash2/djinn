@@ -1,7 +1,6 @@
 use axum::{
     error_handling::HandleErrorLayer,
     extract::{FromRequest, MatchedPath},
-    handler::HandlerWithoutStateExt,
     http::{Request, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -16,8 +15,8 @@ use std::{
     fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,
 };
 use tokio::sync::Mutex;
-use tower::{timeout::TimeoutLayer, BoxError, ServiceBuilder, ServiceExt};
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower::{timeout::TimeoutLayer, BoxError, ServiceBuilder};
+use tower_http::trace::TraceLayer;
 use tracing::{instrument, Instrument, Level, Span};
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -118,14 +117,7 @@ pub(crate) fn build_router(state: AppState) -> Router {
         .merge(fast_router)
         .merge(inference_router)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
-        .fallback_service(
-            ServeDir::new("./djinn-server/assets")
-                .not_found_service(not_found.into_service())
-                .map_request(|request: Request<_>| {
-                    tracing::debug!(?request);
-                    request
-                }),
-        )
+        .fallback(not_found)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<_>| {

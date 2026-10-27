@@ -97,9 +97,7 @@
         # https://nixos.org/manual/nixpkgs/stable/#sec-functions-library-path-manipulation
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
-          filter = path: type:
-            (craneLib.filterCargoSources path type) ||
-            pkgs.lib.hasInfix "/assets/" path;
+          filter = craneLib.filterCargoSources;
         };
 
         # Build common args that apply to all crates

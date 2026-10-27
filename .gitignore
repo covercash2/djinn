@@ -15,9 +15,6 @@ target/
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-# Node / npm
-node_modules/
-
 # Local agent settings
 .claude/settings.local.json
 
