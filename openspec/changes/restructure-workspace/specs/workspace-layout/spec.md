@@ -43,7 +43,7 @@ be present in the workspace.
 
 #### Scenario: Variant list is text-only
 - **WHEN** the model-variant enumeration is inspected (`configs/model/model.schema.json`)
-- **THEN** it lists only the quantized Mistral variant
+- **THEN** every listed variant is a text-generation language model, and none is a detection, vision, image-generation, code-specialised, or encoder-only model
 
 #### Scenario: Vision code is removed
 - **WHEN** the workspace source is searched for `yolov8`, `siglip`, `clip`, or image-generation modules
