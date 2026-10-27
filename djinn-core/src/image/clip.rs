@@ -165,9 +165,11 @@ impl Clip {
 
         // Normalize each pixel using CLIP's per-channel mean and std, producing
         // a flat vec in (H, W, C) order that will be permuted to (C, H, W) below.
-        let pixels: Vec<f32> = img
-            .into_raw()
-            .chunks_exact(3)
+        let raw = img.into_raw();
+        let pixels: Vec<f32> = raw
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|px| {
                 [
                     (px[0] as f32 / 255.0 - CLIP_MEAN[0]) / CLIP_STD[0],

@@ -117,9 +117,11 @@ impl SigLip {
 
         // Normalize each pixel using SigLIP's per-channel mean and std, producing
         // a flat vec in (H, W, C) order that will be permuted to (C, H, W) below.
-        let pixels: Vec<f32> = img
-            .into_raw()
-            .chunks_exact(3)
+        let raw = img.into_raw();
+        let pixels: Vec<f32> = raw
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|px| {
                 [
                     (px[0] as f32 / 255.0 - SIGLIP_MEAN[0]) / SIGLIP_STD[0],
