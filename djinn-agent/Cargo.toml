@@ -1,0 +1,25 @@
+[package]
+name = "djinn-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "djinn-agent"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+clap.workspace = true
+djinn-core.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+tempfile.workspace = true

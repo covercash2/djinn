@@ -6,37 +6,19 @@ authors.workspace = true
 
 
 [dependencies]
-ab_glyph.workspace = true
-accelerate-src = { workspace = true, optional = true }
-anyhow.workspace = true
-async-stream.workspace = true
-bon.workspace = true
-candle-core.workspace = true
-candle-nn.workspace = true
-candle-transformers.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
-derive_builder.workspace = true
-futures.workspace = true
-hf-hub.workspace = true
-image.workspace = true
-imageproc.workspace = true
-metal = { workspace = true, optional = true }
 rand.workspace = true
 schemars.workspace = true
 jsonschema.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokenizers.workspace = true
 tokio.workspace = true
-tokio-stream.workspace = true
 toml.workspace = true
 tracing.workspace = true
 utoipa = { workspace = true, optional = true }
 xdg.workspace = true
-tracing-chrome.workspace = true
-tracing-subscriber.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
@@ -44,22 +26,10 @@ tempfile.workspace = true
 
 [features]
 default = []
-# Enables `clap::Args` derives on core config structs (`GenConfig`, `RunConfig`),
+# Enables `clap::Args` derives on core config structs (`RunConfig`),
 # allowing them to be embedded directly in CLI commands.
 # Note: `clap` is already an unconditional dependency (used by `Device::ValueEnum`
-# and `gen::Args`); this feature only gates the additional `Args` derives.
+# and `ModelArchitecture::ValueEnum`); this feature only gates the additional `Args` derives.
 clap = []
 fixed-seed = []
 openapi = ["dep:utoipa"]
-cuda = [
-	"candle-core/cuda",
-	"candle-nn/cuda",
-	"candle-transformers/cuda",
-]
-mac = [
-	"dep:metal",
-	"dep:accelerate-src",
-	"candle-core/metal",
-	"candle-nn/metal",
-	"candle-transformers/metal",
-]

@@ -1,0 +1,10 @@
+#:schema ./model.schema.json
+# Qwen2.5-Instruct 0.5B (Q4_K_M, about 470 MB): fastest option for smoke tests.
+# Expect weak tool use at this size.
+variant = "qwen2_5_instruct"
+
+[model_source.hugging_face_hub]
+revision = "main"
+repo_id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+weights_file = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+tokenizer_repo = "Qwen/Qwen2.5-0.5B-Instruct"

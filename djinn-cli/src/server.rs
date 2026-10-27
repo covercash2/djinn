@@ -11,7 +11,7 @@ use clap::Parser;
 
 const DEFAULT_HOST_ADDR: &str = "::1";
 const DEFAULT_HOST_PORT: u16 = 8080;
-const DEFAULT_MODEL_CONFIG: &str = "mistral/fib";
+const DEFAULT_MODEL_CONFIG: &str = "model/qwen2_5_instruct";
 
 #[derive(Parser, Clone, Debug, PartialEq)]
 pub struct ServerArgs {
@@ -109,6 +109,15 @@ mod tests {
     #[test]
     fn cli_parser_is_valid() {
         ServerArgs::command().debug_assert();
+    }
+
+    #[test]
+    fn the_default_model_config_is_a_real_file() {
+        let config: Config = ServerArgs::default().try_into().unwrap();
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join(&config.model_config);
+        assert!(path.exists(), "{} does not exist", path.display());
     }
 
     #[test]

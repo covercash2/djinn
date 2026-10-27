@@ -4,7 +4,7 @@ use std::sync::Arc;
 use axum::extract::State;
 use axum::response::sse::{Event, Sse};
 use djinn_core::lm::config::RunConfig;
-use djinn_core::lm::LanguageModel;
+use djinn_models::lm::LanguageModel;
 use futures::{pin_mut, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;

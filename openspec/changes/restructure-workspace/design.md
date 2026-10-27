@@ -104,6 +104,23 @@ rule forbids the impl. Use a plain function
 (or an extension trait) and update the two call sites
 (`lm/mistral/mod.rs`, `djinn-server/src/lib.rs`'s former CLIP init disappears).
 
+### D3b. Amendments found while implementing (orphan rule and default device)
+
+- **Inherent methods on `ModelArchitecture`** (`load_weights`, `hf_files`, `load_model`) cannot
+  stay as `impl ModelArchitecture` blocks in `djinn-models` because the type lives in
+  `djinn-core` (inherent impls must be in the defining crate). They become free functions in
+  `djinn_models::lm::model`. `ModelArchitecture` itself and the pure `hf_repo_id()` stay in core.
+- **Default device.** `Device::default()` used core's `cuda`/`mac` features to pick
+  Cuda/Metal, and `ModelConfig.device` used it as its serde default. With those features gone from
+  core, that would silently turn every config without `device` into CPU. Resolution:
+  `ModelConfig.device` becomes `Option<Device>` (TOML without `device` still loads; the schema
+  gains `null`), and `djinn_models::device::resolve(Option<Device>)` returns the explicit device or
+  the best one compiled in (`cuda` -> Cuda, `mac` -> Metal, else Cpu). `Device` itself derives
+  `Default` = `Cpu`.
+- **`djinn_core::Error`** (top-level) had only candle/tokenizer/hub-parse variants, all of which
+  belonged to the moved code. It is deleted from core; config code keeps `config::Error`.
+  `djinn_models::Error` takes its place.
+
 ### D4. Keep `QMistral`; prune the rest of `ModelArchitecture`
 
 Remove variants `Mistral`, `Starcoder`, `DistilBert`. Keep `QMistral` with its

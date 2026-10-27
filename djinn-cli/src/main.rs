@@ -10,19 +10,15 @@ use std::{
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
-use djinn_core::{
-    config::DEFAULT_CONFIG_DIR,
-    lm::config::ModelRun,
-    lm::mistral::{run, run_model},
-};
+use djinn_core::{config::DEFAULT_CONFIG_DIR, lm::config::ModelRun};
+use djinn_models::lm::loader::{run, run_model};
 use server::ServerArgs;
 use tracing::Instrument;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod clip;
-mod mistral;
 mod server;
+mod single_run;
 
 const DEFAULT_LOG_ENV: &str = "warn,djinn_server=debug,djinn_core=debug,axum=debug,axum::rejection=trace,candle_core=info,tower_http=debug";
 
@@ -48,7 +44,6 @@ enum Runner {
     },
     SingleRun(SingleRunArgs),
     Config(ConfigArgs),
-    Clip(clip::Args),
 }
 
 #[derive(Parser)]
@@ -56,9 +51,8 @@ struct SingleRunArgs {
     /// Pass the name of the config to save
     #[arg(long)]
     save_config: Option<String>,
-    /// The model architecture used
-    #[command(subcommand)]
-    architecture: Architecture,
+    #[command(flatten)]
+    run: single_run::Args,
 }
 
 #[derive(Parser)]
@@ -71,23 +65,18 @@ struct ConfigArgs {
     config_dir: PathBuf,
 }
 
-#[derive(Subcommand)]
-enum Architecture {
-    Mistral(mistral::Args),
-}
-
 #[coverage(off)]
 async fn single_run(args: SingleRunArgs) -> anyhow::Result<()> {
     let save_config = args.save_config.clone();
-    let run: ModelRun = match args.architecture {
-        Architecture::Mistral(mistral_args) => run(mistral_args.try_into()?).await?,
-    };
+    let run: ModelRun = run(args.run.try_into()?).await?;
 
     if let Some(name) = save_config {
         let contents = toml::to_string(&run)?;
-        let path = PathBuf::from(format!("./configs/mistral/{name}.toml"));
-        let mut file = File::create(path)?;
-        let _ = file.write_all(contents.as_bytes());
+        // `djinn-cli config --model-name <variant> --config-name <name>` loads it back.
+        let dir = PathBuf::from(DEFAULT_CONFIG_DIR).join(run.model_config.variant.config_name());
+        std::fs::create_dir_all(&dir)?;
+        let mut file = File::create(dir.join(format!("{name}.toml")))?;
+        file.write_all(contents.as_bytes())?;
     }
 
     Ok(())
@@ -172,10 +161,8 @@ async fn main() -> anyhow::Result<()> {
             djinn_server::run_server(config).instrument(span).await
         }
         Runner::SingleRun(args) => single_run(args).await,
-        Runner::Clip(args) => clip::run(args).await,
         Runner::Config(args) => {
             let config: ModelRun = args.try_into()?;
-            //TODO only Mistral is supported for now
             run_model(config).await
         }
     }

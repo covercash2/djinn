@@ -26,8 +26,20 @@ jobs:
       uses: crate-ci/typos@v1.27.3
     - name: fmt
       run: cargo fmt --check
+    - name: djinn-core stays free of the inference stack
+      run: |
+        if cargo tree -p djinn-core --prefix none | grep -E "^(candle-|tokenizers |hf-hub )"; then
+          echo "djinn-core must not depend on candle, tokenizers, or hf-hub" >&2
+          exit 1
+        fi
+    - name: djinn-agent stays independent of the inference stack and the server
+      run: |
+        if cargo tree -p djinn-agent --prefix none | grep -E "^(candle-|djinn-models |djinn-server )"; then
+          echo "djinn-agent must not depend on candle, djinn-models, or djinn-server" >&2
+          exit 1
+        fi
     - name: clippy
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --workspace --all-targets -- -D warnings
     - name: Check schema files are up to date
       run: |
         cargo xtask schema

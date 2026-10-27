@@ -21,7 +21,7 @@
   },
   "definitions": {
     "Device": {
-      "description": "A enum of supported devices to run models on",
+      "description": "A enum of supported devices to run models on\n\nTurning this into a runtime device is the job of the `djinn-models` crate.",
       "type": "string",
       "enum": [
         "Cpu",
@@ -30,51 +30,31 @@
       ]
     },
     "ModelArchitecture": {
-      "description": "The variant of the model to be loaded",
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "distil_bert",
-            "starcoder"
-          ]
-        },
-        {
-          "description": "Main Mistral version",
-          "type": "string",
-          "enum": [
-            "mistral"
-          ]
-        },
-        {
-          "description": "Quantized Mistral",
-          "type": "string",
-          "enum": [
-            "q_mistral"
-          ]
-        }
+      "description": "The variant of the model to be loaded.\n\n`qwen2_5_instruct` is Qwen2.5-Instruct in quantized GGUF form: an instruct model with native tool calling. The size (0.5B, 1.5B, ...) is chosen by the `repo_id` / `weights_file` in the model source.\n\n(Variants are deliberately not documented one by one: a doc comment on a variant makes the generated schema a `oneOf`, whose validation errors no longer list the valid names.)",
+      "type": "string",
+      "enum": [
+        "qwen2_5_instruct"
       ]
     },
     "ModelConfig": {
       "description": "Configurations that are loaded on initialization of the model.",
       "type": "object",
       "required": [
-        "flash_attn",
         "model_source",
         "variant"
       ],
       "properties": {
         "device": {
-          "default": "Cpu",
-          "allOf": [
+          "description": "Device to run on. When omitted, the best device compiled into the build is used (CUDA or Metal if enabled, otherwise CPU).",
+          "default": null,
+          "anyOf": [
             {
               "$ref": "#/definitions/Device"
+            },
+            {
+              "type": "null"
             }
           ]
-        },
-        "flash_attn": {
-          "description": "Set true to use flash attention. Only supported on CUDA",
-          "type": "boolean"
         },
         "model_source": {
           "$ref": "#/definitions/ModelSource"
@@ -99,8 +79,32 @@
                 "revision"
               ],
               "properties": {
+                "repo_id": {
+                  "description": "Hub repository holding the weights. Defaults to the architecture's standard repository.",
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "revision": {
                   "type": "string"
+                },
+                "tokenizer_repo": {
+                  "description": "Hub repository to take `tokenizer.json` from, when it is not in `repo_id` (GGUF repositories usually do not ship a usable tokenizer).",
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "weights_file": {
+                  "description": "File to download from the repository (for GGUF models). Defaults to the architecture's standard file.",
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               }
             }
