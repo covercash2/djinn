@@ -13,8 +13,10 @@ use axum::response::{IntoResponse, Response};
 use djinn_core::chat::{
     validate_request, ChatChunk, ChatMessage, ChatRequest, ChatResponse, Choice, ChunkChoice,
     Delta, ErrorBody, FinishReason, FunctionCallDelta, ModelInfo, ModelList, Role, StopSpec,
-    ToolCall, ToolCallDelta, Usage, OBJECT_CHAT_COMPLETION, OBJECT_CHAT_COMPLETION_CHUNK,
+    ToolCall, ToolCallDelta, Usage,
 };
+use djinn_core::chat::{ChatCompletionChunkObject, ChatCompletionObject, ListObject, ModelObject};
+use djinn_core::values::ModelId;
 use djinn_models::lm::chat::{ChatEvent, ChatInput, ChatOutcome, ChatParams};
 use djinn_models::lm::LanguageModel;
 use futures::{pin_mut, StreamExt};
@@ -30,7 +32,7 @@ pub const ROUTE_MODELS: &str = "/v1/models";
 #[derive(Clone)]
 pub struct ChatState {
     pub model: Arc<Mutex<Box<dyn LanguageModel>>>,
-    pub model_id: Arc<str>,
+    pub model_id: ModelId,
 }
 
 /// Why a chat request failed. Rendered as an OpenAI-style `{"error": {...}}` body.
@@ -168,11 +170,11 @@ fn tool_call_deltas(calls: &[ToolCall]) -> Vec<ToolCallDelta> {
         .enumerate()
         .map(|(index, call)| ToolCallDelta {
             index: Some(index as u32),
-            id: Some(call.id.clone()),
+            id: Some(call.id.to_string()),
             kind: Some(call.kind),
             function: Some(FunctionCallDelta {
-                name: Some(call.function.name.clone()),
-                arguments: Some(call.function.arguments.clone()),
+                name: Some(call.function.name.to_string()),
+                arguments: Some(call.function.arguments.to_string()),
             }),
         })
         .collect()
@@ -181,7 +183,7 @@ fn tool_call_deltas(calls: &[ToolCall]) -> Vec<ToolCallDelta> {
 struct ChunkMaker {
     id: String,
     created: u64,
-    model: String,
+    model: ModelId,
 }
 
 impl ChunkMaker {
@@ -193,7 +195,7 @@ impl ChunkMaker {
     ) -> ChatChunk {
         ChatChunk {
             id: self.id.clone(),
-            object: OBJECT_CHAT_COMPLETION_CHUNK.to_owned(),
+            object: ChatCompletionChunkObject,
             created: self.created,
             model: self.model.clone(),
             choices: vec![ChunkChoice {
@@ -266,9 +268,9 @@ async fn complete_chat(state: &ChatState, input: ChatInput) -> Result<ChatRespon
 
     Ok(ChatResponse {
         id: completion_id(),
-        object: OBJECT_CHAT_COMPLETION.to_owned(),
+        object: ChatCompletionObject,
         created: now(),
-        model: state.model_id.to_string(),
+        model: state.model_id.clone(),
         choices: vec![Choice {
             index: 0,
             message: response_message(&outcome),
@@ -290,7 +292,7 @@ async fn stream_chat(state: ChatState, input: ChatInput) -> Result<Response, Cha
     let maker = ChunkMaker {
         id: completion_id(),
         created: now(),
-        model: state.model_id.to_string(),
+        model: state.model_id.clone(),
     };
 
     tokio::spawn(async move {
@@ -400,10 +402,10 @@ async fn send_item(
 )]
 pub async fn list_models(State(state): State<ChatState>) -> axum::Json<ModelList> {
     axum::Json(ModelList {
-        object: "list".to_owned(),
+        object: ListObject,
         data: vec![ModelInfo {
-            id: state.model_id.to_string(),
-            object: "model".to_owned(),
+            id: state.model_id.clone(),
+            object: ModelObject,
             owned_by: "djinn".to_owned(),
         }],
     })
@@ -417,6 +419,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{header, Request};
     use axum::Router;
+    use djinn_core::values::{MaxTokens, Prompt, StopSequence, Temperature, TopP};
     use djinn_models::lm::chat::ChatStream;
     use djinn_models::testing::ScriptedModel;
     use futures::stream;
@@ -430,7 +433,7 @@ mod tests {
     fn app_with(model: impl LanguageModel + 'static) -> Router {
         build_router(AppState {
             model: Arc::new(Mutex::new(Box::new(model))),
-            model_id: "test-model".into(),
+            model_id: ModelId::from_static("test-model"),
         })
     }
 
@@ -487,7 +490,7 @@ mod tests {
     fn tool_outcome(content: Option<&str>) -> ChatOutcome {
         ChatOutcome {
             content: content.map(str::to_owned),
-            tool_calls: vec![ToolCall::function(
+            tool_calls: vec![ToolCall::from_static(
                 "call_7",
                 "calculator",
                 r#"{"expression":"2+2"}"#,
@@ -541,6 +544,73 @@ mod tests {
         assert!(body["error"]["message"].is_string());
     }
 
+    /// Posts `body` and checks it is a 400 whose message contains every fragment.
+    async fn assert_rejected(body: Value, fragments: &[&str]) {
+        let app = app_with(ScriptedModel::replying("x"));
+        let (status, body) = chat(&app, body).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        let message = body["error"]["message"].as_str().unwrap();
+        for fragment in fragments {
+            assert!(message.contains(fragment), "`{fragment}` not in: {message}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_invalid_tool_name_is_a_400_naming_the_rule() {
+        assert_rejected(
+            json!({
+                "messages": [{"role": "user", "content": "hi"}],
+                "tools": [{"type": "function", "function": {"name": "read file"}}]
+            }),
+            &["tool name", "ASCII letters"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn an_empty_tool_call_id_is_a_400() {
+        assert_rejected(
+            json!({"messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "tool", "tool_call_id": "", "content": "4"}
+            ]}),
+            &["tool call id"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn replayed_call_arguments_must_be_a_json_object() {
+        assert_rejected(
+            json!({"messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": null, "tool_calls": [{
+                    "id": "call_1", "type": "function",
+                    "function": {"name": "calculator", "arguments": "[1,2]"}
+                }]}
+            ]}),
+            &["tool arguments", "JSON object"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn empty_replayed_arguments_mean_no_arguments() {
+        let app = app_with(ScriptedModel::replying("fine"));
+        let (status, body) = chat(
+            &app,
+            json!({"messages": [
+                {"role": "user", "content": "what time is it?"},
+                {"role": "assistant", "content": null, "tool_calls": [{
+                    "id": "call_1", "type": "function",
+                    "function": {"name": "current_time", "arguments": ""}
+                }]},
+                {"role": "tool", "tool_call_id": "call_1", "content": "noon"}
+            ]}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
     #[tokio::test]
     async fn malformed_json_is_a_400_with_an_error_body() {
         let app = app_with(ScriptedModel::replying("x"));
@@ -592,6 +662,52 @@ mod tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
+    #[tokio::test]
+    async fn an_empty_stop_string_is_a_400_saying_so() {
+        assert_rejected(
+            json!({"messages": [user("hi")], "stop": ["END", ""]}),
+            &["stop sequence", "must not be empty"],
+        )
+        .await;
+        assert_rejected(
+            json!({"messages": [user("hi")], "stop": ""}),
+            &["stop sequence"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn too_many_stop_strings_name_the_limit() {
+        assert_rejected(
+            json!({"messages": [user("hi")], "stop": ["a", "b", "c", "d", "e"]}),
+            &["stop", "at most 4"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn sampling_parameters_out_of_range_are_a_400_naming_them() {
+        for (field, value) in [
+            ("temperature", json!(-1)),
+            ("temperature", json!(5)),
+            ("top_p", json!(0)),
+            ("top_p", json!(1.5)),
+            ("max_tokens", json!(0)),
+        ] {
+            assert_rejected(json!({"messages": [user("hi")], field: value}), &[field]).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn boundary_sampling_values_are_accepted() {
+        let app = app_with(ScriptedModel::replying("x"));
+        let (status, body) = chat(
+            &app,
+            json!({"messages": [user("hi")], "temperature": 0, "top_p": 1, "max_tokens": 1}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
     #[tokio::test]
     async fn hitting_the_token_limit_reports_length() {
         let mut model = ScriptedModel::replying("cut off");
@@ -655,7 +771,7 @@ mod tests {
     impl LanguageModel for Recording {
         fn run(
             &mut self,
-            prompt: String,
+            prompt: Prompt,
             config: djinn_core::lm::config::RunConfig,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = djinn_models::Result<String>> + Send + '_>>
         {
@@ -706,7 +822,13 @@ mod tests {
         let seen = seen.lock().unwrap();
         let roles: Vec<Role> = seen[0].messages.iter().map(|m| m.role).collect();
         assert_eq!(roles, vec![Role::User, Role::Assistant, Role::Tool]);
-        assert_eq!(seen[0].messages[2].tool_call_id.as_deref(), Some("call_7"));
+        assert_eq!(
+            seen[0].messages[2]
+                .tool_call_id
+                .as_ref()
+                .map(|id| id.as_str()),
+            Some("call_7")
+        );
     }
 
     #[tokio::test]
@@ -739,12 +861,15 @@ mod tests {
 
         let seen = seen.lock().unwrap();
         let input = &seen[0];
-        assert_eq!(input.tools[0].function.name, "calculator");
-        assert_eq!(input.params.max_tokens, Some(33));
-        assert_eq!(input.params.temperature, Some(0.25));
-        assert_eq!(input.params.top_p, Some(0.5));
+        assert_eq!(input.tools[0].function.name.as_str(), "calculator");
+        assert_eq!(input.params.max_tokens, Some(MaxTokens::from_const(33)));
+        assert_eq!(
+            input.params.temperature,
+            Some(Temperature::from_const(0.25))
+        );
+        assert_eq!(input.params.top_p, Some(TopP::from_const(0.5)));
         assert_eq!(input.params.seed, Some(9));
-        assert_eq!(input.params.stop, vec!["END"]);
+        assert_eq!(input.params.stop, vec![StopSequence::from_static("END")]);
     }
 
     #[tokio::test]
@@ -752,7 +877,13 @@ mod tests {
         let (model, seen) = recording(ScriptedModel::replying("ok"));
         let app = app_with(model);
         chat(&app, json!({"messages": [user("hi")], "stop": ["a", "b"]})).await;
-        assert_eq!(seen.lock().unwrap()[0].params.stop, vec!["a", "b"]);
+        assert_eq!(
+            seen.lock().unwrap()[0].params.stop,
+            vec![
+                StopSequence::from_static("a"),
+                StopSequence::from_static("b")
+            ]
+        );
     }
 
     // ---- models ----------------------------------------------------------------------------
@@ -779,7 +910,7 @@ mod tests {
     impl LanguageModel for ErrorModel {
         fn run(
             &mut self,
-            _prompt: String,
+            _prompt: Prompt,
             _config: djinn_core::lm::config::RunConfig,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = djinn_models::Result<String>> + Send + '_>>
         {
@@ -945,7 +1076,7 @@ mod tests {
     impl LanguageModel for FailsMidStream {
         fn run(
             &mut self,
-            _prompt: String,
+            _prompt: Prompt,
             _config: djinn_core::lm::config::RunConfig,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = djinn_models::Result<String>> + Send + '_>>
         {
@@ -995,7 +1126,7 @@ mod tests {
     impl LanguageModel for EndlessModel {
         fn run(
             &mut self,
-            _prompt: String,
+            _prompt: Prompt,
             _config: djinn_core::lm::config::RunConfig,
         ) -> std::pin::Pin<Box<dyn futures::Stream<Item = djinn_models::Result<String>> + Send + '_>>
         {

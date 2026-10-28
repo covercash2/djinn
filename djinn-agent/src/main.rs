@@ -7,6 +7,7 @@ use djinn_agent::backend::OpenAiBackend;
 use djinn_agent::cli::{read_system_prompt, Args};
 use djinn_agent::repl;
 use djinn_agent::tools::ToolRegistry;
+use djinn_core::values::SystemPrompt;
 use tokio::sync::Notify;
 
 #[tokio::main]
@@ -28,7 +29,7 @@ async fn run(args: Args) -> Result<bool, String> {
     // Everything that can fail locally is checked before the server is contacted.
     let system_prompt = match &args.system {
         Some(path) => read_system_prompt(path)?,
-        None => DEFAULT_SYSTEM_PROMPT.to_owned(),
+        None => SystemPrompt::from_static(DEFAULT_SYSTEM_PROMPT),
     };
     let tools = ToolRegistry::builtin(&args.tool_root).map_err(|error| {
         format!(

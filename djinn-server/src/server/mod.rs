@@ -8,6 +8,7 @@ use axum::{
 };
 use derive_builder::Builder;
 use derive_new::new;
+use djinn_core::values::ModelId;
 use djinn_models::lm::LanguageModel;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -55,7 +56,7 @@ pub struct HttpServer {
 pub struct AppState {
     pub model: Arc<Mutex<Box<dyn LanguageModel>>>,
     /// Identifier of the loaded model, cached so listing models never waits for a generation.
-    pub model_id: Arc<str>,
+    pub model_id: ModelId,
 }
 
 /// Returns `200 OK` when the server is running.
@@ -198,6 +199,7 @@ pub(crate) mod tests {
     use super::*;
     use axum::http::{self, Request};
     use djinn_core::lm::config::RunConfig;
+    use djinn_core::values::Prompt;
     use futures::stream;
     use std::pin::Pin;
     use tokio_stream::Stream;
@@ -210,7 +212,7 @@ pub(crate) mod tests {
     impl LanguageModel for MockLanguageModel {
         fn run(
             &mut self,
-            _prompt: String,
+            _prompt: Prompt,
             _config: RunConfig,
         ) -> Pin<Box<dyn Stream<Item = Result<String, djinn_models::Error>> + Send + '_>> {
             let tokens = self.tokens.clone();
@@ -223,7 +225,7 @@ pub(crate) mod tests {
             model: Arc::new(Mutex::new(Box::new(MockLanguageModel {
                 tokens: tokens.into_iter().map(str::to_owned).collect(),
             }))),
-            model_id: "test-model".into(),
+            model_id: ModelId::from_static("test-model"),
         }
     }
 
@@ -236,7 +238,7 @@ pub(crate) mod tests {
     impl LanguageModel for ErrorLanguageModel {
         fn run(
             &mut self,
-            _prompt: String,
+            _prompt: Prompt,
             _config: RunConfig,
         ) -> Pin<Box<dyn Stream<Item = Result<String, djinn_models::Error>> + Send + '_>> {
             Box::pin(stream::once(async {
@@ -248,7 +250,7 @@ pub(crate) mod tests {
     fn error_test_app() -> Router {
         build_router(AppState {
             model: Arc::new(Mutex::new(Box::new(ErrorLanguageModel))),
-            model_id: "test-model".into(),
+            model_id: ModelId::from_static("test-model"),
         })
     }
 
@@ -302,6 +304,77 @@ pub(crate) mod tests {
         assert_eq!(response.status(), http::StatusCode::OK);
     }
 
+    /// Posts `body` to `/complete` and returns the status and the response text.
+    async fn post_complete(body: serde_json::Value) -> (http::StatusCode, String) {
+        let app = test_app(vec!["ok"]);
+        let request = Request::builder()
+            .method("POST")
+            .uri("/complete")
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .body(axum::body::Body::from(body.to_string()))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    #[tokio::test]
+    async fn complete_rejects_an_out_of_range_temperature_naming_it() {
+        let (status, body) =
+            post_complete(serde_json::json!({"prompt": "hi", "temperature": 3})).await;
+        assert!(status.is_client_error(), "{status}: {body}");
+        assert!(body.contains("temperature"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn complete_rejects_a_bad_top_p_and_a_zero_sample_length() {
+        let (status, body) = post_complete(serde_json::json!({"prompt": "hi", "top_p": 0})).await;
+        assert!(
+            status.is_client_error() && body.contains("top_p"),
+            "{status}: {body}"
+        );
+        let (status, body) =
+            post_complete(serde_json::json!({"prompt": "hi", "sample_len": 0})).await;
+        assert!(
+            status.is_client_error() && body.contains("max_tokens"),
+            "{status}: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn complete_with_valid_parameters_still_works() {
+        let (status, _) = post_complete(serde_json::json!({
+            "prompt": "hi", "temperature": 0.5, "top_p": 0.9, "sample_len": 10
+        }))
+        .await;
+        assert_eq!(status, http::StatusCode::OK);
+    }
+
+    #[test]
+    fn openapi_publishes_the_sampling_bounds() {
+        use utoipa::OpenApi;
+        fn find<'a>(value: &'a serde_json::Value, title: &str) -> Option<&'a serde_json::Value> {
+            match value {
+                serde_json::Value::Object(map) => {
+                    if map.get("title").and_then(|t| t.as_str()) == Some(title) {
+                        return Some(value);
+                    }
+                    map.values().find_map(|v| find(v, title))
+                }
+                serde_json::Value::Array(items) => items.iter().find_map(|v| find(v, title)),
+                _ => None,
+            }
+        }
+        let doc = serde_json::to_value(crate::openapi::ApiDoc::openapi()).unwrap();
+        let temperature = find(&doc, "temperature").expect("temperature is documented");
+        assert_eq!(temperature["minimum"], 0);
+        assert_eq!(temperature["maximum"], 2);
+        let tokens = find(&doc, "max_tokens").expect("max_tokens is documented");
+        assert_eq!(tokens["minimum"], 1);
+    }
     #[tokio::test]
     async fn complete_missing_content_type_returns_415() {
         let app = test_app(vec![]);

@@ -2,6 +2,7 @@
 use std::pin::Pin;
 
 use djinn_core::lm::config::RunConfig;
+use djinn_core::values::{ModelId, Prompt};
 use futures::Stream;
 
 use crate::error::{Error, Result};
@@ -23,13 +24,13 @@ pub trait LanguageModel: Send + Sync {
     /// Continues `prompt` as plain text, with no chat template.
     fn run(
         &mut self,
-        prompt: String,
+        prompt: Prompt,
         config: RunConfig,
     ) -> Pin<Box<dyn Stream<Item = Result<String>> + Send + '_>>;
 
     /// Identifier reported to API clients as the loaded model.
-    fn model_id(&self) -> String {
-        String::from("default")
+    fn model_id(&self) -> ModelId {
+        ModelId::from_static("default")
     }
 
     /// Generates an assistant reply to a conversation. Models that are not instruction-tuned

@@ -1,6 +1,7 @@
 //! Chat prompt rendering and model-output parsing, independent of any particular model.
 
 use djinn_core::chat::{ChatMessage, FinishReason, ToolCall, ToolSpec, Usage};
+use djinn_core::values::{MaxTokens, StopSequence, Temperature, ToolCallId, TopP};
 
 /// What a model said, split into text and tool calls.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -31,21 +32,22 @@ pub trait ChatTemplate: Send + Sync {
 }
 
 /// Returns a call id that is unique within this process.
-pub(crate) fn next_call_id() -> String {
+pub(crate) fn next_call_id() -> ToolCallId {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    format!("call_{}", NEXT.fetch_add(1, Ordering::Relaxed))
+    ToolCallId::new(format!("call_{}", NEXT.fetch_add(1, Ordering::Relaxed)))
+        .expect("generated ids are valid")
 }
 
 /// Per-request generation settings. `None` means "use the server default".
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ChatParams {
-    pub max_tokens: Option<usize>,
-    pub temperature: Option<f64>,
-    pub top_p: Option<f64>,
+    pub max_tokens: Option<MaxTokens>,
+    pub temperature: Option<Temperature>,
+    pub top_p: Option<TopP>,
     pub seed: Option<u64>,
     /// Generation ends before any of these strings would appear in the output.
-    pub stop: Vec<String>,
+    pub stop: Vec<StopSequence>,
 }
 
 /// Everything needed to generate one assistant reply.

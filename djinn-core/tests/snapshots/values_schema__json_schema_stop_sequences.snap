@@ -1,0 +1,16 @@
+---
+source: djinn-core/tests/values_schema.rs
+expression: schema
+---
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StopSequences",
+  "type": "array",
+  "items": {
+    "title": "stop sequence",
+    "type": "string",
+    "maxLength": 256,
+    "minLength": 1
+  },
+  "maxItems": 4
+}

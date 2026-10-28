@@ -4,6 +4,7 @@
 use async_stream::try_stream;
 use candle_core::{Device, Tensor};
 use candle_transformers::generation::LogitsProcessor;
+use djinn_core::values::{Temperature, TopP};
 use futures::Stream;
 
 use crate::error::{Error, Result};
@@ -34,8 +35,8 @@ pub(crate) trait StepModel {
 pub struct GenParams {
     pub max_tokens: usize,
     pub seed: u64,
-    pub temperature: f64,
-    pub top_p: Option<f64>,
+    pub temperature: Temperature,
+    pub top_p: Option<TopP>,
     pub repeat_penalty: f32,
     pub repeat_last_n: usize,
 }
@@ -99,7 +100,11 @@ pub(crate) fn generate_stream<'a, M: StepModel>(
         yield GenEvent::Started { prompt_tokens };
 
         let budget = params.max_tokens.min(context_length - prompt_tokens);
-        let mut sampler = LogitsProcessor::new(params.seed, Some(params.temperature), params.top_p);
+        let mut sampler = LogitsProcessor::new(
+            params.seed,
+            Some(params.temperature.get()),
+            params.top_p.map(TopP::get),
+        );
         let mut completion_tokens = 0usize;
         let mut finish = GenFinish::Length;
 
@@ -221,7 +226,7 @@ pub(crate) mod tests {
         GenParams {
             max_tokens,
             seed: 1,
-            temperature: 1e-7,
+            temperature: Temperature::from_const(1e-7),
             top_p: None,
             repeat_penalty: 1.0,
             repeat_last_n: 64,

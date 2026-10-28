@@ -1,0 +1,9 @@
+---
+source: djinn-core/tests/values_schema.rs
+expression: schema
+---
+{
+  "type": "integer",
+  "title": "max_tokens",
+  "minimum": 1
+}

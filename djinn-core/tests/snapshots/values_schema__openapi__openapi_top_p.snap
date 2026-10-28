@@ -1,0 +1,10 @@
+---
+source: djinn-core/tests/values_schema.rs
+expression: schema
+---
+{
+  "type": "number",
+  "title": "top_p",
+  "maximum": 1,
+  "exclusiveMinimum": 0
+}

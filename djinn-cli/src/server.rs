@@ -4,6 +4,7 @@ use std::{
 };
 
 use djinn_core::config::DEFAULT_CONFIG_DIR;
+use djinn_core::values::ConfigName;
 use djinn_server::Config;
 use tracing::instrument;
 
@@ -16,7 +17,7 @@ const DEFAULT_MODEL_CONFIG: &str = "model/qwen2_5_instruct";
 #[derive(Parser, Clone, Debug, PartialEq)]
 pub struct ServerArgs {
     #[arg(long, default_value = DEFAULT_HOST_ADDR)]
-    ip: String,
+    ip: IpAddr,
     #[arg(long, default_value_t = DEFAULT_HOST_PORT)]
     port: u16,
     /// Where server configs are stored
@@ -24,19 +25,22 @@ pub struct ServerArgs {
     config_dir: PathBuf,
     /// An optional name of this config to save to [`ServerArgs::config_dir`]
     #[arg(long)]
-    save_config: Option<String>,
+    save_config: Option<ConfigName>,
+    /// Name of the model config under the config directory, without `.toml`.
     #[arg(long, default_value = DEFAULT_MODEL_CONFIG)]
-    model_config: String,
+    model_config: ConfigName,
 }
 
 impl Default for ServerArgs {
     fn default() -> Self {
         Self {
-            ip: DEFAULT_HOST_ADDR.to_string(),
+            ip: DEFAULT_HOST_ADDR
+                .parse()
+                .expect("the default address is valid"),
             port: DEFAULT_HOST_PORT,
             config_dir: PathBuf::from(DEFAULT_CONFIG_DIR),
             save_config: None,
-            model_config: DEFAULT_MODEL_CONFIG.to_string(),
+            model_config: ConfigName::from_static(DEFAULT_MODEL_CONFIG),
         }
     }
 }
@@ -55,8 +59,7 @@ impl TryFrom<ServerArgs> for Config {
         let filename = format!("{model_config}.toml");
         let path = PathBuf::from("./configs/").join(filename);
 
-        let address = IpAddr::parse_ascii(ip.as_bytes())?;
-        let full_address = SocketAddr::new(address, port);
+        let full_address = SocketAddr::new(ip, port);
         Ok(Config::new(full_address, path))
     }
 }
@@ -68,7 +71,7 @@ pub async fn run(args: ServerArgs) -> anyhow::Result<()> {
     djinn_server::run_server(config).await?;
 
     if let Some(ref name) = args.save_config {
-        tracing::info!(name, "saving config");
+        tracing::info!(%name, "saving config");
         save_config(args).await?;
     }
 
@@ -118,6 +121,21 @@ mod tests {
             .join("..")
             .join(&config.model_config);
         assert!(path.exists(), "{} does not exist", path.display());
+    }
+
+    #[test]
+    fn a_bad_ip_is_a_usage_error_naming_the_flag() {
+        let error = ServerArgs::try_parse_from(["server", "--ip", "not-an-ip"]).unwrap_err();
+        assert!(error.to_string().contains("--ip"), "{error}");
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn ipv4_and_ipv6_addresses_parse() {
+        for ip in ["127.0.0.1", "::1", "0.0.0.0"] {
+            let args = ServerArgs::try_parse_from(["server", "--ip", ip]).unwrap();
+            assert_eq!(args.ip, ip.parse::<IpAddr>().unwrap());
+        }
     }
 
     #[test]

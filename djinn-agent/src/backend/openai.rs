@@ -4,13 +4,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_stream::try_stream;
 use djinn_core::chat::{ChatRequest, Delta, FinishReason, ToolCall};
+use djinn_core::values::{ModelId, ToolArguments, ToolCallId, ToolName};
 use futures::stream::BoxStream;
 use futures::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
+use url::Url;
 
 use super::sse::SseParser;
 use super::{Backend, BackendError, BackendEvent, ChatResult};
+use crate::settings::{ApiKey, BaseUrl};
 
 /// Where the djinn server listens by default.
 pub const DEFAULT_BASE_URL: &str = "http://localhost:8080/v1";
@@ -20,33 +23,29 @@ pub const DEFAULT_MODEL: &str = "default";
 /// Talks to `{base_url}/chat/completions` with streaming responses.
 pub struct OpenAiBackend {
     client: reqwest::Client,
-    base_url: String,
-    model: String,
-    api_key: Option<String>,
+    base_url: BaseUrl,
+    model: ModelId,
+    api_key: Option<ApiKey>,
 }
 
 impl OpenAiBackend {
-    pub fn new(
-        base_url: impl Into<String>,
-        model: impl Into<String>,
-        api_key: Option<String>,
-    ) -> Self {
+    pub fn new(base_url: BaseUrl, model: ModelId, api_key: Option<ApiKey>) -> Self {
         Self {
             client: reqwest::Client::new(),
-            base_url: base_url.into(),
-            model: model.into(),
-            api_key: api_key.filter(|key| !key.is_empty()),
+            base_url,
+            model,
+            api_key,
         }
     }
 
     /// The URL chat requests are sent to.
-    pub fn completions_url(&self) -> String {
-        format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
+    pub fn completions_url(&self) -> Url {
+        self.base_url.endpoint("chat/completions")
     }
 
     /// The URL of the model list, used to check that the server is up.
-    pub fn models_url(&self) -> String {
-        format!("{}/models", self.base_url.trim_end_matches('/'))
+    pub fn models_url(&self) -> Url {
+        self.base_url.endpoint("models")
     }
 
     /// Whether the server answers at all (any HTTP status counts as reachable).
@@ -54,10 +53,10 @@ impl OpenAiBackend {
         let url = self.models_url();
         let mut request = self
             .client
-            .get(&url)
+            .get(url.clone())
             .timeout(std::time::Duration::from_secs(5));
         if let Some(key) = &self.api_key {
-            request = request.bearer_auth(key);
+            request = authorize(request, key);
         }
         request
             .send()
@@ -69,11 +68,28 @@ impl OpenAiBackend {
 
 impl Default for OpenAiBackend {
     fn default() -> Self {
-        Self::new(DEFAULT_BASE_URL, DEFAULT_MODEL, None)
+        Self::new(
+            BaseUrl::from_static(DEFAULT_BASE_URL),
+            ModelId::from_static(DEFAULT_MODEL),
+            None,
+        )
     }
 }
 
-fn connection_error(url: &str, error: &reqwest::Error) -> BackendError {
+/// Adds the bearer token. The one place the key text is read; the header is marked sensitive so
+/// that `reqwest`'s own debug output hides it too.
+fn authorize(builder: reqwest::RequestBuilder, key: &ApiKey) -> reqwest::RequestBuilder {
+    match reqwest::header::HeaderValue::from_str(&format!("Bearer {}", key.expose())) {
+        Ok(mut value) => {
+            value.set_sensitive(true);
+            builder.header(reqwest::header::AUTHORIZATION, value)
+        }
+        // Unreachable: `ApiKey` only holds visible ASCII.
+        Err(_) => builder,
+    }
+}
+
+fn connection_error(url: &Url, error: &reqwest::Error) -> BackendError {
     // reqwest's Display is terse ("error sending request"); the cause chain says why.
     let mut message = error.to_string();
     let mut source = std::error::Error::source(error);
@@ -83,7 +99,7 @@ fn connection_error(url: &str, error: &reqwest::Error) -> BackendError {
         source = cause.source();
     }
     BackendError::Connection {
-        url: url.to_owned(),
+        url: url.clone(),
         message,
     }
 }
@@ -117,14 +133,14 @@ fn error_message(body: &str) -> String {
 
 impl Backend for OpenAiBackend {
     fn chat(&self, mut request: ChatRequest) -> BoxStream<'_, Result<BackendEvent, BackendError>> {
-        request.model = Some(self.model.clone());
+        request.model = Some(self.model.to_string());
         request.stream = Some(true);
         let url = self.completions_url();
 
         Box::pin(try_stream! {
-            let mut builder = self.client.post(&url).json(&request);
+            let mut builder = self.client.post(url.clone()).json(&request);
             if let Some(key) = &self.api_key {
-                builder = builder.bearer_auth(key);
+                builder = authorize(builder, key);
             }
             let response = builder.send().await.map_err(|e| connection_error(&url, &e))?;
 
@@ -133,7 +149,7 @@ impl Backend for OpenAiBackend {
                 response
             } else {
                 let body = response.text().await.unwrap_or_default();
-                Err(BackendError::Status { status: status.as_u16(), message: error_message(&body) })?;
+                Err(BackendError::Status { status, message: error_message(&body) })?;
                 unreachable!("the error above ends the stream");
             };
 
@@ -205,9 +221,10 @@ pub(crate) struct Assembler {
     done: bool,
 }
 
-fn next_call_id() -> String {
+fn next_call_id() -> ToolCallId {
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    format!("call_{}", NEXT.fetch_add(1, Ordering::Relaxed))
+    ToolCallId::new(format!("call_{}", NEXT.fetch_add(1, Ordering::Relaxed)))
+        .expect("generated ids are valid")
 }
 
 impl Assembler {
@@ -308,6 +325,18 @@ impl Assembler {
                     "a tool call has no function name".to_owned(),
                 ));
             }
+            let name = ToolName::new(call.name.as_str()).map_err(|error| {
+                BackendError::Malformed(format!("a tool call has an invalid name: {error}"))
+            })?;
+            // A missing or empty id is replaced; one that is present must be usable.
+            let id = match call.id.filter(|id| !id.is_empty()) {
+                Some(id) => ToolCallId::new(id).map_err(|error| {
+                    BackendError::Malformed(format!(
+                        "tool call `{name}` has an invalid id: {error}"
+                    ))
+                })?,
+                None => next_call_id(),
+            };
             let arguments = if call.arguments.trim().is_empty() {
                 "{}".to_owned()
             } else {
@@ -327,11 +356,10 @@ impl Assembler {
                     }
                 }
             };
-            tool_calls.push(ToolCall::function(
-                call.id.unwrap_or_else(next_call_id),
-                call.name,
-                arguments,
-            ));
+            let arguments = ToolArguments::new(arguments).map_err(|error| {
+                BackendError::Malformed(format!("arguments of tool call `{name}`: {error}"))
+            })?;
+            tool_calls.push(ToolCall::function(id, name, arguments));
         }
 
         let finish = if tool_calls.is_empty() {
@@ -363,6 +391,14 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    fn test_backend(url: impl AsRef<str>, model: &str, key: Option<&str>) -> OpenAiBackend {
+        OpenAiBackend::new(
+            BaseUrl::new(url.as_ref()).unwrap(),
+            ModelId::new(model).unwrap(),
+            key.map(|key| ApiKey::new(key).unwrap()),
+        )
+    }
 
     // ---- assembler ---------------------------------------------------------------------------
 
@@ -412,10 +448,10 @@ mod tests {
         assert_eq!(result.content, None);
         assert_eq!(result.finish, FinishReason::ToolCalls);
         assert_eq!(result.tool_calls.len(), 1);
-        assert_eq!(result.tool_calls[0].id, "call_a");
-        assert_eq!(result.tool_calls[0].function.name, "calculator");
+        assert_eq!(result.tool_calls[0].id.as_str(), "call_a");
+        assert_eq!(result.tool_calls[0].function.name.as_str(), "calculator");
         assert_eq!(
-            result.tool_calls[0].function.arguments,
+            result.tool_calls[0].function.arguments.as_str(),
             "{\"expression\":\"2+2\"}"
         );
     }
@@ -432,7 +468,7 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(
-            result.tool_calls[0].function.arguments,
+            result.tool_calls[0].function.arguments.as_str(),
             "{\"expression\":\"1+1\"}"
         );
     }
@@ -452,7 +488,10 @@ mod tests {
             .map(|c| c.function.name.as_str())
             .collect();
         assert_eq!(names, vec!["one", "two"]);
-        assert_eq!(result.tool_calls[1].function.arguments, "{\"x\":1}");
+        assert_eq!(
+            result.tool_calls[1].function.arguments.as_str(),
+            "{\"x\":1}"
+        );
     }
 
     #[test]
@@ -464,8 +503,8 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(result.tool_calls.len(), 2);
-        assert_eq!(result.tool_calls[0].id, "a");
-        assert_eq!(result.tool_calls[1].id, "b");
+        assert_eq!(result.tool_calls[0].id.as_str(), "a");
+        assert_eq!(result.tool_calls[1].id.as_str(), "b");
     }
 
     #[test]
@@ -483,7 +522,7 @@ mod tests {
         ];
         let (_, first) = assemble(&events).unwrap();
         let (_, second) = assemble(&events).unwrap();
-        let ids: Vec<&String> = first
+        let ids: Vec<&ToolCallId> = first
             .tool_calls
             .iter()
             .chain(&second.tool_calls)
@@ -491,9 +530,65 @@ mod tests {
             .collect();
         let unique: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(unique.len(), 4, "{ids:?}");
-        assert!(ids.iter().all(|id| !id.is_empty()));
+        assert!(ids.iter().all(|id| !id.as_str().is_empty()));
     }
 
+    #[test]
+    fn a_server_tool_name_that_breaks_the_rule_is_a_malformed_response() {
+        let error = assemble(&[
+            chunk(
+                json!({"tool_calls": [{"index": 0, "id": "a", "function": {"name": "my tool", "arguments": "{}"}}]}),
+                None,
+            ),
+            chunk(json!({}), Some("tool_calls")),
+            "[DONE]".into(),
+        ])
+        .unwrap_err();
+        let BackendError::Malformed(message) = error else {
+            panic!("expected Malformed, got {error:?}");
+        };
+        assert!(
+            message.contains("tool name") && message.contains("my tool"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_server_tool_call_id_with_whitespace_is_a_malformed_response() {
+        let error = assemble(&[
+            chunk(
+                json!({"tool_calls": [{"index": 0, "id": "a b", "function": {"name": "one", "arguments": "{}"}}]}),
+                None,
+            ),
+            "[DONE]".into(),
+        ])
+        .unwrap_err();
+        assert!(matches!(error, BackendError::Malformed(m) if m.contains("tool call id")));
+    }
+
+    #[test]
+    fn an_empty_server_id_is_replaced_like_a_missing_one() {
+        let (_, result) = assemble(&[
+            chunk(
+                json!({"tool_calls": [{"index": 0, "id": "", "function": {"name": "one", "arguments": "{}"}}]}),
+                None,
+            ),
+            "[DONE]".into(),
+        ])
+        .unwrap();
+        assert!(result.tool_calls[0].id.as_str().starts_with("call_"));
+    }
+
+    #[test]
+    fn chunks_without_an_object_field_are_accepted() {
+        // `chunk` builds bodies with no `object` field at all.
+        let (text, _) = assemble(&[
+            chunk(json!({"content": "hi"}), Some("stop")),
+            "[DONE]".into(),
+        ])
+        .unwrap();
+        assert_eq!(text, "hi");
+    }
     #[test]
     fn empty_arguments_mean_no_arguments() {
         let (_, result) = assemble(&[
@@ -501,7 +596,7 @@ mod tests {
             "[DONE]".into(),
         ])
         .unwrap();
-        assert_eq!(result.tool_calls[0].function.arguments, "{}");
+        assert_eq!(result.tool_calls[0].function.arguments.as_str(), "{}");
     }
 
     #[test]
@@ -733,7 +828,7 @@ mod tests {
             "[DONE]".into(),
         ]);
         let (url, _) = serve(Respond::Sse(vec![body])).await;
-        let backend = OpenAiBackend::new(url, "m", None);
+        let backend = test_backend(url, "m", None);
 
         let (events, error) = collect(&backend).await;
         assert_eq!(error, None);
@@ -754,7 +849,7 @@ mod tests {
             "[DONE]".into(),
         ])]))
         .await;
-        let backend = OpenAiBackend::new(url, "my-model", None);
+        let backend = test_backend(url, "my-model", None);
         collect(&backend).await;
 
         let captured = captured.lock().unwrap();
@@ -773,26 +868,17 @@ mod tests {
         };
 
         let (url, captured) = serve(Respond::Sse(vec![ok()])).await;
-        collect(&OpenAiBackend::new(url, "m", Some("secret".into()))).await;
+        collect(&test_backend(url, "m", Some("secret"))).await;
         assert_eq!(
             captured.lock().unwrap().headers[0]["authorization"],
             "Bearer secret"
         );
 
         let (url, captured) = serve(Respond::Sse(vec![ok()])).await;
-        collect(&OpenAiBackend::new(url, "m", None)).await;
+        collect(&test_backend(url, "m", None)).await;
         assert!(captured.lock().unwrap().headers[0]
             .get("authorization")
             .is_none());
-
-        let (url, captured) = serve(Respond::Sse(vec![ok()])).await;
-        collect(&OpenAiBackend::new(url, "m", Some(String::new()))).await;
-        assert!(
-            captured.lock().unwrap().headers[0]
-                .get("authorization")
-                .is_none(),
-            "an empty key is no key"
-        );
     }
 
     #[tokio::test]
@@ -810,13 +896,16 @@ mod tests {
         let chunks: Vec<Vec<u8>> = whole.iter().map(|b| vec![*b]).collect();
         let (url, _) = serve(Respond::Sse(chunks)).await;
 
-        let (events, error) = collect(&OpenAiBackend::new(url, "m", None)).await;
+        let (events, error) = collect(&test_backend(url, "m", None)).await;
         assert_eq!(error, None);
         assert_eq!(text_events(&events), vec!["\u{e9}t\u{e9}"]);
         let BackendEvent::Done(result) = events.last().unwrap() else {
             panic!("no Done")
         };
-        assert_eq!(result.tool_calls[0].function.arguments, "{\"a\":1}");
+        assert_eq!(
+            result.tool_calls[0].function.arguments.as_str(),
+            "{\"a\":1}"
+        );
         assert_eq!(result.finish, FinishReason::ToolCalls);
     }
 
@@ -827,13 +916,13 @@ mod tests {
             r#"{"error":{"message":"context too long","code":"context_length_exceeded"}}"#.into(),
         ))
         .await;
-        let (events, error) = collect(&OpenAiBackend::new(url, "m", None)).await;
+        let (events, error) = collect(&test_backend(url, "m", None)).await;
         assert!(events.is_empty());
         let error = error.unwrap();
         assert_eq!(
             error,
             BackendError::Status {
-                status: 400,
+                status: StatusCode::BAD_REQUEST,
                 message: "context too long".into()
             }
         );
@@ -851,11 +940,11 @@ mod tests {
             "upstream down".into(),
         ))
         .await;
-        let (_, error) = collect(&OpenAiBackend::new(url, "m", None)).await;
+        let (_, error) = collect(&test_backend(url, "m", None)).await;
         assert_eq!(
             error,
             Some(BackendError::Status {
-                status: 502,
+                status: StatusCode::BAD_GATEWAY,
                 message: "upstream down".into()
             })
         );
@@ -866,7 +955,7 @@ mod tests {
         let body = sse(&[chunk(json!({"content": "partial answer"}), None)]);
         let (url, _) = serve(Respond::Sse(vec![body])).await;
 
-        let (events, error) = collect(&OpenAiBackend::new(url, "m", None)).await;
+        let (events, error) = collect(&test_backend(url, "m", None)).await;
         assert_eq!(text_events(&events), vec!["partial answer"]);
         assert_eq!(error, Some(BackendError::StreamEndedEarly));
         assert!(error.unwrap().to_string().contains("ended before"));
@@ -880,7 +969,7 @@ mod tests {
                 .to_string(),
         ]);
         let (url, _) = serve(Respond::Sse(vec![body])).await;
-        let (events, error) = collect(&OpenAiBackend::new(url, "m", None)).await;
+        let (events, error) = collect(&test_backend(url, "m", None)).await;
         assert_eq!(text_events(&events), vec!["so far"]);
         assert_eq!(
             error,
@@ -893,7 +982,7 @@ mod tests {
         let mut body = sse(&[chunk(json!({"content": "hi"}), Some("stop"))]);
         body.extend_from_slice(b"data: [DONE]"); // no final \n\n
         let (url, _) = serve(Respond::Sse(vec![body])).await;
-        let (events, error) = collect(&OpenAiBackend::new(url, "m", None)).await;
+        let (events, error) = collect(&test_backend(url, "m", None)).await;
         assert_eq!(error, None);
         assert!(matches!(events.last(), Some(BackendEvent::Done(_))));
     }
@@ -906,12 +995,12 @@ mod tests {
         drop(listener);
         let url = format!("http://127.0.0.1:{port}/v1");
 
-        let (events, error) = collect(&OpenAiBackend::new(&url, "m", None)).await;
+        let (events, error) = collect(&test_backend(&url, "m", None)).await;
         assert!(events.is_empty());
         let error = error.unwrap();
         match &error {
             BackendError::Connection { url: tried, .. } => {
-                assert_eq!(tried, &format!("{url}/chat/completions"));
+                assert_eq!(tried.as_str(), format!("{url}/chat/completions"));
             }
             other => panic!("expected a connection error, got {other:?}"),
         }
@@ -923,26 +1012,26 @@ mod tests {
 
     #[tokio::test]
     async fn trailing_slashes_in_the_base_url_are_fine() {
-        let backend = OpenAiBackend::new("http://example.test/v1/", "m", None);
+        let backend = test_backend("http://example.test/v1/", "m", None);
         assert_eq!(
-            backend.completions_url(),
+            backend.completions_url().as_str(),
             "http://example.test/v1/chat/completions"
         );
-        assert_eq!(backend.models_url(), "http://example.test/v1/models");
+        assert_eq!(
+            backend.models_url().as_str(),
+            "http://example.test/v1/models"
+        );
     }
 
     #[tokio::test]
     async fn reachability_check() {
         let (url, _) = serve(Respond::Sse(vec![])).await;
-        assert!(OpenAiBackend::new(url, "m", None)
-            .check_reachable()
-            .await
-            .is_ok());
+        assert!(test_backend(url, "m", None).check_reachable().await.is_ok());
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
-        let error = OpenAiBackend::new(format!("http://127.0.0.1:{port}/v1"), "m", None)
+        let error = test_backend(format!("http://127.0.0.1:{port}/v1"), "m", None)
             .check_reachable()
             .await
             .unwrap_err();
@@ -953,9 +1042,9 @@ mod tests {
     fn defaults_match_the_djinn_server() {
         let backend = OpenAiBackend::default();
         assert_eq!(
-            backend.completions_url(),
+            backend.completions_url().as_str(),
             "http://localhost:8080/v1/chat/completions"
         );
-        assert_eq!(backend.model, "default");
+        assert_eq!(backend.model.as_str(), "default");
     }
 }

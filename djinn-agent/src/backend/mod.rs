@@ -6,7 +6,9 @@
 
 use djinn_core::chat::{ChatRequest, FinishReason, ToolCall};
 use futures::stream::BoxStream;
+use reqwest::StatusCode;
 use thiserror::Error;
+use url::Url;
 
 mod openai;
 mod scripted;
@@ -40,10 +42,10 @@ pub struct ChatResult {
 pub enum BackendError {
     /// The server could not be reached.
     #[error("could not connect to {url}: {message}")]
-    Connection { url: String, message: String },
+    Connection { url: Url, message: String },
     /// The server answered with an error status.
     #[error("the server returned HTTP {status}: {message}")]
-    Status { status: u16, message: String },
+    Status { status: StatusCode, message: String },
     /// The server reported an error inside a stream that had already started.
     #[error("the server reported an error: {0}")]
     Server(String),

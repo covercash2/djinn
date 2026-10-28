@@ -2,7 +2,10 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
+use std::sync::LazyLock;
+
 use serde_json::{json, Value};
 
 use super::{Tool, ToolError};
@@ -11,8 +14,9 @@ use super::{Tool, ToolError};
 pub struct CurrentTime;
 
 impl Tool for CurrentTime {
-    fn name(&self) -> &str {
-        "current_time"
+    fn name(&self) -> &ToolName {
+        static NAME: LazyLock<ToolName> = LazyLock::new(|| ToolName::from_static("current_time"));
+        &NAME
     }
 
     fn description(&self) -> &str {

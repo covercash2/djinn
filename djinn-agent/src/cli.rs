@@ -3,8 +3,10 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use djinn_core::values::{ModelId, SystemPrompt};
 
 use crate::backend::{DEFAULT_BASE_URL, DEFAULT_MODEL};
+use crate::settings::{ApiKey, ApiKeyParser, BaseUrl};
 
 /// A small agent: chat with a model that can use a few read-only tools.
 ///
@@ -15,15 +17,15 @@ use crate::backend::{DEFAULT_BASE_URL, DEFAULT_MODEL};
 pub struct Args {
     /// Base URL of the OpenAI-compatible API, up to and including `/v1`.
     #[arg(long, env = "DJINN_AGENT_BASE_URL", default_value = DEFAULT_BASE_URL)]
-    pub base_url: String,
+    pub base_url: BaseUrl,
 
     /// Model name sent with every request (the djinn server ignores it).
     #[arg(long, env = "DJINN_AGENT_MODEL", default_value = DEFAULT_MODEL)]
-    pub model: String,
+    pub model: ModelId,
 
     /// Bearer token for the API, if the server wants one.
-    #[arg(long, env = "DJINN_AGENT_API_KEY", hide_env_values = true)]
-    pub api_key: Option<String>,
+    #[arg(long, env = "DJINN_AGENT_API_KEY", hide_env_values = true, value_parser = ApiKeyParser)]
+    pub api_key: Option<ApiKey>,
 
     /// The most model calls one message may cause before the agent gives up.
     #[arg(long, default_value_t = 8, value_parser = clap::value_parser!(u32).range(1..))]
@@ -43,13 +45,15 @@ pub struct Args {
 }
 
 /// Reads the system prompt file, with an error that names it.
-pub fn read_system_prompt(path: &std::path::Path) -> Result<String, String> {
-    std::fs::read_to_string(path).map_err(|error| {
+pub fn read_system_prompt(path: &std::path::Path) -> Result<SystemPrompt, String> {
+    let text = std::fs::read_to_string(path).map_err(|error| {
         format!(
             "cannot read system prompt file `{}`: {error}",
             path.display()
         )
-    })
+    })?;
+    SystemPrompt::new(text)
+        .map_err(|error| format!("system prompt file `{}`: {error}", path.display()))
 }
 
 #[cfg(test)]
@@ -90,8 +94,8 @@ mod tests {
     #[test]
     fn defaults_match_the_djinn_server() {
         let args = with_env(&[], || parse(&[]).unwrap());
-        assert_eq!(args.base_url, "http://localhost:8080/v1");
-        assert_eq!(args.model, "default");
+        assert_eq!(args.base_url.to_string(), "http://localhost:8080/v1");
+        assert_eq!(args.model.as_str(), "default");
         assert_eq!(args.api_key, None);
         assert_eq!(args.max_steps, 8);
         assert_eq!(args.tool_root, PathBuf::from("."));
@@ -109,9 +113,9 @@ mod tests {
             ],
             || parse(&[]).unwrap(),
         );
-        assert_eq!(args.base_url, "http://ollama:11434/v1");
-        assert_eq!(args.model, "qwen2.5");
-        assert_eq!(args.api_key.as_deref(), Some("sk-test"));
+        assert_eq!(args.base_url.to_string(), "http://ollama:11434/v1");
+        assert_eq!(args.model.as_str(), "qwen2.5");
+        assert_eq!(args.api_key.as_ref().map(ApiKey::expose), Some("sk-test"));
     }
 
     #[test]
@@ -123,8 +127,8 @@ mod tests {
             ],
             || parse(&["--model", "b", "--base-url", "http://flag/v1"]).unwrap(),
         );
-        assert_eq!(args.model, "b");
-        assert_eq!(args.base_url, "http://flag/v1");
+        assert_eq!(args.model.as_str(), "b");
+        assert_eq!(args.base_url.to_string(), "http://flag/v1");
     }
 
     #[test]
@@ -148,7 +152,7 @@ mod tests {
         assert_eq!(args.tool_root, PathBuf::from("/tmp"));
         assert_eq!(args.system, Some(PathBuf::from("prompt.txt")));
         assert_eq!(args.once.as_deref(), Some("What is 2+2?"));
-        assert_eq!(args.api_key.as_deref(), Some("k"));
+        assert_eq!(args.api_key.as_ref().map(ApiKey::expose), Some("k"));
     }
 
     #[test]
@@ -186,7 +190,69 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("system.txt");
         std::fs::write(&path, "You are terse.\n").unwrap();
-        assert_eq!(read_system_prompt(&path).unwrap(), "You are terse.\n");
+        assert_eq!(
+            read_system_prompt(&path).unwrap().as_str(),
+            "You are terse.\n"
+        );
+    }
+
+    #[test]
+    fn an_invalid_base_url_is_a_usage_error_naming_the_flag() {
+        for url in [
+            "localhost:8080",
+            "ftp://h/v1",
+            "http://u:p@h/v1",
+            "http://h/v1?x=1",
+        ] {
+            let error = with_env(&[], || parse(&["--base-url", url])).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                clap::error::ErrorKind::ValueValidation,
+                "{url}"
+            );
+            assert!(error.to_string().contains("--base-url"), "{url}: {error}");
+        }
+    }
+
+    #[test]
+    fn an_invalid_base_url_from_the_environment_is_rejected_too() {
+        let error = with_env(&[("DJINN_AGENT_BASE_URL", "not a url")], || parse(&[])).unwrap_err();
+        assert!(error.to_string().contains("base URL"), "{error}");
+    }
+
+    #[test]
+    fn an_empty_model_name_is_a_usage_error_naming_the_flag() {
+        let error = with_env(&[], || parse(&["--model", ""])).unwrap_err();
+        assert!(error.to_string().contains("--model"), "{error}");
+    }
+
+    #[test]
+    fn the_api_key_is_validated_and_never_shown() {
+        let error = with_env(&[], || parse(&["--api-key", "has space"])).unwrap_err();
+        assert!(error.to_string().contains("--api-key"), "{error}");
+        assert!(!error.to_string().contains("has space"), "{error}");
+
+        let args = with_env(&[("DJINN_AGENT_API_KEY", "super-secret")], || {
+            parse(&[]).unwrap()
+        });
+        assert!(!format!("{args:?}").contains("super-secret"));
+    }
+
+    #[test]
+    fn an_empty_api_key_is_rejected_without_ambiguity() {
+        let error = with_env(&[("DJINN_AGENT_API_KEY", "")], || parse(&[])).unwrap_err();
+        assert!(error.to_string().contains("--api-key"), "{error}");
+        assert!(error.to_string().contains("must not be empty"), "{error}");
+    }
+
+    #[test]
+    fn a_blank_system_prompt_file_is_named_in_the_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blank.txt");
+        std::fs::write(&path, "  \n\t\n").unwrap();
+        let error = read_system_prompt(&path).unwrap_err();
+        assert!(error.contains("blank.txt"), "{error}");
+        assert!(error.contains("non-whitespace"), "{error}");
     }
 
     #[test]

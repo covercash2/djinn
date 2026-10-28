@@ -1,0 +1,11 @@
+---
+source: djinn-core/tests/values_schema.rs
+expression: schema
+---
+{
+  "type": "string",
+  "title": "repository id",
+  "maxLength": 193,
+  "minLength": 3,
+  "pattern": "^[A-Za-z0-9._-]{1,96}/[A-Za-z0-9._-]{1,96}$"
+}

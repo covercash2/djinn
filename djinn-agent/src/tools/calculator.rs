@@ -4,7 +4,10 @@
 //! There are no variables, functions, exponent operators or implicit multiplication, so the model
 //! cannot make the tool do anything but arithmetic.
 
+use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
+use std::sync::LazyLock;
+
 use serde_json::{json, Value};
 
 use super::{string_arg, Tool, ToolError};
@@ -18,8 +21,9 @@ const MAX_DEPTH: usize = 50;
 pub struct Calculator;
 
 impl Tool for Calculator {
-    fn name(&self) -> &str {
-        "calculator"
+    fn name(&self) -> &ToolName {
+        static NAME: LazyLock<ToolName> = LazyLock::new(|| ToolName::from_static("calculator"));
+        &NAME
     }
 
     fn description(&self) -> &str {

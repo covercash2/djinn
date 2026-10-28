@@ -7,6 +7,7 @@
 mod pyjson;
 
 use djinn_core::chat::{ChatMessage, Role, ToolCall, ToolSpec};
+use djinn_core::values::{ToolArguments, ToolName};
 use serde_json::Value;
 
 use super::chat::{next_call_id, ChatTemplate, ParsedReply};
@@ -85,7 +86,7 @@ impl ChatTemplate for Qwen25Template {
                     }
                     for call in message.tool_calls.iter().flatten() {
                         out.push_str("\n<tool_call>\n{\"name\": \"");
-                        out.push_str(&call.function.name);
+                        out.push_str(call.function.name.as_str());
                         out.push_str("\", \"arguments\": ");
                         out.push_str(&arguments_json(&call.function.arguments));
                         out.push_str("}\n</tool_call>");
@@ -128,8 +129,6 @@ impl ChatTemplate for Qwen25Template {
             let body_end = body_start + close;
             match parse_call(&output[body_start..body_end]) {
                 Some((name, arguments)) => {
-                    let arguments = serde_json::to_string(&arguments)
-                        .expect("serializing a JSON value cannot fail");
                     calls.push(ToolCall::function(next_call_id(), name, arguments));
                     spans.push((start, body_end + TOOL_CALL_CLOSE.len()));
                     cursor = body_end + TOOL_CALL_CLOSE.len();
@@ -178,35 +177,26 @@ fn push_turn(out: &mut String, role: &str, content: &str) {
 }
 
 /// The template renders arguments as a JSON object; the wire format carries them as a string.
-/// If the string is not valid JSON, render it as a JSON string, which is what `tojson` of a
-/// string argument would produce.
-fn arguments_json(arguments: &str) -> String {
-    match serde_json::from_str::<Value>(arguments) {
-        Ok(value) => to_py_json(&value),
-        Err(_) => to_py_json(arguments),
-    }
+fn arguments_json(arguments: &ToolArguments) -> String {
+    to_py_json(&arguments.to_value())
 }
 
 /// Parses the body of one `<tool_call>` block: a JSON object with a string `name` and an
 /// `arguments` object. A missing `arguments` means no arguments; arguments sent as a JSON-encoded
 /// string are accepted if they decode to an object.
-fn parse_call(body: &str) -> Option<(String, Value)> {
+fn parse_call(body: &str) -> Option<(ToolName, ToolArguments)> {
     let Value::Object(mut object) = serde_json::from_str::<Value>(body.trim()).ok()? else {
         return None;
     };
     let Value::String(name) = object.remove("name")? else {
         return None;
     };
-    if name.is_empty() {
-        return None;
-    }
+    // A name that is not a valid tool name cannot be called, so the block stays plain text.
+    let name = ToolName::new(name).ok()?;
     let arguments = match object.remove("arguments") {
-        None | Some(Value::Null) => Value::Object(Default::default()),
-        Some(object @ Value::Object(_)) => object,
-        Some(Value::String(encoded)) => match serde_json::from_str::<Value>(&encoded).ok()? {
-            object @ Value::Object(_) => object,
-            _ => return None,
-        },
+        None | Some(Value::Null) => ToolArguments::empty(),
+        Some(Value::Object(object)) => ToolArguments::from_object(object),
+        Some(Value::String(encoded)) => ToolArguments::new(encoded).ok()?,
         Some(_) => return None,
     };
     Some((name, arguments))
@@ -256,13 +246,24 @@ mod tests {
     }
 
     #[test]
-    fn tool_call_arguments_that_are_not_json_render_as_a_string() {
+    fn tool_call_arguments_render_as_a_json_object() {
         let messages = [
             ChatMessage::user("x"),
-            ChatMessage::assistant_tool_calls(None, vec![ToolCall::function("c", "f", "not json")]),
+            ChatMessage::assistant_tool_calls(
+                None,
+                vec![ToolCall::from_static("c", "f", r#"{"a":1}"#)],
+            ),
         ];
         let rendered = Qwen25Template.render(&messages, &[]);
-        assert!(rendered.contains("{\"name\": \"f\", \"arguments\": \"not json\"}"));
+        assert!(rendered.contains("{\"name\": \"f\", \"arguments\": {\"a\": 1}}"));
+    }
+
+    #[test]
+    fn a_call_with_an_invalid_tool_name_stays_plain_text() {
+        let text = r#"<tool_call>{"name":"do it!","arguments":{}}</tool_call>"#;
+        let reply = Qwen25Template.parse_output(text);
+        assert!(reply.tool_calls.is_empty());
+        assert_eq!(reply.content.as_deref(), Some(text));
     }
 
     #[test]

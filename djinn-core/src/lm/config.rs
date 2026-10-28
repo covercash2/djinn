@@ -3,20 +3,21 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
+use crate::values::{MaxTokens, Prompt, Temperature, TopP};
 
 use crate::{
     device::Device,
     lm::{model::ModelArchitecture, ModelSource},
 };
 
-pub const DEFAULT_SAMPLE_LEN: usize = 100;
+pub const DEFAULT_SAMPLE_LEN: MaxTokens = MaxTokens::from_const(100);
 pub const DEFAULT_SEED: u64 = 299792458;
 pub const DEFAULT_REPEAT_LAST_N: usize = 64;
 pub const DEFAULT_REPEAT_PENALTY: f32 = 1.1;
-pub const DEFAULT_TEMPERATURE: f64 = 1e-7;
-pub const DEFAULT_TOP_P: Option<f64> = None;
+pub const DEFAULT_TEMPERATURE: Temperature = Temperature::from_const(1e-7);
+pub const DEFAULT_TOP_P: Option<TopP> = None;
 
-const fn default_sample_len() -> usize {
+const fn default_sample_len() -> MaxTokens {
     DEFAULT_SAMPLE_LEN
 }
 
@@ -48,17 +49,17 @@ const fn default_repeat_last_n() -> usize {
 const fn default_repeat_penalty() -> f32 {
     DEFAULT_REPEAT_PENALTY
 }
-const fn default_temperature() -> f64 {
+const fn default_temperature() -> Temperature {
     DEFAULT_TEMPERATURE
 }
-const fn default_top_p() -> Option<f64> {
+const fn default_top_p() -> Option<TopP> {
     DEFAULT_TOP_P
 }
 
 /// The results of a model run
 #[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ModelRun {
-    pub prompt: String,
+    pub prompt: Prompt,
     pub model_config: ModelConfig,
     pub run_config: RunConfig,
 }
@@ -74,7 +75,7 @@ pub struct RunConfig {
     /// Number of tokens to generate.
     #[serde(default = "default_sample_len")]
     #[cfg_attr(feature = "clap", arg(long, default_value_t = DEFAULT_SAMPLE_LEN, env = "DJINN_LM_SAMPLE_LEN"))]
-    pub sample_len: usize,
+    pub sample_len: MaxTokens,
     /// RNG seed for reproducible generation.
     #[serde(default = "default_seed")]
     #[schemars(default = "default_seed_schema")]
@@ -91,11 +92,11 @@ pub struct RunConfig {
     /// Sampling temperature (lower = more deterministic).
     #[serde(default = "default_temperature")]
     #[cfg_attr(feature = "clap", arg(long, default_value_t = DEFAULT_TEMPERATURE, env = "DJINN_LM_TEMPERATURE"))]
-    pub temperature: f64,
+    pub temperature: Temperature,
     /// Nucleus sampling probability cutoff.
     #[serde(default = "default_top_p", skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "clap", arg(long, env = "DJINN_LM_TOP_P"))]
-    pub top_p: Option<f64>,
+    pub top_p: Option<TopP>,
 }
 
 impl Default for RunConfig {
@@ -176,7 +177,7 @@ mod tests {
     #[test]
     fn partial_toml_uses_serde_defaults() {
         let cfg: RunConfig = toml::from_str("sample_len = 50").unwrap();
-        assert_eq!(cfg.sample_len, 50);
+        assert_eq!(cfg.sample_len, MaxTokens::from_const(50));
         assert_eq!(cfg.repeat_penalty, DEFAULT_REPEAT_PENALTY);
         assert_eq!(cfg.temperature, DEFAULT_TEMPERATURE);
     }
@@ -217,13 +218,16 @@ mod tests {
         else {
             panic!("expected a hub source");
         };
-        assert_eq!(repo_id.as_deref(), Some("Qwen/Qwen2.5-1.5B-Instruct-GGUF"));
         assert_eq!(
-            weights_file.as_deref(),
+            repo_id.as_ref().map(|r| r.as_str()),
+            Some("Qwen/Qwen2.5-1.5B-Instruct-GGUF")
+        );
+        assert_eq!(
+            weights_file.as_ref().map(|r| r.as_str()),
             Some("qwen2.5-1.5b-instruct-q4_k_m.gguf")
         );
         assert_eq!(
-            tokenizer_repo.as_deref(),
+            tokenizer_repo.as_ref().map(|r| r.as_str()),
             Some("Qwen/Qwen2.5-1.5B-Instruct")
         );
     }
@@ -265,6 +269,38 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    fn load(source: &str) -> Result<ModelConfig, config::Error> {
+        let header = "variant = \"qwen2_5_instruct\"\n[model_source.hugging_face_hub]\nrevision = \"main\"\n";
+        config::validate_and_load::<ModelConfig>(&format!("{header}{source}"), Path::new("t.toml"))
+    }
+
+    #[test]
+    fn a_malformed_repo_id_is_rejected_naming_the_key() {
+        let error = load("repo_id = \"not a repo\"\n").unwrap_err().to_string();
+        assert!(error.contains("repo_id"), "{error}");
+    }
+
+    #[test]
+    fn a_weights_file_that_escapes_the_repository_is_rejected_naming_the_key() {
+        let error = load("weights_file = \"../../etc/passwd\"\n")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("weights_file"), "{error}");
+    }
+
+    #[test]
+    fn a_bad_tokenizer_repo_and_revision_are_rejected() {
+        assert!(load("tokenizer_repo = \"a/b/c\"\n").is_err());
+        let bad_revision = "variant = \"qwen2_5_instruct\"\n[model_source.hugging_face_hub]\nrevision = \"ma in\"\n";
+        let error = config::validate_and_load::<ModelConfig>(bad_revision, Path::new("t.toml"));
+        assert!(error.unwrap_err().to_string().contains("revision"));
+    }
+
+    #[test]
+    fn a_valid_override_is_accepted() {
+        assert!(load("repo_id = \"Qwen/Qwen2.5-0.5B-Instruct-GGUF\"\nweights_file = \"qwen2.5-0.5b-instruct-q4_k_m.gguf\"\n").is_ok());
     }
 
     #[test]

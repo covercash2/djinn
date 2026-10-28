@@ -2,7 +2,10 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
+use std::sync::LazyLock;
+
 use serde_json::{json, Value};
 use tokio::io::AsyncReadExt;
 
@@ -127,8 +130,9 @@ impl ReadFile {
 }
 
 impl Tool for ReadFile {
-    fn name(&self) -> &str {
-        "read_file"
+    fn name(&self) -> &ToolName {
+        static NAME: LazyLock<ToolName> = LazyLock::new(|| ToolName::from_static("read_file"));
+        &NAME
     }
 
     fn description(&self) -> &str {

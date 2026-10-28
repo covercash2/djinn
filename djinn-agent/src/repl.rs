@@ -157,7 +157,7 @@ fn show(
         AgentEvent::ToolStarted {
             name, arguments, ..
         } => {
-            writeln!(err, "[tool] {name}({})", one_line(arguments, 160))?;
+            writeln!(err, "[tool] {name}({})", one_line(arguments.as_str(), 160))?;
         }
         AgentEvent::ToolFinished {
             name,
@@ -407,14 +407,15 @@ mod tests {
     async fn a_backend_error_is_reported_and_the_session_continues() {
         let (mut agent, _dir) = agent(vec![
             ScriptedReply::error(BackendError::Status {
-                status: 500,
+                status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
                 message: "boom".into(),
             }),
             ScriptedReply::text("back again"),
         ]);
         let s = session(&mut agent, "one\ntwo\n").await;
         assert!(
-            s.err.contains("error: the server returned HTTP 500: boom"),
+            s.err
+                .contains("error: the server returned HTTP 500 Internal Server Error: boom"),
             "{}",
             s.err
         );
@@ -571,7 +572,7 @@ mod tests {
         let (mut agent, _dir) = agent(vec![ScriptedReply::error_after(
             "partial text that must not leak",
             BackendError::Connection {
-                url: "http://nowhere/v1/chat/completions".into(),
+                url: "http://nowhere/v1/chat/completions".parse().unwrap(),
                 message: "refused".into(),
             },
         )]);

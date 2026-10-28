@@ -91,5 +91,22 @@ breakdown:
     - `server-config` command to run the server from a config file
     - `--name test` to run the config named `test`, in `./configs/server/test.toml`
 
+Arguments are validated when they are parsed: for example `djinn-cli server --ip not-an-ip` is a usage error that names `--ip`, before anything starts.
+
+## Validated settings
+
+Identifiers, names, paths, addresses, URLs, secrets and tuning parameters are checked when they are read, not when they are used, so a mistake fails early and says which value and which rule:
+
+```sh
+$ djinn-agent --base-url localhost:8080 --once hi
+error: invalid value 'localhost:8080' for '--base-url <BASE_URL>': base URL `localhost:8080`: must start with http:// or https://
+
+$ curl -s localhost:8080/v1/chat/completions -H 'content-type: application/json' \
+    -d '{"messages":[{"role":"user","content":"hi"}],"temperature":5}'
+{"error":{"message":"Failed to deserialize the JSON body ... temperature `5`: must be a number from 0 to 2", ...}}
+```
+
+The same rules apply to TOML configs (`repo_id`, `weights_file`, `temperature`, ...) and are published in the generated JSON Schemas under `configs/` and in the OpenAPI document at `/swagger-ui`, so editors and clients see the constraints (patterns, lengths, numeric bounds). The rules for each value are listed in `djinn-core/src/values/mod.rs`.
+
 [Ollama]: https://github.com/ollama/ollama/
 [candle]: https://github.com/huggingface/candle

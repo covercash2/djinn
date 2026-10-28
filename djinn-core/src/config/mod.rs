@@ -22,11 +22,11 @@ pub enum Error {
     },
 
     /// A config file could not be parsed as TOML.
-    #[error("failed to parse config file {path}")]
+    /// The message includes the TOML error, which names the key and the rule a value broke.
+    #[error("failed to parse config file {path}: {error}")]
     Parse {
         path: PathBuf,
-        #[source]
-        source: toml::de::Error,
+        error: toml::de::Error,
     },
 
     /// A config file failed JSON Schema validation.
@@ -58,9 +58,9 @@ where
     T: schemars::JsonSchema + DeserializeOwned,
 {
     // Parse TOML to a generic value (for JSON-Schema validation).
-    let toml_value: toml::Value = content.parse().map_err(|source| Error::Parse {
+    let toml_value: toml::Value = content.parse().map_err(|error| Error::Parse {
         path: path.to_owned(),
-        source,
+        error,
     })?;
 
     // Convert to serde_json::Value — infallible for all TOML primitive types.
@@ -85,9 +85,9 @@ where
     }
 
     // Deserialize from TOML (preserves TOML semantics for edge cases like integers).
-    toml::from_str(content).map_err(|source| Error::Parse {
+    toml::from_str(content).map_err(|error| Error::Parse {
         path: path.to_owned(),
-        source,
+        error,
     })
 }
 
