@@ -7,7 +7,7 @@ default:
 
 # run the djinn server (loads configs/server/<name>.toml)
 server name="test":
-	cargo run --release --features djinn-models/mac -- server-config --name {{name}}
+	cargo run --release --features djinn-models/cuda -- server-config --name {{name}}
 
 # run the ollama-cli
 tui:

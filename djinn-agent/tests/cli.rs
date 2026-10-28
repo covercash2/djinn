@@ -434,8 +434,16 @@ async fn ctrl_c_cancels_the_turn_and_the_next_question_is_answered() {
         writeln!(stdin, "first question").unwrap();
         // Wait until the server has the request and has sent its partial text.
         let started = std::time::Instant::now();
-        let first_line = out_rx.recv_timeout(std::time::Duration::from_secs(10));
-        let partial_seen = first_line.map(|l| l.contains("partial")).unwrap_or(false);
+        // The first chunk may be only the prompt, so read until the partial text arrives.
+        let mut seen = String::new();
+        while !seen.contains("partial") {
+            let remaining = std::time::Duration::from_secs(10).saturating_sub(started.elapsed());
+            match out_rx.recv_timeout(remaining) {
+                Ok(chunk) => seen.push_str(&chunk),
+                Err(_) => break,
+            }
+        }
+        let partial_seen = seen.contains("partial");
 
         // A real SIGINT, delivered the way a terminal would.
         let signalled = Command::new("kill")

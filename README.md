@@ -78,15 +78,15 @@ just schema      # regenerate JSON Schema files after config struct changes
 
 # examples
 
-run the server on a Macbook M-series:
+run the server with NVIDIA GPU acceleration (use `djinn-models/mac` instead on Apple Silicon; the dev shell sets `CUDA_COMPUTE_CAP`, see `flake.nix`):
 
 ```sh
-cargo run --release --features djinn-models/mac -- server-config --name test
+cargo run --release --features djinn-models/cuda -- server-config --name test
 ```
 
 breakdown:
     - `cargo run --release` to build in release mode for best performance
-    - `--features djinn-models/mac` to enable Metal acceleration
+    - `--features djinn-models/cuda` to enable CUDA acceleration
     - `--` everything before this are `cargo` args and everything after are `djinn` args
     - `server-config` command to run the server from a config file
     - `--name test` to run the config named `test`, in `./configs/server/test.toml`
