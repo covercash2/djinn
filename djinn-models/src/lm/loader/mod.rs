@@ -1,21 +1,20 @@
-// Requires HF Hub model download and GPU inference — excluded from coverage measurement.
-#![coverage(off)]
+// Requires HF Hub model download and GPU inference. Excluded from coverage (see `coverage_ignore` in the justfile).
 
 use candle_core::{self as candle};
-use futures::pin_mut;
 use futures::StreamExt;
-use hf_hub::{api::tokio::Api, Repo, RepoType};
+use futures::pin_mut;
+use hf_hub::{Repo, RepoType, api::tokio::Api};
 use tokenizers::Tokenizer;
 
 use std::sync::Arc;
 
+use djinn_core::lm::ModelSource;
 use djinn_core::lm::config::{ModelConfig, ModelRun};
 use djinn_core::lm::model::ModelArchitecture;
-use djinn_core::lm::ModelSource;
 use djinn_core::values::{ModelId, WeightsFile};
 
 use super::chat::ChatTemplate;
-use super::model::{load_weights, ModelContext, ModelContextBuilder};
+use super::model::{ModelContext, ModelContextBuilder, load_weights};
 use super::qwen::Qwen25Template;
 
 pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<ModelContext> {

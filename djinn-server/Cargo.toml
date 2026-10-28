@@ -8,7 +8,6 @@ authors.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 axum.workspace = true
-derive-new.workspace = true
 derive_builder.workspace = true
 djinn-core = { workspace = true, features = ["openapi"] }
 djinn-models.workspace = true

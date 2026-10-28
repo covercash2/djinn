@@ -1,5 +1,3 @@
-#![feature(coverage_attribute)]
-
 use std::sync::Arc;
 
 use djinn_core::lm::config::ModelConfig;
@@ -18,7 +16,6 @@ mod server;
 
 pub use error::{Error, Result};
 
-#[coverage(off)] // loads real model weights and HF Hub — not unit testable
 #[instrument]
 pub async fn run_server(config: Config) -> anyhow::Result<()> {
     let model_path = &config.model_config;

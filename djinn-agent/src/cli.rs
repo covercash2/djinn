@@ -75,18 +75,31 @@ mod tests {
         Args::try_parse_from(std::iter::once("djinn-agent").chain(args.iter().copied()))
     }
 
+    /// Changes the process environment for the tests below.
+    ///
+    /// SAFETY: `set_var` and `remove_var` are only unsafe because another thread might read the
+    /// environment at the same moment. Every caller holds the `ENV` lock, and the only code in these
+    /// tests that reads the environment (clap, inside `parse`) runs under that same lock. (The CI and
+    /// `just check` use nextest, which also runs each test in its own process.)
+    fn set_env(name: &str, value: Option<&str>) {
+        match value {
+            Some(value) => unsafe { std::env::set_var(name, value) },
+            None => unsafe { std::env::remove_var(name) },
+        }
+    }
+
     /// Runs `body` with a clean environment, restoring nothing (the vars are test-only).
     fn with_env<T>(vars: &[(&str, &str)], body: impl FnOnce() -> T) -> T {
         let _guard = ENV.lock().unwrap_or_else(|e| e.into_inner());
         for var in VARS {
-            std::env::remove_var(var);
+            set_env(var, None);
         }
         for (name, value) in vars {
-            std::env::set_var(name, value);
+            set_env(name, Some(value));
         }
         let result = body();
         for var in VARS {
-            std::env::remove_var(var);
+            set_env(var, None);
         }
         result
     }

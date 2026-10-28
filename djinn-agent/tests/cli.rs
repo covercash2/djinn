@@ -3,12 +3,12 @@
 use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
 
+use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::response::Response;
 use axum::routing::{get, post};
-use axum::Router;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const BIN: &str = env!("CARGO_BIN_EXE_djinn-agent");
 

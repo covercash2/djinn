@@ -1,3 +1,4 @@
+# Keep the version in sync with `flake.nix` and `.github/workflows/rust.yml`.
 [toolchain]
-channel = "nightly"
+channel = "1.99.0"
 components = [ "rust-analyzer", "rustfmt", "clippy", "llvm-tools" ]

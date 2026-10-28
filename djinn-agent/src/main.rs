@@ -4,7 +4,7 @@ use std::sync::Arc;
 use clap::Parser;
 use djinn_agent::agent::{Agent, AgentConfig, DEFAULT_SYSTEM_PROMPT};
 use djinn_agent::backend::OpenAiBackend;
-use djinn_agent::cli::{read_system_prompt, Args};
+use djinn_agent::cli::{Args, read_system_prompt};
 use djinn_agent::repl;
 use djinn_agent::tools::ToolRegistry;
 use djinn_core::values::SystemPrompt;

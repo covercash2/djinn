@@ -5,10 +5,10 @@ use std::pin::Pin;
 use djinn_core::chat::{FinishReason, Usage};
 use djinn_core::lm::config::RunConfig;
 use djinn_core::values::{ModelId, Prompt};
-use futures::{stream, Stream};
+use futures::{Stream, stream};
 
-use crate::lm::chat::{ChatEvent, ChatInput, ChatOutcome, ChatStream};
 use crate::lm::LanguageModel;
+use crate::lm::chat::{ChatEvent, ChatInput, ChatOutcome, ChatStream};
 use crate::{Error, Result};
 
 /// A model that replays fixed output instead of running inference.

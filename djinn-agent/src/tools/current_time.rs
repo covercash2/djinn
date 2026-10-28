@@ -6,7 +6,7 @@ use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
 use std::sync::LazyLock;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::{Tool, ToolError};
 
@@ -126,7 +126,9 @@ mod tests {
         let bytes = timestamp.as_bytes();
         assert_eq!(bytes.len(), 20, "{timestamp}");
         assert_eq!(
-            (bytes[4], bytes[7], bytes[10], bytes[13], bytes[16], bytes[19]),
+            (
+                bytes[4], bytes[7], bytes[10], bytes[13], bytes[16], bytes[19]
+            ),
             (b'-', b'-', b'T', b':', b':', b'Z')
         );
         let number = |range: std::ops::Range<usize>| timestamp[range].parse::<i64>().unwrap();
@@ -172,10 +174,12 @@ mod tests {
 
     #[tokio::test]
     async fn arguments_are_ignored() {
-        assert!(CurrentTime
-            .call(json!({"timezone": "Mars/Base"}))
-            .await
-            .is_ok());
+        assert!(
+            CurrentTime
+                .call(json!({"timezone": "Mars/Base"}))
+                .await
+                .is_ok()
+        );
         assert!(CurrentTime.call(Value::Null).await.is_ok());
     }
 

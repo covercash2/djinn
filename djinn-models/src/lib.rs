@@ -2,7 +2,6 @@
 //!
 //! This is the only workspace crate that links candle. Shared config types live in
 //! `djinn-core`, which must stay free of the inference stack.
-#![feature(coverage_attribute)]
 
 #[cfg(feature = "mac")]
 extern crate accelerate_src;

@@ -157,8 +157,10 @@ mod tests {
 
     #[test]
     fn errors_have_readable_messages() {
-        assert!(ChatRequestError::EmptyMessages
-            .to_string()
-            .contains("at least one message"));
+        assert!(
+            ChatRequestError::EmptyMessages
+                .to_string()
+                .contains("at least one message")
+        );
     }
 }

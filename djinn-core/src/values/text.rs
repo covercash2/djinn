@@ -194,7 +194,7 @@ impl schemars::JsonSchema for StopSequences {
         false
     }
 
-    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(generator: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
         schemars::schema::SchemaObject {
             instance_type: Some(schemars::schema::InstanceType::Array.into()),
             array: Some(Box::new(schemars::schema::ArrayValidation {

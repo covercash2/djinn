@@ -5,7 +5,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Chris Overcash"]
 
 [workspace.dependencies]
@@ -18,9 +18,7 @@ candle-nn = { version = "0.11.0" }
 candle-transformers = { version = "0.11.0" }
 cfg-if = "1.0.0"
 clap = { version = "4.5.35", features = ["derive", "env"] }
-derive-new = "0.7.0"
 derive_builder = "0.20.2"
-djinn-agent = { path = "./djinn-agent" }
 djinn-core = { path = "./djinn-core" }
 djinn-models = { path = "./djinn-models" }
 djinn-server = { path = "./djinn-server" }

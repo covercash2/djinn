@@ -7,7 +7,7 @@ use crate::values::{MaxTokens, Prompt, Temperature, TopP};
 
 use crate::{
     device::Device,
-    lm::{model::ModelArchitecture, ModelSource},
+    lm::{ModelSource, model::ModelArchitecture},
 };
 
 pub const DEFAULT_SAMPLE_LEN: MaxTokens = MaxTokens::from_const(100);

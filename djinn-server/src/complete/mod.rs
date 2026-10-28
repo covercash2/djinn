@@ -6,11 +6,11 @@ use axum::response::sse::{Event, Sse};
 use djinn_core::lm::config::RunConfig;
 use djinn_core::values::Prompt;
 use djinn_models::lm::LanguageModel;
-use futures::{pin_mut, Stream, StreamExt};
+use futures::{Stream, StreamExt, pin_mut};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{instrument, Instrument};
+use tracing::{Instrument, instrument};
 
 use crate::error::{Error, Result};
 use crate::server::Json;

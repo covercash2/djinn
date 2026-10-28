@@ -11,7 +11,9 @@ pub enum Error {
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
     /// The rendered prompt does not leave room to generate even one token.
-    #[error("the prompt has {prompt_tokens} tokens, which does not fit the model's context window of {context_length}")]
+    #[error(
+        "the prompt has {prompt_tokens} tokens, which does not fit the model's context window of {context_length}"
+    )]
     ContextLengthExceeded {
         prompt_tokens: usize,
         context_length: usize,

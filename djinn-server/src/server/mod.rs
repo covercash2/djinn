@@ -1,13 +1,12 @@
 use axum::{
+    Router,
     error_handling::HandleErrorLayer,
     extract::{FromRequest, MatchedPath},
     http::{Request, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Router,
 };
 use derive_builder::Builder;
-use derive_new::new;
 use djinn_core::values::ModelId;
 use djinn_models::lm::LanguageModel;
 use serde::{Deserialize, Serialize};
@@ -15,9 +14,9 @@ use std::{
     fmt::Display, future::IntoFuture, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration,
 };
 use tokio::sync::Mutex;
-use tower::{timeout::TimeoutLayer, BoxError, ServiceBuilder};
+use tower::{BoxError, ServiceBuilder, timeout::TimeoutLayer};
 use tower_http::trace::TraceLayer;
-use tracing::{instrument, Instrument, Level, Span};
+use tracing::{Instrument, Level, Span, instrument};
 use utoipa_swagger_ui::SwaggerUi;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
@@ -39,10 +38,19 @@ where
     }
 }
 
-#[derive(new, Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Config {
     pub socket_addr: SocketAddr,
     pub model_config: PathBuf,
+}
+
+impl Config {
+    pub fn new(socket_addr: SocketAddr, model_config: PathBuf) -> Self {
+        Self {
+            socket_addr,
+            model_config,
+        }
+    }
 }
 
 #[derive(Builder)]
@@ -121,7 +129,7 @@ pub(crate) fn build_router(state: AppState) -> Router {
         .route(ROUTE_CHAT, post(crate::chat::chat_completions))
         .with_state(chat_state);
 
-    let router = Router::new()
+    Router::new()
         .merge(fast_router)
         .merge(inference_router)
         .merge(chat_router)
@@ -155,9 +163,7 @@ pub(crate) fn build_router(state: AppState) -> Router {
                         tracing::warn!(?status, content_type, "unsupported media type");
                     }
                 }),
-        );
-
-    router
+        )
 }
 
 enum ServiceRoutes {

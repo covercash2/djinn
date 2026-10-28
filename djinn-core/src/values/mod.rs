@@ -43,7 +43,7 @@ mod tool;
 pub use error::ValueError;
 pub use model::{ConfigName, ModelId, RepoId, Revision, WeightsFile};
 pub use sampling::{MaxTokens, Temperature, TopP};
-pub use text::{Prompt, StopSequence, StopSequences, SystemPrompt, MAX_STOP_SEQUENCES};
+pub use text::{MAX_STOP_SEQUENCES, Prompt, StopSequence, StopSequences, SystemPrompt};
 pub use tool::{ToolArguments, ToolCallId, ToolName};
 
 #[cfg(test)]

@@ -715,17 +715,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-new"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cdc8d50f426189eef89dac62fabfa0abb27d5cc008f25bf4156a0203325becc"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "derive_arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -823,7 +812,6 @@ dependencies = [
 name = "djinn-agent"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-stream",
  "axum",
  "clap",
@@ -913,7 +901,6 @@ dependencies = [
  "anyhow",
  "async-stream",
  "axum",
- "derive-new",
  "derive_builder",
  "djinn-core",
  "djinn-models",

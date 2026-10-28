@@ -72,7 +72,9 @@ pub enum AgentEvent {
 pub enum TurnError {
     #[error(transparent)]
     Backend(#[from] BackendError),
-    #[error("stopped after {0} model calls without a final answer (the step limit); ask again or raise --max-steps")]
+    #[error(
+        "stopped after {0} model calls without a final answer (the step limit); ask again or raise --max-steps"
+    )]
     StepLimit(usize),
 }
 
@@ -249,7 +251,7 @@ mod tests {
 
     use djinn_core::chat::Role;
     use futures::future::BoxFuture;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     use super::*;
     use crate::backend::{ScriptedBackend, ScriptedReply};
@@ -453,7 +455,9 @@ mod tests {
             .collect();
         assert_eq!(
             order,
-            vec!["start a", "finish a", "start b", "finish b", "start c", "finish c"]
+            vec![
+                "start a", "finish a", "start b", "finish b", "start c", "finish c"
+            ]
         );
         assert_eq!(calls.lock().unwrap().len(), 2);
 
@@ -607,9 +611,11 @@ mod tests {
             shown.contains("echo") && shown.contains("calculator"),
             "{shown}"
         );
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, AgentEvent::ToolFinished { ok: false, .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, AgentEvent::ToolFinished { ok: false, .. }))
+        );
     }
 
     #[tokio::test]
@@ -694,9 +700,11 @@ mod tests {
             .clone()
             .unwrap();
         assert!(shown.contains("timed out"), "{shown}");
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, AgentEvent::ToolFinished { ok: false, .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, AgentEvent::ToolFinished { ok: false, .. }))
+        );
     }
 
     #[tokio::test]
