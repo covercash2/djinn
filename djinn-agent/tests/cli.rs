@@ -231,6 +231,34 @@ async fn a_missing_system_prompt_file_fails_before_contacting_the_server() {
 }
 
 #[tokio::test]
+async fn a_blank_system_prompt_file_fails_before_contacting_the_server() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("blank.txt");
+    std::fs::write(&path, "   \n").unwrap();
+    let (url, requests) = serve(vec![text_reply("x")]).await;
+    let output = run(
+        args(&[
+            "--base-url",
+            &url,
+            "--system",
+            path.to_str().unwrap(),
+            "--once",
+            "hi",
+        ]),
+        "",
+    )
+    .await;
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = text(&output.stderr);
+    assert!(
+        stderr.contains("blank.txt") && stderr.contains("non-whitespace"),
+        "{stderr}"
+    );
+    assert!(requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_custom_system_prompt_is_used() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("system.txt");
@@ -499,4 +527,60 @@ async fn ctrl_c_cancels_the_turn_and_the_next_question_is_answered() {
         !contents.contains(&"first question"),
         "the cancelled turn must not be in the history: {contents:?}"
     );
+}
+
+#[tokio::test]
+async fn a_malformed_base_url_is_a_usage_error_and_no_request_is_sent() {
+    let (url, requests) = serve(vec![text_reply("x")]).await;
+    let output = run(args(&["--base-url", "localhost:8080", "--once", "hi"]), "").await;
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "clap usage errors exit with 2"
+    );
+    let stderr = text(&output.stderr);
+    assert!(stderr.contains("--base-url"), "{stderr}");
+    assert!(text(&output.stdout).is_empty());
+    assert!(requests.lock().unwrap().is_empty());
+    drop(url);
+}
+
+#[tokio::test]
+async fn an_empty_model_name_is_a_usage_error_naming_the_flag() {
+    let output = run(args(&["--model", "", "--once", "hi"]), "").await;
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        text(&output.stderr).contains("--model"),
+        "{}",
+        text(&output.stderr)
+    );
+}
+
+#[tokio::test]
+async fn the_api_key_never_appears_in_any_output() {
+    const KEY: &str = "sk-very-secret-key-123";
+    // A failing request, a successful one, and a rejected key: none may print the key.
+    let (url, _) = serve(vec![text_reply("fine")]).await;
+    let outputs = [
+        run(
+            args(&["--base-url", &dead_url(), "--api-key", KEY, "--once", "hi"]),
+            "",
+        )
+        .await,
+        run(
+            args(&["--base-url", &url, "--api-key", KEY, "--once", "hi"]),
+            "",
+        )
+        .await,
+        run(args(&["--api-key", "bad key", "--once", "hi"]), "").await,
+    ];
+    for output in outputs {
+        for stream in [&output.stdout, &output.stderr] {
+            let shown = text(stream);
+            assert!(!shown.contains(KEY), "{shown}");
+            assert!(!shown.contains("bad key"), "{shown}");
+        }
+    }
 }

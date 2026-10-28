@@ -4,10 +4,20 @@ schema: spec-driven
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.
 # Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+context: |
+  The owner commits with `jj`; plans and tasks must never ask an agent to stage
+  or commit. Cargo, just and typos only exist inside `nix develop`, so verification
+  commands are written `nix develop --command <cmd>`; `just check` is the gate and
+  every task group must leave it green.
+  Domain values (identifiers, names, paths, addresses, URLs, secrets, bounded
+  parameters) are modelled as validated newtypes that are checked on construction
+  and on deserialization, never as bare String/f64/usize; String is only for free
+  text (message content, tool output, generated text, error messages). The shared
+  types live in `djinn_core::values`. New requirements and designs must say which
+  type each new value uses and what its validity rules are, and must not change
+  serialized formats unless stated.
+  `djinn-core` must stay free of candle/tokenizers/hf-hub, and `djinn-agent` must
+  not depend on candle, `djinn-models` or `djinn-server`.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

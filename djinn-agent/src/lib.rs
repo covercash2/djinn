@@ -8,4 +8,5 @@ pub mod agent;
 pub mod backend;
 pub mod cli;
 pub mod repl;
+pub mod settings;
 pub mod tools;

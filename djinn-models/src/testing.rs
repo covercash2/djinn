@@ -4,6 +4,7 @@ use std::pin::Pin;
 
 use djinn_core::chat::{FinishReason, Usage};
 use djinn_core::lm::config::RunConfig;
+use djinn_core::values::{ModelId, Prompt};
 use futures::{stream, Stream};
 
 use crate::lm::chat::{ChatEvent, ChatInput, ChatOutcome, ChatStream};
@@ -64,7 +65,7 @@ impl ScriptedModel {
 impl LanguageModel for ScriptedModel {
     fn run(
         &mut self,
-        _prompt: String,
+        _prompt: Prompt,
         _config: RunConfig,
     ) -> Pin<Box<dyn Stream<Item = Result<String>> + Send + '_>> {
         if self.fail {
@@ -75,8 +76,8 @@ impl LanguageModel for ScriptedModel {
         Box::pin(stream::iter(self.tokens.clone().into_iter().map(Ok)))
     }
 
-    fn model_id(&self) -> String {
-        String::from("scripted")
+    fn model_id(&self) -> ModelId {
+        ModelId::from_static("scripted")
     }
 
     fn chat(&mut self, input: ChatInput) -> ChatStream<'_> {

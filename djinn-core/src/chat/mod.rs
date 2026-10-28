@@ -7,14 +7,26 @@
 //! Conventions that follow the OpenAI protocol and are easy to get wrong:
 //!
 //! - `content` is nullable: an assistant message that only carries tool calls has `null` content.
-//! - [`FunctionCall::arguments`] is a **string** holding JSON, not a JSON object.
+//! - [`FunctionCall::arguments`] is a **string** holding a JSON object, not an object itself. The
+//!   [`ToolArguments`] type checks that and keeps the exact text.
+//! - Tool names, call ids and arguments are validated types (see [`crate::values`]), so a request
+//!   with an invalid one fails to deserialize.
 //! - `stop` may be a single string or a list of strings ([`StopSpec`]).
 
 use serde::{Deserialize, Serialize};
 
+use crate::values::{
+    MaxTokens, ModelId, StopSequence, StopSequences, Temperature, ToolArguments, ToolCallId,
+    ToolName, TopP,
+};
+
+mod markers;
 mod validate;
 
-pub use validate::{validate_request, ChatRequestError, MAX_STOP_SEQUENCES};
+pub use markers::{ChatCompletionChunkObject, ChatCompletionObject, ListObject, ModelObject};
+
+pub use crate::values::MAX_STOP_SEQUENCES;
+pub use validate::{validate_request, ChatRequestError};
 
 /// Who a message is from.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -40,7 +52,7 @@ pub enum ToolKind {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct FunctionSpec {
-    pub name: String,
+    pub name: ToolName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// JSON Schema describing the arguments object.
@@ -61,14 +73,14 @@ pub struct ToolSpec {
 impl ToolSpec {
     /// Convenience constructor for a function tool.
     pub fn function(
-        name: impl Into<String>,
+        name: ToolName,
         description: impl Into<String>,
         parameters: serde_json::Value,
     ) -> Self {
         Self {
             kind: ToolKind::Function,
             function: FunctionSpec {
-                name: name.into(),
+                name,
                 description: Some(description.into()),
                 parameters: Some(parameters),
             },
@@ -80,35 +92,38 @@ impl ToolSpec {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct FunctionCall {
-    pub name: String,
-    /// The arguments object, **encoded as a JSON string**.
-    pub arguments: String,
+    pub name: ToolName,
+    /// The arguments object, **encoded as a JSON string** (see [`ToolArguments`]).
+    pub arguments: ToolArguments,
 }
 
 /// A tool call in a complete (non-delta) message.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ToolCall {
-    pub id: String,
+    pub id: ToolCallId,
     #[serde(rename = "type", default)]
     pub kind: ToolKind,
     pub function: FunctionCall,
 }
 
 impl ToolCall {
+    /// For literals and tests only: panics if a value is invalid.
+    #[track_caller]
+    pub fn from_static(id: &'static str, name: &'static str, arguments: &'static str) -> Self {
+        Self::function(
+            ToolCallId::from_static(id),
+            ToolName::from_static(name),
+            ToolArguments::from_static(arguments),
+        )
+    }
+
     /// Convenience constructor for a function call.
-    pub fn function(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        arguments: impl Into<String>,
-    ) -> Self {
+    pub fn function(id: ToolCallId, name: ToolName, arguments: ToolArguments) -> Self {
         Self {
-            id: id.into(),
+            id,
             kind: ToolKind::Function,
-            function: FunctionCall {
-                name: name.into(),
-                arguments: arguments.into(),
-            },
+            function: FunctionCall { name, arguments },
         }
     }
 }
@@ -126,7 +141,7 @@ pub struct ChatMessage {
     pub tool_calls: Option<Vec<ToolCall>>,
     /// For `tool` messages: the id of the call this message answers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
+    pub tool_call_id: Option<ToolCallId>,
 }
 
 impl ChatMessage {
@@ -162,37 +177,75 @@ impl ChatMessage {
     }
 
     /// The result of a tool call.
-    pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn tool(tool_call_id: ToolCallId, content: impl Into<String>) -> Self {
         Self {
             role: Role::Tool,
             content: Some(content.into()),
             tool_calls: None,
-            tool_call_id: Some(tool_call_id.into()),
+            tool_call_id: Some(tool_call_id),
         }
     }
 }
 
-/// `stop` as sent by clients: one string or a list of strings.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// `stop` as sent by clients: one string or a list of at most [`MAX_STOP_SEQUENCES`] strings, none
+/// of them empty. Both forms are validated while deserializing.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(untagged)]
 pub enum StopSpec {
-    One(String),
-    Many(Vec<String>),
+    One(StopSequence),
+    Many(StopSequences),
 }
 
 impl StopSpec {
     /// The stop strings as a list.
-    pub fn into_vec(self) -> Vec<String> {
+    pub fn into_vec(self) -> Vec<StopSequence> {
         match self {
             StopSpec::One(s) => vec![s],
-            StopSpec::Many(v) => v,
+            StopSpec::Many(v) => v.into_vec(),
         }
     }
 
-    /// The stop strings as a slice-backed list.
-    pub fn to_vec(&self) -> Vec<String> {
+    /// A copy of the stop strings as a list.
+    pub fn to_vec(&self) -> Vec<StopSequence> {
         self.clone().into_vec()
+    }
+}
+
+// Hand-written so that the error says which rule a stop string broke; an `untagged` derive would
+// replace it with "data did not match any variant".
+impl<'de> Deserialize<'de> for StopSpec {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = StopSpec;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a stop string or a list of stop strings")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<StopSpec, E> {
+                StopSequence::new(value)
+                    .map(StopSpec::One)
+                    .map_err(E::custom)
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<StopSpec, A::Error> {
+                let mut sequences = Vec::new();
+                while let Some(sequence) = seq.next_element::<StopSequence>()? {
+                    sequences.push(sequence);
+                }
+                StopSequences::new(sequences)
+                    .map(StopSpec::Many)
+                    .map_err(serde::de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
     }
 }
 
@@ -209,11 +262,11 @@ pub struct ChatRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<usize>,
+    pub max_tokens: Option<MaxTokens>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f64>,
+    pub temperature: Option<Temperature>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f64>,
+    pub top_p: Option<TopP>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop: Option<StopSpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -273,18 +326,13 @@ pub struct Choice {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ChatResponse {
     pub id: String,
-    /// Always `chat.completion`.
-    pub object: String,
+    #[serde(default)]
+    pub object: ChatCompletionObject,
     pub created: u64,
-    pub model: String,
+    pub model: ModelId,
     pub choices: Vec<Choice>,
     pub usage: Usage,
 }
-
-/// Object type of a complete response.
-pub const OBJECT_CHAT_COMPLETION: &str = "chat.completion";
-/// Object type of a streamed chunk.
-pub const OBJECT_CHAT_COMPLETION_CHUNK: &str = "chat.completion.chunk";
 
 /// A function call as streamed: any field may be absent, and `arguments` may arrive in
 /// fragments that must be concatenated per `index`.
@@ -340,10 +388,10 @@ pub struct ChunkChoice {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ChatChunk {
     pub id: String,
-    /// Always `chat.completion.chunk`.
-    pub object: String,
+    #[serde(default)]
+    pub object: ChatCompletionChunkObject,
     pub created: u64,
-    pub model: String,
+    pub model: ModelId,
     pub choices: Vec<ChunkChoice>,
     /// Token accounting; only present on the final chunk.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -354,9 +402,9 @@ pub struct ChatChunk {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ModelInfo {
-    pub id: String,
-    /// Always `model`.
-    pub object: String,
+    pub id: ModelId,
+    #[serde(default)]
+    pub object: ModelObject,
     pub owned_by: String,
 }
 
@@ -364,8 +412,8 @@ pub struct ModelInfo {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ModelList {
-    /// Always `list`.
-    pub object: String,
+    #[serde(default)]
+    pub object: ListObject,
     pub data: Vec<ModelInfo>,
 }
 
@@ -436,10 +484,10 @@ mod tests {
             }]
         }));
         assert!(req.is_stream());
-        assert_eq!(req.max_tokens, Some(64));
+        assert_eq!(req.max_tokens, Some(MaxTokens::from_const(64)));
         assert_eq!(req.seed, Some(7));
         let tools = req.tools.unwrap();
-        assert_eq!(tools[0].function.name, "calculator");
+        assert_eq!(tools[0].function.name.as_str(), "calculator");
         assert_eq!(tools[0].kind, ToolKind::Function);
         assert_eq!(
             tools[0].function.parameters.as_ref().unwrap()["type"],
@@ -461,8 +509,11 @@ mod tests {
         assert_eq!(msg.role, Role::Assistant);
         assert_eq!(msg.content, None);
         let calls = msg.tool_calls.unwrap();
-        assert_eq!(calls[0].id, "call_1");
-        assert_eq!(calls[0].function.arguments, "{\"expression\":\"2+2\"}");
+        assert_eq!(calls[0].id.as_str(), "call_1");
+        assert_eq!(
+            calls[0].function.arguments.as_str(),
+            "{\"expression\":\"2+2\"}"
+        );
     }
 
     #[test]
@@ -475,15 +526,50 @@ mod tests {
     fn tool_message_deserializes() {
         let msg: ChatMessage =
             parse(json!({"role": "tool", "tool_call_id": "call_1", "content": "4"}));
-        assert_eq!(msg, ChatMessage::tool("call_1", "4"));
+        assert_eq!(
+            msg,
+            ChatMessage::tool(ToolCallId::from_static("call_1"), "4")
+        );
     }
 
     #[test]
     fn stop_accepts_string_and_list() {
         let one: ChatRequest = parse(json!({"messages": [], "stop": "x"}));
-        assert_eq!(one.stop.unwrap().into_vec(), vec!["x"]);
+        assert_eq!(
+            one.stop.unwrap().into_vec(),
+            vec![StopSequence::from_static("x")]
+        );
         let many: ChatRequest = parse(json!({"messages": [], "stop": ["x", "y"]}));
-        assert_eq!(many.stop.unwrap().into_vec(), vec!["x", "y"]);
+        assert_eq!(
+            many.stop.unwrap().into_vec(),
+            vec![
+                StopSequence::from_static("x"),
+                StopSequence::from_static("y")
+            ]
+        );
+    }
+
+    #[test]
+    fn invalid_stop_values_are_rejected_with_the_rule() {
+        let empty =
+            serde_json::from_value::<ChatRequest>(json!({"messages": [], "stop": ["END", ""]}));
+        assert!(empty.unwrap_err().to_string().contains("must not be empty"));
+        let empty_one = serde_json::from_value::<ChatRequest>(json!({"messages": [], "stop": ""}));
+        assert!(empty_one.unwrap_err().to_string().contains("stop sequence"));
+        let many = serde_json::from_value::<ChatRequest>(
+            json!({"messages": [], "stop": ["a", "b", "c", "d", "e"]}),
+        );
+        assert!(many.unwrap_err().to_string().contains("at most 4"));
+        let wrong_type = serde_json::from_value::<ChatRequest>(json!({"messages": [], "stop": 5}));
+        assert!(wrong_type.is_err());
+    }
+
+    #[test]
+    fn stop_serializes_in_the_form_it_was_given() {
+        let one: StopSpec = serde_json::from_value(json!("x")).unwrap();
+        assert_eq!(serde_json::to_value(&one).unwrap(), json!("x"));
+        let many: StopSpec = serde_json::from_value(json!(["x", "y"])).unwrap();
+        assert_eq!(serde_json::to_value(&many).unwrap(), json!(["x", "y"]));
     }
 
     #[test]
@@ -507,14 +593,14 @@ mod tests {
     fn response_serializes_to_expected_json() {
         let response = ChatResponse {
             id: "chatcmpl-1".into(),
-            object: OBJECT_CHAT_COMPLETION.into(),
+            object: ChatCompletionObject,
             created: 1,
-            model: "m".into(),
+            model: ModelId::from_static("m"),
             choices: vec![Choice {
                 index: 0,
                 message: ChatMessage::assistant_tool_calls(
                     None,
-                    vec![ToolCall::function(
+                    vec![ToolCall::from_static(
                         "call_0",
                         "calculator",
                         "{\"expression\":\"1\"}",
@@ -561,9 +647,9 @@ mod tests {
     fn stream_chunk_serializes_to_expected_json() {
         let chunk = ChatChunk {
             id: "chatcmpl-1".into(),
-            object: OBJECT_CHAT_COMPLETION_CHUNK.into(),
+            object: ChatCompletionChunkObject,
             created: 1,
-            model: "m".into(),
+            model: ModelId::from_static("m"),
             choices: vec![ChunkChoice {
                 index: 0,
                 delta: Delta {
@@ -614,5 +700,50 @@ mod tests {
             json!({"error": {"message": "bad", "type": "invalid_request_error", "code": "context_length_exceeded"}})
         );
         assert_eq!(parse::<ErrorBody>(value), body);
+    }
+
+    #[test]
+    fn invalid_tool_values_are_rejected_when_parsing() {
+        let bad_name = json!({"type": "function", "function": {"name": "read file"}});
+        let error = serde_json::from_value::<ToolSpec>(bad_name).unwrap_err();
+        assert!(error.to_string().contains("tool name"), "{error}");
+
+        let bad_id = json!({"role": "tool", "tool_call_id": "", "content": "x"});
+        assert!(serde_json::from_value::<ChatMessage>(bad_id).is_err());
+
+        let bad_arguments = json!({
+            "id": "call_1", "type": "function",
+            "function": {"name": "calculator", "arguments": "[1,2]"}
+        });
+        assert!(serde_json::from_value::<ToolCall>(bad_arguments).is_err());
+    }
+
+    #[test]
+    fn empty_arguments_are_accepted_and_mean_no_arguments() {
+        let call: ToolCall = parse(json!({
+            "id": "call_1", "type": "function",
+            "function": {"name": "current_time", "arguments": ""}
+        }));
+        assert!(call.function.arguments.object().is_empty());
+        assert_eq!(call.function.arguments.as_str(), "");
+    }
+
+    #[test]
+    fn a_missing_object_field_is_accepted_but_a_wrong_one_is_not() {
+        let body = |object: Option<&str>| {
+            let mut value = json!({
+                "id": "x", "created": 1, "model": "m", "choices": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+            });
+            if let Some(object) = object {
+                value["object"] = json!(object);
+            }
+            value
+        };
+        assert!(serde_json::from_value::<ChatResponse>(body(None)).is_ok());
+        assert!(serde_json::from_value::<ChatResponse>(body(Some("chat.completion"))).is_ok());
+        assert!(
+            serde_json::from_value::<ChatResponse>(body(Some("chat.completion.chunk"))).is_err()
+        );
     }
 }

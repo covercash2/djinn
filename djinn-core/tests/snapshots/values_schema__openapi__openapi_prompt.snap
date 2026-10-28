@@ -1,0 +1,8 @@
+---
+source: djinn-core/tests/values_schema.rs
+expression: schema
+---
+{
+  "type": "string",
+  "description": "Text the model is asked to continue. Any text is valid, including the empty string; the type\nexists so a prompt cannot be confused with generated output or other text."
+}

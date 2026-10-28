@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use djinn_core::device::Device;
 use djinn_core::lm::config::RunConfig;
@@ -7,6 +9,7 @@ use djinn_core::lm::config::{
 };
 use djinn_core::lm::model::ModelArchitecture;
 use djinn_core::lm::ModelSource;
+use djinn_core::values::{MaxTokens, ModelId, Prompt, Revision, Temperature, TopP};
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -14,9 +17,9 @@ pub struct Args {
     #[arg(long, value_enum)]
     device: Device,
     #[arg(long)]
-    prompt: String,
+    prompt: Prompt,
     #[arg(long)]
-    model_id: Option<String>,
+    model_id: Option<ModelId>,
     /// Penalty to be applied for repeating tokens, 1. means no penalty.
     #[arg(long, default_value_t = DEFAULT_REPEAT_PENALTY)]
     repeat_penalty: f32,
@@ -24,33 +27,33 @@ pub struct Args {
     #[arg(long, default_value_t = DEFAULT_REPEAT_LAST_N)]
     repeat_last_n: usize,
     #[arg(long)]
-    revision: Option<String>,
+    revision: Option<Revision>,
     /// The seed to use when generating random samples.
     #[arg(long, default_value_t = DEFAULT_SEED)]
     seed: u64,
     /// The length of the sample to generate (in tokens).
     #[arg(long, short = 'n', default_value_t = DEFAULT_SAMPLE_LEN)]
-    sample_len: usize,
+    sample_len: MaxTokens,
     /// The temperature used to generate samples.
     #[arg(long, default_value_t = DEFAULT_TEMPERATURE)]
-    temperature: f64,
+    temperature: Temperature,
     /// Nucleus sampling probability cutoff.
     #[arg(long)]
-    top_p: Option<f64>,
+    top_p: Option<TopP>,
     #[arg(value_enum)]
     variant: ModelArchitecture,
 
     #[arg(long)]
-    tokenizer_file: Option<String>,
+    tokenizer_file: Option<PathBuf>,
     #[arg(long)]
-    weight_files: Option<String>,
+    weight_files: Option<PathBuf>,
 }
 
 impl TryFrom<Args> for ModelRun {
     type Error = anyhow::Error;
 
     fn try_from(args: Args) -> Result<Self, Self::Error> {
-        let prompt = args.prompt.to_owned();
+        let prompt = args.prompt.clone();
         let run_config: RunConfig = args.clone().into();
         let model_config: ModelConfig = args.try_into()?;
 
@@ -100,8 +103,8 @@ impl TryFrom<Args> for ModelConfig {
             ModelSource::hub(revision)
         } else if let Some((weight_files, tokenizer_file)) = weight_files.zip(tokenizer_file) {
             ModelSource::Files {
-                weight_files: vec![weight_files.into()],
-                tokenizer_file: tokenizer_file.into(),
+                weight_files: vec![weight_files],
+                tokenizer_file,
             }
         } else {
             panic!("unable to find files");
@@ -146,13 +149,62 @@ mod tests {
         let run: ModelRun = args.try_into().unwrap();
 
         assert_eq!(run.prompt, "hello");
-        assert_eq!(run.run_config.sample_len, 7);
+        assert_eq!(run.run_config.sample_len, MaxTokens::from_const(7));
         assert_eq!(run.model_config.variant, ModelArchitecture::Qwen25Instruct);
         assert_eq!(run.model_config.device, Some(Device::Cpu));
         assert!(matches!(
             run.model_config.model_source,
-            ModelSource::HuggingFaceHub { ref revision, .. } if revision == "main"
+            ModelSource::HuggingFaceHub { ref revision, .. } if revision.as_str() == "main"
         ));
+    }
+
+    #[test]
+    fn weight_and_tokenizer_files_are_paths() {
+        let args = parse(&[
+            "--device",
+            "cpu",
+            "--prompt",
+            "x",
+            "--weight-files",
+            "w/model.gguf",
+            "--tokenizer-file",
+            "w/tokenizer.json",
+            "qwen2_5_instruct",
+        ])
+        .unwrap();
+        let run: ModelRun = args.try_into().unwrap();
+        match run.model_config.model_source {
+            ModelSource::Files {
+                weight_files,
+                tokenizer_file,
+            } => {
+                assert_eq!(weight_files, vec![PathBuf::from("w/model.gguf")]);
+                assert_eq!(tokenizer_file, PathBuf::from("w/tokenizer.json"));
+            }
+            other => panic!("expected files, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn out_of_range_sampling_flags_are_usage_errors_naming_the_flag() {
+        for (flag, value) in [
+            ("--temperature", "3"),
+            ("--top-p", "0"),
+            ("--sample-len", "0"),
+        ] {
+            let error = parse(&[
+                "--device",
+                "cpu",
+                "--prompt",
+                "x",
+                flag,
+                value,
+                "qwen2_5_instruct",
+            ])
+            .err()
+            .unwrap_or_else(|| panic!("{flag} {value} should be rejected"));
+            assert!(error.to_string().contains(flag), "{error}");
+        }
     }
 
     #[test]

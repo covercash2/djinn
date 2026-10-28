@@ -6,10 +6,10 @@ use std::{
     fs::File,
     io::Write,
     path::PathBuf,
-    sync::Arc,
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
+use djinn_core::values::ConfigName;
 use djinn_core::{config::DEFAULT_CONFIG_DIR, lm::config::ModelRun};
 use djinn_models::lm::loader::{run, run_model};
 use server::ServerArgs;
@@ -38,7 +38,7 @@ enum Runner {
     /// Run the server from a given path
     ServerConfig {
         #[arg(long)]
-        name: Arc<str>,
+        name: ConfigName,
         #[arg(long, default_value = DEFAULT_CONFIG_DIR)]
         config_dir: PathBuf,
     },
@@ -50,7 +50,7 @@ enum Runner {
 struct SingleRunArgs {
     /// Pass the name of the config to save
     #[arg(long)]
-    save_config: Option<String>,
+    save_config: Option<ConfigName>,
     #[command(flatten)]
     run: single_run::Args,
 }
@@ -58,9 +58,9 @@ struct SingleRunArgs {
 #[derive(Parser)]
 struct ConfigArgs {
     #[arg(long)]
-    model_name: String,
+    model_name: ConfigName,
     #[arg(long)]
-    config_name: String,
+    config_name: ConfigName,
     #[arg(long, default_value=PathBuf::from(DEFAULT_CONFIG_DIR).into_os_string())]
     config_dir: PathBuf,
 }
@@ -88,7 +88,7 @@ impl TryFrom<ConfigArgs> for ModelRun {
     fn try_from(value: ConfigArgs) -> anyhow::Result<ModelRun> {
         let path = value
             .config_dir
-            .join(value.model_name)
+            .join(value.model_name.as_str())
             .join(format!("{}.toml", value.config_name));
         if !path.exists() {
             return Err(anyhow::Error::msg(format!(
@@ -164,6 +164,53 @@ async fn main() -> anyhow::Result<()> {
         Runner::Config(args) => {
             let config: ModelRun = args.try_into()?;
             run_model(config).await
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("djinn-cli").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn server_config_takes_a_name_without_an_extension() {
+        assert!(parse(&["server-config", "--name", "test"]).is_ok());
+        let error = parse(&["server-config", "--name", "test.toml"])
+            .err()
+            .expect("an extension is rejected");
+        let shown = error.to_string();
+        assert!(
+            shown.contains("--name") && shown.contains("without the `.toml` extension"),
+            "{shown}"
+        );
+    }
+
+    #[test]
+    fn config_names_cannot_escape_the_config_directory() {
+        assert!(parse(&["server", "--model-config", "../elsewhere"]).is_err());
+        assert!(parse(&["server-config", "--name", "/etc/passwd"]).is_err());
+        assert!(parse(&["config", "--model-name", "..", "--config-name", "x"]).is_err());
+    }
+
+    #[test]
+    fn the_documented_invocations_still_parse() {
+        for args in [
+            &["server-config", "--name", "test"][..],
+            &["server", "--ip", "127.0.0.1", "--port", "9000"],
+            &["server", "--model-config", "model/qwen2_5_instruct_0_5b"],
+            &[
+                "config",
+                "--model-name",
+                "qwen2_5_instruct",
+                "--config-name",
+                "run",
+            ],
+        ] {
+            assert!(parse(args).is_ok(), "{args:?}");
         }
     }
 }

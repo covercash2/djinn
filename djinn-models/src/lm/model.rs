@@ -8,6 +8,7 @@ use candle_transformers::generation::LogitsProcessor;
 use candle_transformers::models::quantized_qwen2::ModelWeights as QwenWeights;
 use derive_builder::Builder;
 use djinn_core::lm::{config::RunConfig, model::ModelArchitecture};
+use djinn_core::values::{MaxTokens, ModelId, Prompt, TopP};
 use hf_hub::api::tokio::ApiRepo;
 use tokio_stream::Stream;
 use tracing::instrument;
@@ -178,8 +179,8 @@ pub struct ModelContext {
     tokenizer: TokenOutputStream,
     device: Device,
     /// Identifier reported by `GET /v1/models`.
-    #[builder(setter(into), default = "String::from(\"default\")")]
-    model_id: String,
+    #[builder(default = "ModelId::from_static(\"default\")")]
+    model_id: ModelId,
     /// Chat prompt format; `None` for models that are not instruction-tuned.
     #[builder(default)]
     chat_template: Option<Arc<dyn ChatTemplate>>,
@@ -189,10 +190,10 @@ pub struct ModelContext {
 impl ModelContext {
     pub fn run(
         &mut self,
-        prompt: String,
+        prompt: Prompt,
         config: RunConfig,
     ) -> impl Stream<Item = Result<String>> + '_ {
-        let prompt = prompt.to_string();
+        let prompt = prompt.into_string();
         stream! {
             let RunConfig {
                 seed,
@@ -215,6 +216,12 @@ impl ModelContext {
                 .get_ids()
                 .to_vec();
 
+            // Nothing to continue: the model cannot run on zero tokens (CUDA rejects the empty input),
+            // so an empty prompt yields an empty completion.
+            if tokens.is_empty() {
+                return;
+            }
+
             for &t in tokens.iter() {
                 if let Some(t) = self.tokenizer.next_token(t)? {
                     yield Ok(t);
@@ -228,13 +235,13 @@ impl ModelContext {
 
             let mut generated_tokens = 0usize;
 
-            let mut logits_processor = LogitsProcessor::new(seed, Some(temperature), top_p);
+            let mut logits_processor = LogitsProcessor::new(seed, Some(temperature.get()), top_p.map(TopP::get));
 
             tracing::debug!("initialized logits");
 
             let start_gen = std::time::Instant::now();
             tracing::info!("starting generation");
-            for index in 0..sample_len {
+            for index in 0..sample_len.get() {
                 let logits =
                     self.model.forward(index, &tokens, &self.device, repeat_penalty, repeat_last_n)?;
 
@@ -285,7 +292,10 @@ impl ModelContext {
 
         let defaults = RunConfig::default();
         let params = GenParams {
-            max_tokens: input.params.max_tokens.unwrap_or(DEFAULT_CHAT_MAX_TOKENS),
+            max_tokens: input
+                .params
+                .max_tokens
+                .map_or(DEFAULT_CHAT_MAX_TOKENS, MaxTokens::get),
             seed: input.params.seed.unwrap_or(defaults.seed),
             temperature: input.params.temperature.unwrap_or(defaults.temperature),
             top_p: input.params.top_p.or(defaults.top_p),
@@ -312,14 +322,14 @@ const DEFAULT_CHAT_MAX_TOKENS: usize = 1024;
 impl LanguageModel for ModelContext {
     fn run(
         &mut self,
-        prompt: String,
+        prompt: Prompt,
         config: RunConfig,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = crate::error::Result<String>> + Send + '_>>
     {
         Box::pin(ModelContext::run(self, prompt, config))
     }
 
-    fn model_id(&self) -> String {
+    fn model_id(&self) -> ModelId {
         self.model_id.clone()
     }
 

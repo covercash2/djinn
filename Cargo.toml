@@ -29,13 +29,14 @@ hf-hub = { version = "0.4.2", features = ["tokio"] }
 http-body-util = "0.1"
 metal = "0.32.0"
 reqwest = { version = "0.12", features = ["json", "stream"] }
+url = "2"
 project-root = "0.2.2"
 rand = "0.9.0"
 schemars = { version = "0.8", features = ["derive"] }
 jsonschema = "0.29"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["preserve_order"] }
-insta = { version = "1", features = ["toml"] }
+insta = { version = "1", features = ["toml", "json"] }
 tempfile = "3"
 thiserror = "2.0.12"
 tokenizers = "0.21.1"

@@ -1,6 +1,8 @@
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
+use crate::values::{RepoId, WeightsFile};
+
 /// The variant of the model to be loaded.
 ///
 /// `qwen2_5_instruct` is Qwen2.5-Instruct in quantized GGUF form: an instruct model with native tool
@@ -30,26 +32,28 @@ pub enum ModelArchitecture {
 
 impl ModelArchitecture {
     /// The Hugging Face Hub repository that hosts this model's weights by default.
-    pub fn hf_repo_id(&self) -> String {
+    pub fn hf_repo_id(&self) -> RepoId {
         match self {
-            ModelArchitecture::Qwen25Instruct => "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+            ModelArchitecture::Qwen25Instruct => {
+                RepoId::from_static("Qwen/Qwen2.5-1.5B-Instruct-GGUF")
+            }
         }
-        .to_string()
     }
 
     /// The weights file to fetch from the repository by default.
-    pub fn default_weights_file(&self) -> &'static str {
+    pub fn default_weights_file(&self) -> WeightsFile {
         match self {
-            ModelArchitecture::Qwen25Instruct => "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            ModelArchitecture::Qwen25Instruct => {
+                WeightsFile::from_static("qwen2.5-1.5b-instruct-q4_k_m.gguf")
+            }
         }
     }
 
     /// The repository to take `tokenizer.json` from by default.
-    pub fn default_tokenizer_repo(&self) -> String {
+    pub fn default_tokenizer_repo(&self) -> RepoId {
         match self {
-            ModelArchitecture::Qwen25Instruct => "Qwen/Qwen2.5-1.5B-Instruct",
+            ModelArchitecture::Qwen25Instruct => RepoId::from_static("Qwen/Qwen2.5-1.5B-Instruct"),
         }
-        .to_string()
     }
 
     /// The name used for this variant in config files and on the command line.
@@ -67,12 +71,18 @@ mod tests {
     #[test]
     fn defaults_for_qwen() {
         let arch = ModelArchitecture::Qwen25Instruct;
-        assert_eq!(arch.hf_repo_id(), "Qwen/Qwen2.5-1.5B-Instruct-GGUF");
         assert_eq!(
-            arch.default_weights_file(),
+            arch.hf_repo_id().as_str(),
+            "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+        );
+        assert_eq!(
+            arch.default_weights_file().as_str(),
             "qwen2.5-1.5b-instruct-q4_k_m.gguf"
         );
-        assert_eq!(arch.default_tokenizer_repo(), "Qwen/Qwen2.5-1.5B-Instruct");
+        assert_eq!(
+            arch.default_tokenizer_repo().as_str(),
+            "Qwen/Qwen2.5-1.5B-Instruct"
+        );
     }
 
     #[test]

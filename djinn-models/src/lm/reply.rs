@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use async_stream::try_stream;
 use djinn_core::chat::{FinishReason, Usage};
+use djinn_core::values::StopSequence;
 use futures::{pin_mut, Stream, StreamExt};
 
 use super::chat::{ChatEvent, ChatOutcome, ChatTemplate};
@@ -21,7 +22,7 @@ use crate::holdback::Holdback;
 pub(crate) fn reply_stream<'a, S>(
     template: Arc<dyn ChatTemplate>,
     events: S,
-    stop: Vec<String>,
+    stop: Vec<StopSequence>,
 ) -> impl Stream<Item = Result<ChatEvent>> + Send + 'a
 where
     S: Stream<Item = Result<GenEvent>> + Send + 'a,
@@ -29,6 +30,7 @@ where
     try_stream! {
         pin_mut!(events);
 
+        let stop: Vec<String> = stop.into_iter().map(StopSequence::into_string).collect();
         let stop_count = stop.len();
         let mut triggers = stop.clone();
         triggers.extend(template.tool_call_start().map(str::to_owned));
@@ -155,7 +157,10 @@ mod tests {
     }
 
     fn run(events: Vec<Result<GenEvent>>, stop: &[&str]) -> Result<Vec<ChatEvent>> {
-        let stop = stop.iter().map(|s| s.to_string()).collect();
+        let stop = stop
+            .iter()
+            .map(|s| StopSequence::new(*s).unwrap())
+            .collect();
         block_on(async {
             reply_stream(Arc::new(Qwen25Template), stream::iter(events), stop)
                 .collect::<Vec<_>>()
@@ -302,9 +307,9 @@ mod tests {
         assert_eq!(outcome.finish, FinishReason::ToolCalls);
         assert_eq!(outcome.content.as_deref(), Some("Let me check."));
         assert_eq!(outcome.tool_calls.len(), 1);
-        assert_eq!(outcome.tool_calls[0].function.name, "calculator");
+        assert_eq!(outcome.tool_calls[0].function.name.as_str(), "calculator");
         assert_eq!(
-            outcome.tool_calls[0].function.arguments,
+            outcome.tool_calls[0].function.arguments.as_str(),
             r#"{"expression":"1+1"}"#
         );
     }

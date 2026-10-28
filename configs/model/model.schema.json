@@ -60,31 +60,47 @@
               ],
               "properties": {
                 "repo_id": {
+                  "title": "repository id",
                   "description": "Hub repository holding the weights. Defaults to the architecture's standard repository.",
                   "default": null,
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "maxLength": 193,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9._-]{1,96}/[A-Za-z0-9._-]{1,96}$"
                 },
                 "revision": {
-                  "type": "string"
+                  "title": "revision",
+                  "type": "string",
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[^\\s\\x00-\\x1f\\x7f]{1,128}$"
                 },
                 "tokenizer_repo": {
+                  "title": "repository id",
                   "description": "Hub repository to take `tokenizer.json` from, when it is not in `repo_id` (GGUF repositories usually do not ship a usable tokenizer).",
                   "default": null,
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "maxLength": 193,
+                  "minLength": 3,
+                  "pattern": "^[A-Za-z0-9._-]{1,96}/[A-Za-z0-9._-]{1,96}$"
                 },
                 "weights_file": {
+                  "title": "weights file",
                   "description": "File to download from the repository (for GGUF models). Defaults to the architecture's standard file.",
                   "default": null,
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^[^/\\\\\\x00-\\x1f\\x7f][^\\\\\\x00-\\x1f\\x7f]*$"
                 }
               }
             }

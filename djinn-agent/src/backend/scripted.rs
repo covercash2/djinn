@@ -56,8 +56,8 @@ impl ScriptedReply {
     }
 
     /// A single call to `name` with JSON `arguments`.
-    pub fn call(id: &str, name: &str, arguments: &str) -> Self {
-        Self::tool_calls(None, vec![ToolCall::function(id, name, arguments)])
+    pub fn call(id: &'static str, name: &'static str, arguments: &'static str) -> Self {
+        Self::tool_calls(None, vec![ToolCall::from_static(id, name, arguments)])
     }
 
     /// A request that fails immediately.
@@ -188,7 +188,7 @@ mod tests {
         let Ok(BackendEvent::Done(result)) = &events[0] else {
             panic!("expected Done")
         };
-        assert_eq!(result.tool_calls[0].function.name, "calculator");
+        assert_eq!(result.tool_calls[0].function.name.as_str(), "calculator");
         assert_eq!(result.finish, FinishReason::ToolCalls);
     }
 

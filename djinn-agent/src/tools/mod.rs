@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use djinn_core::chat::ToolSpec;
+use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
 use serde_json::Value;
 use thiserror::Error;
@@ -34,7 +35,7 @@ pub enum ToolError {
 /// Something the model can ask the agent to do.
 pub trait Tool: Send + Sync {
     /// Unique name the model uses to call the tool.
-    fn name(&self) -> &str;
+    fn name(&self) -> &ToolName;
 
     /// What the tool does and when to use it, written for the model.
     fn description(&self) -> &str;
@@ -49,7 +50,7 @@ pub trait Tool: Send + Sync {
 /// Registration failed because a tool with this name already exists.
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("a tool named `{0}` is already registered")]
-pub struct DuplicateTool(pub String);
+pub struct DuplicateTool(pub ToolName);
 
 /// The tools available to an agent, in registration order.
 #[derive(Clone, Default)]
@@ -64,8 +65,8 @@ impl ToolRegistry {
 
     /// Adds a tool; fails if its name is taken.
     pub fn register(&mut self, tool: Arc<dyn Tool>) -> Result<(), DuplicateTool> {
-        if self.get(tool.name()).is_some() {
-            return Err(DuplicateTool(tool.name().to_owned()));
+        if self.get(tool.name().as_str()).is_some() {
+            return Err(DuplicateTool(tool.name().clone()));
         }
         self.tools.push(tool);
         Ok(())
@@ -78,11 +79,11 @@ impl ToolRegistry {
     }
 
     pub fn get(&self, name: &str) -> Option<&Arc<dyn Tool>> {
-        self.tools.iter().find(|tool| tool.name() == name)
+        self.tools.iter().find(|tool| tool.name().as_str() == name)
     }
 
     pub fn names(&self) -> Vec<&str> {
-        self.tools.iter().map(|tool| tool.name()).collect()
+        self.tools.iter().map(|tool| tool.name().as_str()).collect()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn Tool>> {
@@ -97,7 +98,9 @@ impl ToolRegistry {
     pub fn specs(&self) -> Vec<ToolSpec> {
         self.tools
             .iter()
-            .map(|tool| ToolSpec::function(tool.name(), tool.description(), tool.parameters()))
+            .map(|tool| {
+                ToolSpec::function(tool.name().clone(), tool.description(), tool.parameters())
+            })
             .collect()
     }
 
@@ -137,11 +140,11 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    struct Named(&'static str);
+    struct Named(ToolName);
 
     impl Tool for Named {
-        fn name(&self) -> &str {
-            self.0
+        fn name(&self) -> &ToolName {
+            &self.0
         }
         fn description(&self) -> &str {
             "a test tool"
@@ -157,10 +160,12 @@ mod tests {
     #[test]
     fn duplicate_names_are_rejected_with_the_name() {
         let mut registry = ToolRegistry::new();
-        registry.register(Arc::new(Named("a"))).unwrap();
+        registry
+            .register(Arc::new(Named(ToolName::from_static("a"))))
+            .unwrap();
         assert_eq!(
-            registry.register(Arc::new(Named("a"))),
-            Err(DuplicateTool("a".into()))
+            registry.register(Arc::new(Named(ToolName::from_static("a")))),
+            Err(DuplicateTool(ToolName::from_static("a")))
         );
         assert_eq!(
             registry.names(),
@@ -172,9 +177,9 @@ mod tests {
     #[test]
     fn specs_list_every_tool_in_registration_order() {
         let registry = ToolRegistry::new()
-            .with(Arc::new(Named("b")))
+            .with(Arc::new(Named(ToolName::from_static("b"))))
             .unwrap()
-            .with(Arc::new(Named("a")))
+            .with(Arc::new(Named(ToolName::from_static("a"))))
             .unwrap();
         let specs = registry.specs();
         assert_eq!(
@@ -196,7 +201,9 @@ mod tests {
 
     #[test]
     fn lookup_finds_registered_tools_only() {
-        let registry = ToolRegistry::new().with(Arc::new(Named("a"))).unwrap();
+        let registry = ToolRegistry::new()
+            .with(Arc::new(Named(ToolName::from_static("a"))))
+            .unwrap();
         assert!(registry.get("a").is_some());
         assert!(registry.get("missing").is_none());
         assert!(!registry.is_empty());

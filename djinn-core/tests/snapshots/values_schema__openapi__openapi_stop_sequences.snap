@@ -1,0 +1,14 @@
+---
+source: djinn-core/tests/values_schema.rs
+expression: schema
+---
+{
+  "type": "array",
+  "items": {
+    "type": "string",
+    "title": "stop sequence",
+    "maxLength": 256,
+    "minLength": 1
+  },
+  "maxItems": 4
+}

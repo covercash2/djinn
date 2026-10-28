@@ -3,8 +3,10 @@
 use std::time::{Duration, Instant};
 
 use djinn_core::chat::{ChatMessage, ChatRequest, ToolCall};
+use djinn_core::values::{
+    MaxTokens, SystemPrompt, Temperature, ToolArguments, ToolCallId, ToolName,
+};
 use futures::StreamExt;
-use serde_json::Value;
 use thiserror::Error;
 
 use crate::backend::{Backend, BackendError, BackendEvent};
@@ -16,21 +18,21 @@ pub const DEFAULT_SYSTEM_PROMPT: &str = "You are a concise, helpful assistant. U
 /// Settings for an [`Agent`].
 #[derive(Clone, Debug)]
 pub struct AgentConfig {
-    pub system_prompt: String,
+    pub system_prompt: SystemPrompt,
     /// The most model calls one user message may cause.
     pub max_steps: usize,
     /// How long one tool may run before it is cancelled.
     pub tool_timeout: Duration,
     /// Tool results longer than this many bytes are cut off.
     pub max_tool_output: usize,
-    pub temperature: Option<f64>,
-    pub max_tokens: Option<usize>,
+    pub temperature: Option<Temperature>,
+    pub max_tokens: Option<MaxTokens>,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            system_prompt: DEFAULT_SYSTEM_PROMPT.to_owned(),
+            system_prompt: SystemPrompt::from_static(DEFAULT_SYSTEM_PROMPT),
             max_steps: 8,
             tool_timeout: Duration::from_secs(10),
             max_tool_output: 8 * 1024,
@@ -47,14 +49,14 @@ pub enum AgentEvent {
     Text(String),
     /// The model asked for a tool and it is about to run. `arguments` is the JSON the model wrote.
     ToolStarted {
-        id: String,
-        name: String,
-        arguments: String,
+        id: ToolCallId,
+        name: ToolName,
+        arguments: ToolArguments,
     },
     /// A tool call ended. `output` is what the model is shown (an error message when `ok` is false).
     ToolFinished {
-        id: String,
-        name: String,
+        id: ToolCallId,
+        name: ToolName,
         ok: bool,
         output: String,
         elapsed: Duration,
@@ -85,7 +87,7 @@ pub struct Agent<B> {
 impl<B: Backend> Agent<B> {
     pub fn new(backend: B, tools: ToolRegistry, mut config: AgentConfig) -> Self {
         config.max_steps = config.max_steps.max(1);
-        let history = vec![ChatMessage::system(config.system_prompt.clone())];
+        let history = vec![ChatMessage::system(config.system_prompt.as_str())];
         Self {
             backend,
             tools,
@@ -187,7 +189,7 @@ impl<B: Backend> Agent<B> {
         });
         let started = Instant::now();
 
-        let (ok, output) = match self.tools.get(&name) {
+        let (ok, output) = match self.tools.get(name.as_str()) {
             None => (
                 false,
                 format!(
@@ -196,35 +198,16 @@ impl<B: Backend> Agent<B> {
                 ),
             ),
             Some(tool) => {
-                let raw = call.function.arguments.trim();
-                let parsed = if raw.is_empty() {
-                    Ok(Value::Object(Default::default()))
-                } else {
-                    serde_json::from_str::<Value>(raw)
-                };
-                match parsed {
-                    Err(error) => (
+                let arguments = call.function.arguments.to_value();
+                match tokio::time::timeout(self.config.tool_timeout, tool.call(arguments)).await {
+                    Ok(Ok(text)) => (true, text),
+                    Ok(Err(error)) => (false, format!("Error: {error}")),
+                    Err(_) => (
                         false,
-                        format!("Error: the arguments are not valid JSON: {error}"),
-                    ),
-                    Ok(arguments @ Value::Object(_)) => {
-                        match tokio::time::timeout(self.config.tool_timeout, tool.call(arguments))
-                            .await
-                        {
-                            Ok(Ok(text)) => (true, text),
-                            Ok(Err(error)) => (false, format!("Error: {error}")),
-                            Err(_) => (
-                                false,
-                                format!(
-                                    "Error: the tool timed out after {:.1} seconds",
-                                    self.config.tool_timeout.as_secs_f64()
-                                ),
-                            ),
-                        }
-                    }
-                    Ok(_) => (
-                        false,
-                        "Error: the arguments must be a JSON object".to_owned(),
+                        format!(
+                            "Error: the tool timed out after {:.1} seconds",
+                            self.config.tool_timeout.as_secs_f64()
+                        ),
                     ),
                 }
             }
@@ -262,9 +245,11 @@ pub fn truncate_output(text: String, limit: usize) -> String {
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use std::sync::LazyLock;
+
     use djinn_core::chat::Role;
     use futures::future::BoxFuture;
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     use super::*;
     use crate::backend::{ScriptedBackend, ScriptedReply};
@@ -276,8 +261,9 @@ mod tests {
     }
 
     impl Tool for Echo {
-        fn name(&self) -> &str {
-            "echo"
+        fn name(&self) -> &ToolName {
+            static NAME: LazyLock<ToolName> = LazyLock::new(|| ToolName::from_static("echo"));
+            &NAME
         }
         fn description(&self) -> &str {
             "Echo the text back"
@@ -300,8 +286,9 @@ mod tests {
     struct Sleepy;
 
     impl Tool for Sleepy {
-        fn name(&self) -> &str {
-            "sleepy"
+        fn name(&self) -> &ToolName {
+            static NAME: LazyLock<ToolName> = LazyLock::new(|| ToolName::from_static("sleepy"));
+            &NAME
         }
         fn description(&self) -> &str {
             "Sleeps"
@@ -321,8 +308,9 @@ mod tests {
     struct Fixed(Result<String, ToolError>);
 
     impl Tool for Fixed {
-        fn name(&self) -> &str {
-            "fixed"
+        fn name(&self) -> &ToolName {
+            static NAME: LazyLock<ToolName> = LazyLock::new(|| ToolName::from_static("fixed"));
+            &NAME
         }
         fn description(&self) -> &str {
             "Returns a fixed result"
@@ -421,8 +409,11 @@ mod tests {
             roles(second),
             vec![Role::System, Role::User, Role::Assistant, Role::Tool]
         );
-        assert_eq!(second[2].tool_calls.as_ref().unwrap()[0].id, "c1");
-        assert_eq!(second[3].tool_call_id.as_deref(), Some("c1"));
+        assert_eq!(second[2].tool_calls.as_ref().unwrap()[0].id.as_str(), "c1");
+        assert_eq!(
+            second[3].tool_call_id.as_ref().map(|id| id.as_str()),
+            Some("c1")
+        );
         assert_eq!(second[3].content.as_deref(), Some("echo: hi"));
         assert_eq!(
             roles(agent.history()),
@@ -442,9 +433,9 @@ mod tests {
             ScriptedReply::tool_calls(
                 Some("Doing both."),
                 vec![
-                    ToolCall::function("a", "echo", r#"{"text":"first"}"#),
-                    ToolCall::function("b", "calculator", r#"{"expression":"6*7"}"#),
-                    ToolCall::function("c", "echo", r#"{"text":"third"}"#),
+                    ToolCall::from_static("a", "echo", r#"{"text":"first"}"#),
+                    ToolCall::from_static("b", "calculator", r#"{"expression":"6*7"}"#),
+                    ToolCall::from_static("c", "echo", r#"{"text":"third"}"#),
                 ],
             ),
             ScriptedReply::text("done"),
@@ -472,7 +463,7 @@ mod tests {
         assert_eq!(
             results
                 .iter()
-                .map(|m| m.tool_call_id.as_deref().unwrap())
+                .map(|m| m.tool_call_id.as_ref().unwrap().as_str())
                 .collect::<Vec<_>>(),
             vec!["a", "b", "c"]
         );
@@ -622,26 +613,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bad_arguments_are_reported_to_the_model() {
+    async fn a_missing_parameter_is_reported_to_the_model() {
+        // Arguments that are not a JSON object cannot reach the agent any more: the value type
+        // rejects them, and the backend reports them as a malformed response.
         let (mut agent, calls) = agent(vec![
-            ScriptedReply::call("a", "echo", "{not json"),
-            ScriptedReply::call("b", "echo", "[1, 2]"),
             ScriptedReply::call("c", "calculator", "{}"),
             ScriptedReply::text("giving up"),
         ]);
         turn(&mut agent, "go").await.0.unwrap();
 
-        let messages = &agent.backend().requests()[3].messages;
+        let messages = &agent.backend().requests()[1].messages;
         let shown: Vec<_> = tool_messages(messages)
             .iter()
             .map(|m| m.content.clone().unwrap())
             .collect();
-        assert!(shown[0].contains("not valid JSON"), "{}", shown[0]);
-        assert!(shown[1].contains("must be a JSON object"), "{}", shown[1]);
         assert!(
-            shown[2].contains("missing required parameter `expression`"),
+            shown[0].contains("missing required parameter `expression`"),
             "{}",
-            shown[2]
+            shown[0]
         );
         assert!(calls.lock().unwrap().is_empty(), "echo never ran");
     }
@@ -774,7 +763,7 @@ mod tests {
     async fn the_system_prompt_comes_first() {
         let (tools, _) = registry(vec![]);
         let config = AgentConfig {
-            system_prompt: "Be brief.".into(),
+            system_prompt: SystemPrompt::from_static("Be brief."),
             ..AgentConfig::default()
         };
         let mut agent = Agent::new(
@@ -796,7 +785,7 @@ mod tests {
             ScriptedReply::text("first answer"),
             ScriptedReply::call("c", "echo", r#"{"text":"x"}"#),
             ScriptedReply::error(BackendError::Status {
-                status: 500,
+                status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
                 message: "boom".into(),
             }),
             ScriptedReply::text("recovered"),
@@ -808,7 +797,7 @@ mod tests {
         assert_eq!(
             result,
             Err(TurnError::Backend(BackendError::Status {
-                status: 500,
+                status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
                 message: "boom".into()
             }))
         );
@@ -871,7 +860,7 @@ mod tests {
                 .tools
                 .unwrap()
                 .iter()
-                .map(|t| t.function.name.clone())
+                .map(|t| t.function.name.to_string())
                 .collect();
             assert_eq!(names, vec!["echo", "calculator"]);
         }
@@ -892,8 +881,8 @@ mod tests {
     async fn generation_settings_are_passed_to_the_backend() {
         let (tools, _) = registry(vec![]);
         let config = AgentConfig {
-            temperature: Some(0.3),
-            max_tokens: Some(77),
+            temperature: Some(Temperature::from_const(0.3)),
+            max_tokens: Some(MaxTokens::from_const(77)),
             ..AgentConfig::default()
         };
         let mut agent = Agent::new(
@@ -905,7 +894,10 @@ mod tests {
         let request = &agent.backend().requests()[0];
         assert_eq!(
             (request.temperature, request.max_tokens),
-            (Some(0.3), Some(77))
+            (
+                Some(Temperature::from_const(0.3)),
+                Some(MaxTokens::from_const(77))
+            )
         );
     }
 

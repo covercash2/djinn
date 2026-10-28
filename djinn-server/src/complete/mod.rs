@@ -4,6 +4,7 @@ use std::sync::Arc;
 use axum::extract::State;
 use axum::response::sse::{Event, Sse};
 use djinn_core::lm::config::RunConfig;
+use djinn_core::values::Prompt;
 use djinn_models::lm::LanguageModel;
 use futures::{pin_mut, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -20,7 +21,7 @@ pub const ROUTE_COMPLETE_STREAM: &str = "/complete/stream";
 #[derive(Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct CompleteRequest {
     /// Text to continue
-    prompt: String,
+    prompt: Prompt,
     #[serde(default, flatten)]
     #[schema(inline)]
     config: RunConfig,
@@ -29,7 +30,7 @@ pub struct CompleteRequest {
 #[derive(Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct CompleteResponse {
     /// The original prompt
-    prompt: String,
+    prompt: Prompt,
     /// The generated continuation
     output: String,
 }

@@ -28,7 +28,7 @@ pub async fn run_server(config: Config) -> anyhow::Result<()> {
 
     let model = Box::new(create_new_context(&model_config).await?)
         as Box<dyn djinn_models::lm::LanguageModel>;
-    let model_id: Arc<str> = model.model_id().into();
+    let model_id = model.model_id();
     let model = Arc::new(Mutex::new(model));
 
     tracing::debug!("starting server with config: {config:?}");

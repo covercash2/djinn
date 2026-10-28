@@ -3,10 +3,14 @@ source: djinn-core/src/lm/config.rs
 expression: cfg
 ---
 RunConfig {
-    sample_len: 100,
+    sample_len: MaxTokens(
+        100,
+    ),
     seed: 299792458,
     repeat_last_n: 64,
     repeat_penalty: 1.1,
-    temperature: 1e-7,
+    temperature: Temperature(
+        1e-7,
+    ),
     top_p: None,
 }
