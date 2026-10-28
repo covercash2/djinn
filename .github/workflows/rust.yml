@@ -15,9 +15,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Install nightly toolchain
-      uses: dtolnay/rust-toolchain@nightly
+    - name: Install Rust toolchain
+      # Keep the version in sync with `rust-toolchain.toml` and `flake.nix`.
+      uses: dtolnay/rust-toolchain@master
       with:
+        toolchain: 1.99.0
         components: clippy,rustfmt,llvm-tools
     - uses: taiki-e/install-action@v2
       with:
@@ -45,9 +47,14 @@ jobs:
         cargo xtask schema
         git diff --exit-code configs/
     - name: coverage
-      run: cargo llvm-cov nextest --all --fail-under-lines 30
+      # Keep the ignore pattern in sync with `coverage_ignore` in the justfile.
+      run: >
+        cargo llvm-cov nextest --all --fail-under-lines 30
+        --ignore-filename-regex '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs)'
     - name: generate lcov
-      run: cargo llvm-cov --no-run --lcov --output-path lcov.info
+      run: >
+        cargo llvm-cov --no-run --lcov --output-path lcov.info
+        --ignore-filename-regex '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs)'
     - name: upload coverage
       uses: codecov/codecov-action@v5
       with:

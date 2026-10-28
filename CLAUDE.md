@@ -10,7 +10,7 @@ just coverage       # HTML coverage report → target/llvm-cov/html/index.html
 cargo nextest run -p <crate> <test_name>  # single test
 ```
 
-Dev environment: Nix flakes (`.envrc` runs `use flake`). Rust nightly required.
+Dev environment: Nix flakes (`.envrc` runs `use flake`). Stable Rust, edition 2024; the toolchain version is pinned in `rust-toolchain.toml`, `flake.nix` and `.github/workflows/rust.yml` (bump all three together).
 
 ## Workspace
 

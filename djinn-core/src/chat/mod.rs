@@ -26,7 +26,7 @@ mod validate;
 pub use markers::{ChatCompletionChunkObject, ChatCompletionObject, ListObject, ModelObject};
 
 pub use crate::values::MAX_STOP_SEQUENCES;
-pub use validate::{validate_request, ChatRequestError};
+pub use validate::{ChatRequestError, validate_request};
 
 /// Who a message is from.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]

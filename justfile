@@ -1,6 +1,10 @@
 # pass recipe arguments to the shell exactly as typed (see the `agent` recipe)
 set positional-arguments
 
+# Code that needs real model weights, the Hugging Face Hub or a GPU cannot run in unit tests, so it
+# is left out of the coverage numbers. Keep this in sync with `.github/workflows/rust.yml`.
+coverage_ignore := '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs)'
+
 # list recipes by default
 default:
 	just --list
@@ -40,11 +44,11 @@ check:
 	just check-agent-deps
 	cargo fmt --check
 	cargo clippy --workspace --all-targets -- -D warnings
-	cargo llvm-cov nextest --all --fail-under-lines 30
+	cargo llvm-cov nextest --all --ignore-filename-regex '{{coverage_ignore}}' --fail-under-lines 30
 
 # generate HTML coverage report (opens at target/llvm-cov/html/index.html)
 coverage:
-	cargo llvm-cov nextest --all --html
+	cargo llvm-cov nextest --all --ignore-filename-regex '{{coverage_ignore}}' --html
 	@echo "Report: target/llvm-cov/html/index.html"
 
 # run the agent REPL (flags after the recipe name are passed through, e.g. `just agent --once "What is 2+2?"`)

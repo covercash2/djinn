@@ -9,7 +9,6 @@ name = "djinn-agent"
 path = "src/main.rs"
 
 [dependencies]
-anyhow.workspace = true
 async-stream.workspace = true
 clap.workspace = true
 djinn-core.workspace = true

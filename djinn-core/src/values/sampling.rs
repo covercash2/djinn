@@ -70,10 +70,12 @@ mod tests {
             error.contains("temperature") && error.contains('5'),
             "{error}"
         );
-        assert!(MaxTokens::new(0)
-            .unwrap_err()
-            .to_string()
-            .contains("max_tokens"));
+        assert!(
+            MaxTokens::new(0)
+                .unwrap_err()
+                .to_string()
+                .contains("max_tokens")
+        );
         assert!(TopP::new(7.0).unwrap_err().to_string().contains("top_p"));
     }
 

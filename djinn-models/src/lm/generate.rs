@@ -132,9 +132,9 @@ pub(crate) fn generate_stream<'a, M: StepModel>(
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use futures::{executor::block_on, StreamExt};
+    use futures::{StreamExt, executor::block_on};
     use tokenizers::{
-        models::wordlevel::WordLevel, pre_tokenizers::whitespace::Whitespace, Tokenizer,
+        Tokenizer, models::wordlevel::WordLevel, pre_tokenizers::whitespace::Whitespace,
     };
 
     use super::*;

@@ -10,7 +10,7 @@ use djinn_core::chat::{ChatMessage, Role, ToolCall, ToolSpec};
 use djinn_core::values::{ToolArguments, ToolName};
 use serde_json::Value;
 
-use super::chat::{next_call_id, ChatTemplate, ParsedReply};
+use super::chat::{ChatTemplate, ParsedReply, next_call_id};
 use pyjson::to_py_json;
 
 const DEFAULT_SYSTEM: &str = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.";
@@ -376,14 +376,18 @@ mod tests {
 
     #[test]
     fn non_string_or_empty_name_is_not_a_call() {
-        assert!(Qwen25Template
-            .parse_output(r#"<tool_call>{"name":1,"arguments":{}}</tool_call>"#)
-            .tool_calls
-            .is_empty());
-        assert!(Qwen25Template
-            .parse_output(r#"<tool_call>{"name":"","arguments":{}}</tool_call>"#)
-            .tool_calls
-            .is_empty());
+        assert!(
+            Qwen25Template
+                .parse_output(r#"<tool_call>{"name":1,"arguments":{}}</tool_call>"#)
+                .tool_calls
+                .is_empty()
+        );
+        assert!(
+            Qwen25Template
+                .parse_output(r#"<tool_call>{"name":"","arguments":{}}</tool_call>"#)
+                .tool_calls
+                .is_empty()
+        );
     }
 
     #[test]

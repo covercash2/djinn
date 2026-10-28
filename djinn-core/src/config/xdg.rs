@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 
-use super::{validate_and_load, Error, Result};
+use super::{Error, Result, validate_and_load};
 
 /// Returns the djinn XDG config directory: `$XDG_CONFIG_HOME/djinn/`.
 ///

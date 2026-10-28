@@ -6,10 +6,10 @@ use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
 use std::sync::LazyLock;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
 
-use super::{string_arg, Tool, ToolError};
+use super::{Tool, ToolError, string_arg};
 
 /// The most bytes returned from one file.
 pub const MAX_READ_BYTES: usize = 64 * 1024;
@@ -114,7 +114,7 @@ impl ReadFile {
             Err(_) => {
                 return Err(ToolError::Failed(format!(
                     "{requested} is not a UTF-8 text file"
-                )))
+                )));
             }
         };
 

@@ -47,9 +47,10 @@
             || builtins.any (l: (l.shortName or "") == "CUDA EULA" || (l.shortName or "") == "NVidia OptiX EULA") licenses;
         };
 
-        # Define the Rust compiler and tools.
+        # Define the Rust compiler and tools. Keep the version in sync with `rust-toolchain.toml` and
+        # `.github/workflows/rust.yml`.
         # https://github.com/oxalica/rust-overlay#rust-binrust-toolchainstable
-        rustToolchain = pkgs.rust-bin.nightly."2026-03-01".default.override {
+        rustToolchain = pkgs.rust-bin.stable."1.99.0".default.override {
           extensions = [ "clippy" "rustfmt" "rust-src" "llvm-tools-preview" ];
         };
 

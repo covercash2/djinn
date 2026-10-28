@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use djinn_core::device::Device;
+use djinn_core::lm::ModelSource;
 use djinn_core::lm::config::RunConfig;
 use djinn_core::lm::config::{
-    ModelConfig, ModelRun, DEFAULT_REPEAT_LAST_N, DEFAULT_REPEAT_PENALTY, DEFAULT_SAMPLE_LEN,
-    DEFAULT_SEED, DEFAULT_TEMPERATURE,
+    DEFAULT_REPEAT_LAST_N, DEFAULT_REPEAT_PENALTY, DEFAULT_SAMPLE_LEN, DEFAULT_SEED,
+    DEFAULT_TEMPERATURE, ModelConfig, ModelRun,
 };
 use djinn_core::lm::model::ModelArchitecture;
-use djinn_core::lm::ModelSource;
 use djinn_core::values::{MaxTokens, ModelId, Prompt, Revision, Temperature, TopP};
 
 #[derive(Parser, Clone)]
@@ -209,28 +209,32 @@ mod tests {
 
     #[test]
     fn the_removed_base_model_is_not_accepted() {
-        assert!(parse(&[
-            "--device",
-            "cpu",
-            "--prompt",
-            "x",
-            "--revision",
-            "main",
-            "q_mistral"
-        ])
-        .is_err());
+        assert!(
+            parse(&[
+                "--device",
+                "cpu",
+                "--prompt",
+                "x",
+                "--revision",
+                "main",
+                "q_mistral"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
     fn flash_attention_is_no_longer_an_option() {
-        assert!(parse(&[
-            "--device",
-            "cpu",
-            "--prompt",
-            "x",
-            "--use-flash-attn",
-            "qwen2_5_instruct"
-        ])
-        .is_err());
+        assert!(
+            parse(&[
+                "--device",
+                "cpu",
+                "--prompt",
+                "x",
+                "--use-flash-attn",
+                "qwen2_5_instruct"
+            ])
+            .is_err()
+        );
     }
 }

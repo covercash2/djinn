@@ -8,9 +8,9 @@ use djinn_core::values::ToolName;
 use futures::future::BoxFuture;
 use std::sync::LazyLock;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use super::{string_arg, Tool, ToolError};
+use super::{Tool, ToolError, string_arg};
 
 /// Longest expression accepted, in characters.
 const MAX_LENGTH: usize = 200;
@@ -303,25 +303,31 @@ mod tests {
     #[tokio::test]
     async fn overlong_and_deeply_nested_expressions_are_rejected() {
         let long = format!("1{}", " + 1".repeat(100));
-        assert!(run(&long)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("too long"));
+        assert!(
+            run(&long)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("too long")
+        );
 
         let deep = format!("{}1{}", "(".repeat(99), ")".repeat(99)); // 199 chars: under the length limit
-        assert!(run(&deep)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("nested too deeply"));
+        assert!(
+            run(&deep)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("nested too deeply")
+        );
 
         let unary = format!("{}1", "-".repeat(150));
-        assert!(run(&unary)
-            .await
-            .unwrap_err()
-            .to_string()
-            .contains("nested too deeply"));
+        assert!(
+            run(&unary)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("nested too deeply")
+        );
 
         let ok = format!("{}1{}", "(".repeat(40), ")".repeat(40));
         assert_eq!(run(&ok).await.unwrap(), "1");

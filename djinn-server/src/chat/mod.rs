@@ -1,26 +1,26 @@
 //! OpenAI-compatible chat endpoints: `POST /v1/chat/completions` and `GET /v1/models`.
 
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use axum::extract::rejection::JsonRejection;
 use axum::extract::State;
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use djinn_core::chat::{
-    validate_request, ChatChunk, ChatMessage, ChatRequest, ChatResponse, Choice, ChunkChoice,
-    Delta, ErrorBody, FinishReason, FunctionCallDelta, ModelInfo, ModelList, Role, StopSpec,
-    ToolCall, ToolCallDelta, Usage,
+    ChatChunk, ChatMessage, ChatRequest, ChatResponse, Choice, ChunkChoice, Delta, ErrorBody,
+    FinishReason, FunctionCallDelta, ModelInfo, ModelList, Role, StopSpec, ToolCall, ToolCallDelta,
+    Usage, validate_request,
 };
 use djinn_core::chat::{ChatCompletionChunkObject, ChatCompletionObject, ListObject, ModelObject};
 use djinn_core::values::ModelId;
-use djinn_models::lm::chat::{ChatEvent, ChatInput, ChatOutcome, ChatParams};
 use djinn_models::lm::LanguageModel;
-use futures::{pin_mut, StreamExt};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use djinn_models::lm::chat::{ChatEvent, ChatInput, ChatOutcome, ChatParams};
+use futures::{StreamExt, pin_mut};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::instrument;
 
@@ -416,19 +416,19 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::time::Duration;
 
-    use axum::body::Body;
-    use axum::http::{header, Request};
     use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, header};
     use djinn_core::values::{MaxTokens, Prompt, StopSequence, Temperature, TopP};
     use djinn_models::lm::chat::ChatStream;
     use djinn_models::testing::ScriptedModel;
     use futures::stream;
     use http_body_util::BodyExt;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use super::*;
-    use crate::server::{build_router, AppState};
+    use crate::server::{AppState, build_router};
 
     fn app_with(model: impl LanguageModel + 'static) -> Router {
         build_router(AppState {
@@ -526,10 +526,12 @@ mod tests {
         let (status, body) = chat(&app, json!({"messages": []})).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body["error"]["type"], "invalid_request_error");
-        assert!(body["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("messages"));
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("messages")
+        );
     }
 
     #[tokio::test]
@@ -993,9 +995,11 @@ mod tests {
 
         let chunks = chunks(&body);
         assert_eq!(chunks[0]["choices"][0]["delta"]["role"], "assistant");
-        assert!(chunks
-            .iter()
-            .all(|c| c["object"] == "chat.completion.chunk"));
+        assert!(
+            chunks
+                .iter()
+                .all(|c| c["object"] == "chat.completion.chunk")
+        );
         assert_eq!(content_deltas(&chunks), vec!["Hi", " there"]);
 
         let last = chunks.last().unwrap();

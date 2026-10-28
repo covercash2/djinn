@@ -5,8 +5,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use djinn_core::chat::{ChatRequest, FinishReason, ToolCall};
-use futures::stream::{self, BoxStream};
 use futures::StreamExt;
+use futures::stream::{self, BoxStream};
 
 use super::{Backend, BackendError, BackendEvent, ChatResult};
 

@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use async_stream::try_stream;
 use djinn_core::chat::{ChatRequest, Delta, FinishReason, ToolCall};
 use djinn_core::values::{ModelId, ToolArguments, ToolCallId, ToolName};
-use futures::stream::BoxStream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
@@ -167,17 +167,28 @@ impl Backend for OpenAiBackend {
                     }
                 }
             }
-            if !assembler.is_done() {
-                if let Some(event) = parser.finish() {
-                    if let Accepted::Text(text) = assembler.accept(&event.data)? {
-                        yield BackendEvent::Text(text);
-                    }
-                }
+            if let Some(text) = flush_parser(&mut parser, &mut assembler)? {
+                yield BackendEvent::Text(text);
             }
 
             yield BackendEvent::Done(assembler.finish()?);
         })
     }
+}
+
+/// Handles an event the server left unterminated at the end of the stream. (A plain function: let
+/// chains do not work inside `try_stream!`.)
+fn flush_parser(
+    parser: &mut SseParser,
+    assembler: &mut Assembler,
+) -> Result<Option<String>, BackendError> {
+    if !assembler.is_done()
+        && let Some(event) = parser.finish()
+        && let Accepted::Text(text) = assembler.accept(&event.data)?
+    {
+        return Ok(Some(text));
+    }
+    Ok(None)
 }
 
 // ---- stream assembly ----------------------------------------------------------------------
@@ -301,10 +312,10 @@ impl Assembler {
             call.id = Some(id);
         }
         if let Some(function) = delta.function {
-            if let Some(name) = function.name {
-                if call.name.is_empty() {
-                    call.name = name;
-                }
+            if let Some(name) = function.name
+                && call.name.is_empty()
+            {
+                call.name = name;
             }
             if let Some(arguments) = function.arguments {
                 call.arguments.push_str(&arguments);
@@ -346,13 +357,13 @@ impl Assembler {
                         return Err(BackendError::Malformed(format!(
                             "arguments of tool call `{}` are not a JSON object",
                             call.name
-                        )))
+                        )));
                     }
                     Err(error) => {
                         return Err(BackendError::Malformed(format!(
                             "arguments of tool call `{}` are not valid JSON: {error}",
                             call.name
-                        )))
+                        )));
                     }
                 }
             };
@@ -380,12 +391,12 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use axum::Router;
     use axum::body::{Body, Bytes};
     use axum::extract::State;
     use axum::http::{HeaderMap, StatusCode};
     use axum::response::{IntoResponse, Response};
     use axum::routing::{get, post};
-    use axum::Router;
     use djinn_core::chat::ChatMessage;
     use futures::stream;
     use serde_json::json;
@@ -876,9 +887,11 @@ mod tests {
 
         let (url, captured) = serve(Respond::Sse(vec![ok()])).await;
         collect(&test_backend(url, "m", None)).await;
-        assert!(captured.lock().unwrap().headers[0]
-            .get("authorization")
-            .is_none());
+        assert!(
+            captured.lock().unwrap().headers[0]
+                .get("authorization")
+                .is_none()
+        );
     }
 
     #[tokio::test]

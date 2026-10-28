@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use async_stream::stream;
-use candle_core::{quantized::gguf_file, DType, Device, Tensor};
+use candle_core::{DType, Device, Tensor, quantized::gguf_file};
 use candle_transformers::generation::LogitsProcessor;
 use candle_transformers::models::quantized_qwen2::ModelWeights as QwenWeights;
 use derive_builder::Builder;
@@ -16,10 +16,10 @@ use tracing::instrument;
 use crate::error::{Error, Result};
 use crate::token_output_stream::TokenOutputStream;
 
-use super::chat::{ChatInput, ChatStream, ChatTemplate};
-use super::generate::{generate_stream, GenParams, StepModel};
-use super::reply::reply_stream;
 use super::LanguageModel;
+use super::chat::{ChatInput, ChatStream, ChatTemplate};
+use super::generate::{GenParams, StepModel, generate_stream};
+use super::reply::reply_stream;
 
 pub enum Model {
     Qwen25Instruct {
@@ -40,7 +40,6 @@ impl std::fmt::Debug for Model {
     }
 }
 
-#[coverage(off)] // requires constructing Model, which needs loaded weights
 impl Model {
     /// Get the End of Sequence token for a given model
     pub fn eos_token(&self) -> &'static str {
@@ -57,7 +56,6 @@ impl Model {
     }
 }
 
-#[coverage(off)] // requires ApiRepo (HF Hub) and GPU device
 pub async fn load_weights(
     architecture: ModelArchitecture,
     repo: &ApiRepo,
@@ -69,12 +67,10 @@ pub async fn load_weights(
     load_model(architecture, &files, device).await
 }
 
-#[coverage(off)] // HF Hub network call
 pub async fn hf_files(repo: &ApiRepo, weights_file: &str) -> anyhow::Result<Vec<PathBuf>> {
     Ok(vec![repo.get(weights_file).await?])
 }
 
-#[coverage(off)] // HF Hub + VarBuilder — requires model weights
 pub async fn load_model<P: AsRef<Path>>(
     architecture: ModelArchitecture,
     files: &[P],
@@ -102,7 +98,6 @@ pub async fn load_model<P: AsRef<Path>>(
     }
 }
 
-#[coverage(off)] // requires loaded model weights for forward pass and kv-cache ops
 impl Model {
     #[instrument(skip(self))]
     fn forward(
@@ -149,7 +144,6 @@ impl Model {
     }
 }
 
-#[coverage(off)] // delegation to the weights above
 impl StepModel for Model {
     fn step(
         &mut self,
@@ -186,7 +180,6 @@ pub struct ModelContext {
     chat_template: Option<Arc<dyn ChatTemplate>>,
 }
 
-#[coverage(off)] // requires loaded tokenizer + model weights
 impl ModelContext {
     pub fn run(
         &mut self,
@@ -284,10 +277,10 @@ impl ModelContext {
             .iter()
             .filter_map(|marker| self.tokenizer.get_token(marker))
             .collect();
-        if let Some(eos) = self.tokenizer.get_token(self.model.eos_token()) {
-            if !stop_tokens.contains(&eos) {
-                stop_tokens.push(eos);
-            }
+        if let Some(eos) = self.tokenizer.get_token(self.model.eos_token())
+            && !stop_tokens.contains(&eos)
+        {
+            stop_tokens.push(eos);
         }
 
         let defaults = RunConfig::default();
@@ -318,7 +311,6 @@ impl ModelContext {
 /// How many tokens a chat reply may use when the request does not say.
 const DEFAULT_CHAT_MAX_TOKENS: usize = 1024;
 
-#[coverage(off)] // pure delegation to ModelContext::run above
 impl LanguageModel for ModelContext {
     fn run(
         &mut self,

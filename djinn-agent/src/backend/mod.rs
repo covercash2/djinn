@@ -14,7 +14,7 @@ mod openai;
 mod scripted;
 mod sse;
 
-pub use openai::{OpenAiBackend, DEFAULT_BASE_URL, DEFAULT_MODEL};
+pub use openai::{DEFAULT_BASE_URL, DEFAULT_MODEL, OpenAiBackend};
 pub use scripted::{ScriptedBackend, ScriptedReply};
 pub use sse::{SseEvent, SseParser};
 

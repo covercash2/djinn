@@ -205,10 +205,10 @@ pub async fn run_once<B: Backend>(
                 return;
             }
             // The answer is printed at the end; only tool activity is shown as it happens.
-            if !matches!(event, AgentEvent::Text(_)) {
-                if let Err(error) = show(&event, &mut std::io::sink(), err, &mut false) {
-                    io_error = Some(error);
-                }
+            if !matches!(event, AgentEvent::Text(_))
+                && let Err(error) = show(&event, &mut std::io::sink(), err, &mut false)
+            {
+                io_error = Some(error);
             }
         })
         .await;

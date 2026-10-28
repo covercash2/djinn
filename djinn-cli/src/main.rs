@@ -1,6 +1,3 @@
-#![feature(addr_parse_ascii)]
-#![feature(coverage_attribute)]
-
 use std::{
     fmt::{Debug, Display},
     fs::File,
@@ -65,7 +62,6 @@ struct ConfigArgs {
     config_dir: PathBuf,
 }
 
-#[coverage(off)]
 async fn single_run(args: SingleRunArgs) -> anyhow::Result<()> {
     let save_config = args.save_config.clone();
     let run: ModelRun = run(args.run.try_into()?).await?;
@@ -121,7 +117,6 @@ impl Display for TracingArgs {
     }
 }
 
-#[coverage(off)] // initializes global tracing subscriber — not safely callable in tests
 fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<FlushGuard>> {
     match tracing_args {
         TracingArgs::Chrome => {
@@ -146,7 +141,6 @@ fn setup_tracing(tracing_args: TracingArgs) -> anyhow::Result<Option<FlushGuard>
     }
 }
 
-#[coverage(off)]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();

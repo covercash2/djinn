@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_stream::try_stream;
 use djinn_core::chat::{FinishReason, Usage};
 use djinn_core::values::StopSequence;
-use futures::{pin_mut, Stream, StreamExt};
+use futures::{Stream, StreamExt, pin_mut};
 
 use super::chat::{ChatEvent, ChatOutcome, ChatTemplate};
 use super::generate::{GenEvent, GenFinish};

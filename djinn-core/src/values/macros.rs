@@ -8,7 +8,7 @@ macro_rules! string_value {
     (
         $(#[$meta:meta])*
         $name:ident, $kind:literal, $validate:path,
-        min_length = $min:expr, max_length = $max:expr, pattern = $pattern:expr
+        min_length = $min:expr_2021, max_length = $max:expr_2021, pattern = $pattern:expr_2021
     ) => {
         $(#[$meta])*
         #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -117,7 +117,7 @@ macro_rules! string_value {
                 false
             }
 
-            fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
                 let min_length: Option<u32> = $min;
                 let max_length: Option<u32> = $max;
                 let pattern: Option<&str> = $pattern;
@@ -166,7 +166,7 @@ macro_rules! number_value {
         $(#[$meta:meta])*
         $name:ident($inner:ty), $kind:literal, $valid:path, $rule:literal,
         schema_type = $schema_type:ident,
-        minimum = $minimum:expr, maximum = $maximum:expr, exclusive_minimum = $exclusive_minimum:expr
+        minimum = $minimum:expr_2021, maximum = $maximum:expr_2021, exclusive_minimum = $exclusive_minimum:expr_2021
     ) => {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -253,7 +253,7 @@ macro_rules! number_value {
                 false
             }
 
-            fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
                 let minimum: Option<f64> = $minimum;
                 let maximum: Option<f64> = $maximum;
                 let exclusive_minimum: Option<f64> = $exclusive_minimum;

@@ -79,13 +79,14 @@ impl ToolArguments {
                 Ok(_) => {
                     return Err(
                         ValueError::new(Self::KIND, "must be a JSON object").with_value(&raw)
-                    )
+                    );
                 }
                 Err(error) => {
-                    return Err(
-                        ValueError::new(Self::KIND, format!("must be valid JSON: {error}"))
-                            .with_value(&raw),
+                    return Err(ValueError::new(
+                        Self::KIND,
+                        format!("must be valid JSON: {error}"),
                     )
+                    .with_value(&raw));
                 }
             }
         };
@@ -182,7 +183,7 @@ impl schemars::JsonSchema for ToolArguments {
         false
     }
 
-    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
         schemars::schema::SchemaObject {
             instance_type: Some(schemars::schema::InstanceType::String.into()),
             metadata: Some(Box::new(schemars::schema::Metadata {

@@ -44,7 +44,7 @@ macro_rules! object_marker {
                 false
             }
 
-            fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
                 schemars::schema::SchemaObject {
                     instance_type: Some(schemars::schema::InstanceType::String.into()),
                     const_value: Some(serde_json::Value::from($literal)),
