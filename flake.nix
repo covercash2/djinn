@@ -64,8 +64,17 @@
               cudaPackages.cudatoolkit
               cudaPackages.libcublas
               cudaPackages.cuda_cudart
-              linuxPackages.nvidia_x11
+              # No `nvidia_x11` here: libcuda must match the *running* kernel module, so
+              # it comes from the host (/run/opengl-driver), never from the Nix store.
             ] else [];
+
+        # GPU compute capability candle compiles its kernels for (RTX 4090 = Ada = 8.9).
+        # Change this for a different GPU: https://developer.nvidia.com/cuda-gpus
+        cudaComputeCap = "89";
+
+        # The host's NVIDIA driver libraries (libcuda.so.1). On NixOS the driver module
+        # installs them here.
+        hostDriverLibs = "/run/opengl-driver/lib";
 
         # Common dependencies across platforms
         commonDependencies = with pkgs; [
@@ -86,9 +95,10 @@
           echo "🍎 macOS environment: Metal acceleration enabled"
         '' else if pkgs.stdenv.isLinux then ''
           # On Linux, configure CUDA environment
-          export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath systemDependencies}
+          export LD_LIBRARY_PATH=${hostDriverLibs}:${pkgs.lib.makeLibraryPath systemDependencies}
           export CUDA_HOME=${pkgs.cudaPackages.cudatoolkit}
           export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+          export CUDA_COMPUTE_CAP=${cudaComputeCap}
           echo "🐧 Linux environment: CUDA acceleration enabled"
         '' else "";
 
@@ -108,7 +118,15 @@
           version = "0.1.0";
 
           buildInputs = commonDependencies ++ systemDependencies;
-          nativeBuildInputs = with pkgs; [ rustToolchain pkg-config ];
+          nativeBuildInputs = with pkgs; [ rustToolchain pkg-config ]
+            # Adds /run/opengl-driver/lib to the binary's RUNPATH so it finds the host libcuda.
+            ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.autoAddDriverRunpath ];
+
+          # candle-kernels' build script needs these inside the sandbox (the devShell hook
+          # sets them for interactive builds).
+          CUDA_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux "${pkgs.cudaPackages.cudatoolkit}";
+          CUDA_HOME = pkgs.lib.optionalString pkgs.stdenv.isLinux "${pkgs.cudaPackages.cudatoolkit}";
+          CUDA_COMPUTE_CAP = pkgs.lib.optionalString pkgs.stdenv.isLinux cudaComputeCap;
 
           # Add platform-specific feature flags
           cargoExtraArgs = if pkgs.stdenv.isDarwin then
