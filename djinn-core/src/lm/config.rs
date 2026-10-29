@@ -266,6 +266,7 @@ mod tests {
             ModelSource::HuggingFaceHub {
                 repo_id: None,
                 weights_file: None,
+                tokenizer_revision: None,
                 ..
             }
         ));
@@ -293,9 +294,30 @@ mod tests {
     #[test]
     fn a_bad_tokenizer_repo_and_revision_are_rejected() {
         assert!(load("tokenizer_repo = \"a/b/c\"\n").is_err());
+        assert!(load("tokenizer_revision = \"ma in\"\n").is_err());
         let bad_revision = "variant = \"qwen2_5_instruct\"\n[model_source.hugging_face_hub]\nrevision = \"ma in\"\n";
         let error = config::validate_and_load::<ModelConfig>(bad_revision, Path::new("t.toml"));
         assert!(error.unwrap_err().to_string().contains("revision"));
+    }
+
+    #[test]
+    fn tokenizer_revision_can_be_overridden_independently() {
+        let config = load("tokenizer_revision = \"tokenizer-commit\"\n").unwrap();
+        let ModelSource::HuggingFaceHub {
+            revision,
+            tokenizer_revision,
+            ..
+        } = config.model_source
+        else {
+            panic!("expected a hub source");
+        };
+        assert_eq!(revision.as_str(), "main");
+        assert_eq!(
+            tokenizer_revision
+                .as_ref()
+                .map(|revision| revision.as_str()),
+            Some("tokenizer-commit")
+        );
     }
 
     #[test]
