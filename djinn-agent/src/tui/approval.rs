@@ -124,6 +124,7 @@ pub enum Stage {
 pub struct Dialog {
     pub pending: PendingApproval,
     pub stage: Stage,
+    pub scroll: usize,
 }
 
 /// What a key press in the dialog decided.
@@ -141,7 +142,16 @@ impl Dialog {
         Self {
             pending,
             stage: Stage::Choose,
+            scroll: 0,
         }
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_sub(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scroll = self.scroll.saturating_add(lines);
     }
 
     /// Whether "allow for this session" is offered.

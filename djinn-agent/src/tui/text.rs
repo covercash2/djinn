@@ -122,8 +122,26 @@ pub fn wrap_spans(spans: &[Span<'static>], columns: usize) -> Vec<Row> {
     let mut wrapped = false;
     let mut pending: Vec<&Token> = Vec::new();
     let tokens = tokens(spans);
+    let first_word = tokens
+        .iter()
+        .position(|token| !token.space)
+        .unwrap_or(tokens.len());
 
-    for token in &tokens {
+    for token in &tokens[..first_word] {
+        for (text, style) in &token.pieces {
+            for c in text.chars() {
+                if used > 0 && used + c.width().unwrap_or(0) > limit {
+                    rows.push(Row::new());
+                    used = 0;
+                    wrapped = true;
+                }
+                push(rows.last_mut().expect("one row"), &c.to_string(), *style);
+                used += c.width().unwrap_or(0);
+            }
+        }
+    }
+
+    for token in &tokens[first_word..] {
         if token.space {
             pending.push(token);
             continue;
@@ -224,6 +242,12 @@ mod tests {
     #[test]
     fn leading_spaces_on_the_first_row_are_kept() {
         assert_eq!(wrap("  indented", 20), vec!["  indented"]);
+    }
+
+    #[test]
+    fn leading_indentation_wraps_without_overflowing_the_row() {
+        assert_eq!(wrap("    x", 4), vec!["    ", "x"]);
+        assert_eq!(wrap("  abc", 4), vec!["  ", "abc"]);
     }
 
     #[test]

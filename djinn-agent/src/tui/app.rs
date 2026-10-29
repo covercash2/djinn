@@ -303,10 +303,16 @@ impl App {
             KeyCode::Char('c') if ctrl => return self.interrupt(),
             KeyCode::PageUp => {
                 self.scroll_up(self.page.max(1));
+                if let Some(dialog) = &mut self.dialog {
+                    dialog.scroll_up(self.page.max(1));
+                }
                 return vec![];
             }
             KeyCode::PageDown => {
                 self.scroll_down(self.page.max(1));
+                if let Some(dialog) = &mut self.dialog {
+                    dialog.scroll_down(self.page.max(1));
+                }
                 return vec![];
             }
             KeyCode::Home if ctrl => {

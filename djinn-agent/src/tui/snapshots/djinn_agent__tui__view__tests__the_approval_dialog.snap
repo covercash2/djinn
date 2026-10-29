@@ -5,12 +5,12 @@ expression: "screen(&mut app, 70, 18)"
 › read it
 
 ▸ ? read_file {"path":"notes/todo.txt"} waiting for approval
+
   ┌ Tool call ─────────────────────────────────────────────────────┐
   │ Run read_file?                                                 │
-  │                                                                │
   │ {"path":"notes/todo.txt"}                                      │
-  │                                                                │
-  │ [y] allow once   [a] allow this tool for the session   [n] den │
+  │ [y] allow once   [a] allow this tool for the session   [n]     │
+  │ deny                                                           │
   └────────────────────────────────────────────────────────────────┘
 
 

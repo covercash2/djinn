@@ -110,6 +110,7 @@ impl InputBuffer {
     /// Inserts pasted text as if typed, but never sends it. `\r\n` and `\r` count as one newline;
     /// tabs become four spaces; other controls are dropped.
     pub fn insert_str(&mut self, text: &str) {
+        let mut lines = vec![String::new()];
         let mut chars = text.chars().peekable();
         while let Some(c) = chars.next() {
             match c {
@@ -117,12 +118,33 @@ impl InputBuffer {
                     if chars.peek() == Some(&'\n') {
                         chars.next();
                     }
-                    self.newline();
+                    lines.push(String::new());
                 }
-                '\t' => "    ".chars().for_each(|c| self.insert_char(c)),
-                c => self.insert_char(c),
+                '\n' => lines.push(String::new()),
+                '\t' => lines.last_mut().expect("one line").push_str("    "),
+                c if c.is_control() => {}
+                c => lines.last_mut().expect("one line").push(c),
             }
         }
+        if lines.len() == 1 && lines[0].is_empty() {
+            return;
+        }
+
+        self.leave_history();
+        let at = byte_index(self.line(), self.col);
+        let rest = self.lines[self.row].split_off(at);
+        let last = lines.len() - 1;
+        let column = if last == 0 {
+            self.col + char_count(&lines[0])
+        } else {
+            char_count(&lines[last])
+        };
+        self.lines[self.row].push_str(&lines[0]);
+        lines[last].push_str(&rest);
+        self.lines
+            .splice(self.row + 1..self.row + 1, lines.into_iter().skip(1));
+        self.row += last;
+        self.col = column;
     }
 
     pub fn newline(&mut self) {
@@ -394,6 +416,16 @@ mod tests {
         input.insert_str("one\r\ntwo\rthree\tx\u{1b}[31m");
         assert_eq!(input.text(), "one\ntwo\nthree    x[31m");
         assert_eq!(input.line_count(), 3);
+    }
+
+    #[test]
+    fn a_paste_inserts_normalised_lines_at_the_cursor() {
+        let mut input = typed("abXY");
+        input.left();
+        input.left();
+        input.insert_str("é\r\n\tz");
+        assert_eq!(input.text(), "abé\n    zXY");
+        assert_eq!(input.cursor(), (1, 5));
     }
 
     #[test]

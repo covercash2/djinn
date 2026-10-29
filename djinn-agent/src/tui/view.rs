@@ -230,11 +230,11 @@ fn entry_lines(entry: &Entry, focused: bool, columns: usize, spinner: usize) -> 
     }
 }
 
-/// All transcript lines, reusing the layout of entries that did not change.
-fn transcript(app: &mut App, columns: usize) -> Vec<Line<'static>> {
+/// Lays out entries that changed and returns the transcript's total line count.
+fn prepare_transcript(app: &mut App, columns: usize) -> usize {
     let spinner = app.spinner;
     app.cache.resize(app.entries().len(), None);
-    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut total = 0;
     let mut previous_was_tool = false;
     for index in 0..app.entries().len() {
         let focused = app.focus == Some(index);
@@ -261,13 +261,42 @@ fn transcript(app: &mut App, columns: usize) -> Vec<Line<'static>> {
                 lines: laid_out,
             });
         }
-        if !lines.is_empty() && !(is_tool && previous_was_tool) {
-            lines.push(Line::default());
+        if total > 0 && !(is_tool && previous_was_tool) {
+            total += 1;
         }
         if let Some(cached) = &app.cache[index] {
-            lines.extend(cached.lines.iter().cloned());
+            total += cached.lines.len();
         }
         previous_was_tool = is_tool;
+    }
+    total
+}
+
+/// Clones only the cached transcript rows in `[start, end)`.
+fn transcript_range(app: &App, start: usize, end: usize) -> Vec<Line<'static>> {
+    let mut lines = Vec::with_capacity(end.saturating_sub(start));
+    let mut offset = 0;
+    let mut previous_was_tool = false;
+    for (index, entry) in app.entries().iter().enumerate() {
+        let is_tool = matches!(entry.kind(), EntryKind::Tool(_));
+        if offset > 0 && !(is_tool && previous_was_tool) {
+            if (start..end).contains(&offset) {
+                lines.push(Line::default());
+            }
+            offset += 1;
+        }
+        if let Some(cached) = &app.cache[index] {
+            let first = start.saturating_sub(offset).min(cached.lines.len());
+            let last = end.saturating_sub(offset).min(cached.lines.len());
+            if first < last {
+                lines.extend(cached.lines[first..last].iter().cloned());
+            }
+            offset += cached.lines.len();
+        }
+        previous_was_tool = is_tool;
+        if offset >= end {
+            break;
+        }
     }
     lines
 }
@@ -286,8 +315,12 @@ fn status_line(app: &App, columns: usize) -> Line<'static> {
             app.settings.max_steps
         ),
     };
-    let hints = if app.dialog.is_some() {
-        "y allow · a session · n deny · Ctrl-C cancel"
+    let hints = if let Some(dialog) = &app.dialog {
+        if dialog.can_allow_session() {
+            "y allow · a session · n deny · Ctrl-C cancel"
+        } else {
+            "y allow · n deny · Ctrl-C cancel"
+        }
     } else if app.is_working() {
         "Ctrl-C cancel · PgUp/PgDn scroll"
     } else {
@@ -311,6 +344,8 @@ fn status_line(app: &App, columns: usize) -> Line<'static> {
         left
     } else if width(&mid) <= columns {
         mid
+    } else if app.dialog.is_some() {
+        truncate_columns(&format!(" {hints}"), columns)
     } else {
         truncate_columns(&compact, columns)
     };
@@ -320,8 +355,11 @@ fn status_line(app: &App, columns: usize) -> Line<'static> {
     ))
 }
 
-fn dialog_lines(dialog: &Dialog, columns: usize) -> Vec<Line<'static>> {
-    let mut lines = vec![Line::from(vec![
+fn dialog_lines(
+    dialog: &Dialog,
+    columns: usize,
+) -> (Vec<Line<'static>>, Vec<Line<'static>>, Vec<Line<'static>>) {
+    let mut header = vec![Line::from(vec![
         Span::raw("Run "),
         Span::styled(
             dialog.pending.name.to_string(),
@@ -330,23 +368,23 @@ fn dialog_lines(dialog: &Dialog, columns: usize) -> Vec<Line<'static>> {
         Span::raw("?"),
     ])];
     if dialog.pending.needs_confirmation {
-        lines.push(Line::from(Span::styled(
+        header.push(Line::from(Span::styled(
             "This tool asks for confirmation every time.",
             Style::default().fg(Color::Yellow),
         )));
     }
-    lines.push(Line::default());
     let arguments = super::text::sanitise(dialog.pending.arguments.as_str());
+    let mut argument_lines = Vec::new();
     if arguments.trim().is_empty() || arguments.trim() == "{}" {
-        lines.push(Line::from(Span::styled("(no arguments)", dim())));
+        argument_lines.push(Line::from(Span::styled("(no arguments)", dim())));
     } else {
         for source in arguments.split('\n') {
             for row in hard_wrap(source, columns, Style::default()) {
-                lines.push(Line::from(row));
+                argument_lines.push(Line::from(row));
             }
         }
     }
-    lines.push(Line::default());
+    let mut footer = Vec::new();
     match &dialog.stage {
         Stage::Choose => {
             let mut options = vec![
@@ -359,35 +397,39 @@ fn dialog_lines(dialog: &Dialog, columns: usize) -> Vec<Line<'static>> {
             }
             options.push(Span::styled("[n]", Style::default().fg(Color::Red)));
             options.push(Span::raw(" deny"));
-            lines.push(Line::from(options));
+            footer.extend(wrap_spans(&options, columns).into_iter().map(Line::from));
         }
         Stage::Reason(reason) => {
-            lines.push(Line::from(Span::styled(
+            footer.push(Line::from(Span::styled(
                 "Why? (optional; Enter denies, Esc goes back)",
                 dim(),
             )));
-            lines.push(Line::from(format!("> {reason}▏")));
+            footer.push(Line::from(format!("> {reason}▏")));
         }
     }
-    lines
+    (header, argument_lines, footer)
 }
 
-fn render_dialog(frame: &mut Frame, dialog: &Dialog, area: Rect) {
-    let box_width = area.width.saturating_sub(4).clamp(10, 76);
+fn render_dialog(frame: &mut Frame, dialog: &mut Dialog, area: Rect) {
+    let box_width = area.width.saturating_sub(4).clamp(10, 76).min(area.width);
     let inner_columns = box_width.saturating_sub(4) as usize;
-    let mut lines = dialog_lines(dialog, inner_columns);
-    let max_height = area.height.saturating_sub(2).max(3) as usize;
-    if lines.len() + 2 > max_height {
-        // Keep the question and the options; drop the middle of long arguments.
-        let keep = max_height.saturating_sub(2);
-        let tail = 3.min(keep);
-        let head = keep - tail;
-        let total = lines.len();
-        let mut shortened: Vec<Line<'static>> = lines.drain(..head).collect();
-        shortened.push(Line::from(Span::styled("…", dim())));
-        shortened.extend(lines.drain(total - head - tail.saturating_sub(1)..));
-        lines = shortened;
-    }
+    let (header, arguments, footer) = dialog_lines(dialog, inner_columns);
+    let available_rows = area.height.saturating_sub(2) as usize;
+    let footer_rows = footer.len().min(available_rows);
+    let header_rows = header.len().min(available_rows.saturating_sub(footer_rows));
+    let argument_rows = available_rows.saturating_sub(footer_rows + header_rows);
+    let max_scroll = arguments.len().saturating_sub(argument_rows);
+    dialog.scroll = dialog.scroll.min(max_scroll);
+    let mut lines: Vec<Line<'static>> = header.into_iter().take(header_rows).collect();
+    lines.extend(
+        arguments
+            .into_iter()
+            .skip(dialog.scroll)
+            .take(argument_rows),
+    );
+    let footer_start = footer.len().saturating_sub(footer_rows);
+    lines.extend(footer.into_iter().skip(footer_start));
+
     let height = (lines.len() as u16 + 2).min(area.height);
     let rect = Rect {
         x: area.x + (area.width.saturating_sub(box_width)) / 2,
@@ -474,8 +516,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     // Transcript.
     let columns = transcript_area.width as usize;
     let height = transcript_area.height as usize;
-    let lines = transcript(app, columns);
-    let total = lines.len();
+    let total = prepare_transcript(app, columns);
     app.page = height.saturating_sub(1).max(1);
     if app.last_width == transcript_area.width && app.scroll > 0 && total > app.last_total {
         let added = total - app.last_total;
@@ -489,7 +530,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         app.new_lines = 0;
     }
     let start = total.saturating_sub(height + app.scroll);
-    let visible: Vec<Line<'static>> = lines.into_iter().skip(start).take(height).collect();
+    let visible = transcript_range(app, start, start.saturating_add(height).min(total));
     frame.render_widget(Paragraph::new(visible), transcript_area);
     if app.scroll > 0 && transcript_area.height > 0 {
         let label = if app.new_lines > 0 {
@@ -522,12 +563,16 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         " message "
     };
     let cursor_row = layout.cursor.0;
-    let first_row = (cursor_row + 1).saturating_sub(MAX_INPUT_ROWS);
+    let displayed_rows = input_area
+        .height
+        .saturating_sub(2)
+        .min(MAX_INPUT_ROWS as u16) as usize;
+    let first_row = (cursor_row + 1).saturating_sub(displayed_rows);
     let shown: Vec<Line<'static>> = layout
         .rows
         .iter()
         .skip(first_row)
-        .take(MAX_INPUT_ROWS)
+        .take(displayed_rows)
         .map(|row| Line::raw(row.clone()))
         .collect();
     let block = Block::default().borders(Borders::ALL).title(title);
@@ -542,9 +587,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     render_popup(frame, app, input_area);
 
     // Dialog on top, or the cursor in the input box.
-    match &app.dialog {
+    match &mut app.dialog {
         Some(dialog) => render_dialog(frame, dialog, transcript_area),
-        None => {
+        None if displayed_rows > 0 && input_area.width > 2 => {
             let x = input_area.x + 1 + layout.cursor.1 as u16;
             let y = input_area.y + 1 + (cursor_row - first_row) as u16;
             frame.set_cursor_position(Position::new(
@@ -552,6 +597,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 y,
             ));
         }
+        None => {}
     }
 }
 
@@ -719,6 +765,35 @@ mod tests {
     }
 
     #[test]
+    fn approval_choices_and_long_arguments_remain_accessible() {
+        let mut app = app();
+        let arguments = (0..20)
+            .map(|index| format!("  \"argument line {index:02}\""))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        let arguments = format!("{{\n  \"lines\": [\n{arguments}\n  ]\n}}");
+        app.update(Msg::Approval(pending("read_file", &arguments, false)));
+
+        let first = screen(&mut app, 40, 12);
+        assert!(
+            first.contains("[y]") && first.contains("[a]") && first.contains("[n]"),
+            "{first}"
+        );
+        assert!(first.contains("n deny"), "{first}");
+        assert!(first.contains("Ctrl-C"), "{first}");
+        assert!(first.contains("argument line 00"), "{first}");
+
+        app.update(Msg::Key(KeyEvent::new(
+            KeyCode::PageDown,
+            KeyModifiers::NONE,
+        )));
+        let later = screen(&mut app, 40, 12);
+        assert!(later.contains("argument line 05"), "{later}");
+        assert!(later.contains("[y]") && later.contains("[n]"), "{later}");
+        assert!(later.contains("n deny"), "{later}");
+    }
+
+    #[test]
     fn the_denial_reason_prompt() {
         let mut app = app();
         type_and_send(&mut app, "go");
@@ -784,6 +859,25 @@ mod tests {
         terminal.backend_mut().assert_cursor_position((11, 9));
         let shown = screen(&mut app, 40, 12);
         assert!(shown.contains("line three"), "{shown}");
+    }
+
+    #[test]
+    fn a_short_input_area_shows_the_latest_rows_and_keeps_the_cursor_inside() {
+        let mut app = app();
+        app.update(Msg::Paste("one\ntwo\nthree\nfour\nfive\nsix".into()));
+        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
+        let cursor = terminal.get_cursor_position().unwrap();
+        assert!(
+            cursor.x < 40 && cursor.y < 8,
+            "cursor is outside: {cursor:?}"
+        );
+        let shown = screen(&mut app, 40, 8);
+        assert!(shown.contains("six"), "{shown}");
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
+        assert_eq!(terminal.get_cursor_position().unwrap(), Position::new(0, 0));
     }
 
     #[test]
