@@ -136,6 +136,25 @@ impl FromStr for ApiKey {
     }
 }
 
+/// When the TUI asks before running a tool.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum Approval {
+    /// Every tool call waits for the user's decision.
+    #[default]
+    Ask,
+    /// Only tools that declare they need confirmation wait for the user.
+    Auto,
+}
+
+impl fmt::Display for Approval {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Ask => "ask",
+            Self::Auto => "auto",
+        })
+    }
+}
+
 /// Parses `--api-key` for clap. A normal `FromStr` parser would make clap print the rejected value in
 /// its error message, which for a secret is exactly what must not happen.
 #[derive(Clone, Copy, Debug)]

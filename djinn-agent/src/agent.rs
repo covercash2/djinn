@@ -7,6 +7,7 @@ use djinn_core::values::{
     MaxTokens, SystemPrompt, Temperature, ToolArguments, ToolCallId, ToolName,
 };
 use futures::StreamExt;
+use futures::future::BoxFuture;
 use thiserror::Error;
 
 use crate::backend::{Backend, BackendError, BackendEvent};
@@ -45,6 +46,8 @@ impl Default for AgentConfig {
 /// What happens during a turn, for a user interface to show.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AgentEvent {
+    /// A model call is about to start: the `step`-th of this turn (counting from 1).
+    StepStarted { step: usize },
     /// A piece of the model's reply, as it streams in.
     Text(String),
     /// The model asked for a tool and it is about to run. `arguments` is the JSON the model wrote.
@@ -52,6 +55,12 @@ pub enum AgentEvent {
         id: ToolCallId,
         name: ToolName,
         arguments: ToolArguments,
+    },
+    /// The user denied a call, so the tool did not run. `reason` is what the user said, if anything.
+    ToolDenied {
+        id: ToolCallId,
+        name: ToolName,
+        reason: Option<String>,
     },
     /// A tool call ended. `output` is what the model is shown (an error message when `ok` is false).
     ToolFinished {
@@ -65,6 +74,43 @@ pub enum AgentEvent {
     StepLimit { steps: usize },
     /// The turn ended successfully.
     TurnFinished,
+}
+
+/// A tool call waiting for the user's decision.
+#[derive(Clone, Copy, Debug)]
+pub struct ApprovalRequest<'a> {
+    pub id: &'a ToolCallId,
+    pub name: &'a ToolName,
+    pub arguments: &'a ToolArguments,
+    /// The tool declares that its calls need confirmation (see [`crate::tools::Tool::needs_confirmation`]).
+    pub needs_confirmation: bool,
+}
+
+/// The user's answer to an [`ApprovalRequest`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Decision {
+    Allow,
+    /// Do not run the tool. `reason` is free text shown to the model.
+    Deny {
+        reason: Option<String>,
+    },
+}
+
+/// Decides whether a requested tool call may run. Asked once per call, in order, before the tool
+/// starts; the agent waits for the answer without a time limit, and dropping the turn while it waits
+/// cancels it like any other point of the turn.
+pub trait Approver: Send + Sync {
+    fn decide<'a>(&'a self, request: ApprovalRequest<'a>) -> BoxFuture<'a, Decision>;
+}
+
+/// Allows every call. What [`Agent::run_turn`] uses.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AllowAll;
+
+impl Approver for AllowAll {
+    fn decide<'a>(&'a self, _: ApprovalRequest<'a>) -> BoxFuture<'a, Decision> {
+        Box::pin(async { Decision::Allow })
+    }
 }
 
 /// Why a turn did not produce an answer.
@@ -129,12 +175,23 @@ impl<B: Backend> Agent<B> {
     pub async fn run_turn(
         &mut self,
         user_message: &str,
+        on_event: impl FnMut(AgentEvent),
+    ) -> Result<String, TurnError> {
+        self.run_turn_with(user_message, on_event, &AllowAll).await
+    }
+
+    /// Like [`Agent::run_turn`], but asks `approver` before each tool runs (see [`Approver`]).
+    pub async fn run_turn_with(
+        &mut self,
+        user_message: &str,
         mut on_event: impl FnMut(AgentEvent),
+        approver: &dyn Approver,
     ) -> Result<String, TurnError> {
         let mut turn = vec![ChatMessage::user(user_message)];
         let tool_specs = self.tools.specs();
 
         for step in 1..=self.config.max_steps {
+            on_event(AgentEvent::StepStarted { step });
             let request = ChatRequest {
                 messages: self.history.iter().chain(&turn).cloned().collect(),
                 tools: (!tool_specs.is_empty()).then(|| tool_specs.clone()),
@@ -167,7 +224,7 @@ impl<B: Backend> Agent<B> {
                 result.tool_calls.clone(),
             ));
             for call in &result.tool_calls {
-                let output = self.run_tool(call, &mut on_event).await;
+                let output = self.run_tool(call, approver, &mut on_event).await;
                 turn.push(ChatMessage::tool(call.id.clone(), output));
             }
 
@@ -182,8 +239,34 @@ impl<B: Backend> Agent<B> {
 
     /// Runs one tool call and returns the text the model is shown. Never fails: every problem is
     /// described to the model so that it can correct itself.
-    async fn run_tool(&self, call: &ToolCall, on_event: &mut impl FnMut(AgentEvent)) -> String {
+    async fn run_tool(
+        &self,
+        call: &ToolCall,
+        approver: &dyn Approver,
+        on_event: &mut impl FnMut(AgentEvent),
+    ) -> String {
         let name = call.function.name.clone();
+        let tool = self.tools.get(name.as_str());
+
+        // An unknown tool is reported to the model without bothering the user.
+        if let Some(tool) = tool {
+            let request = ApprovalRequest {
+                id: &call.id,
+                name: &name,
+                arguments: &call.function.arguments,
+                needs_confirmation: tool.needs_confirmation(),
+            };
+            if let Decision::Deny { reason } = approver.decide(request).await {
+                let output = denial_message(reason.as_deref());
+                on_event(AgentEvent::ToolDenied {
+                    id: call.id.clone(),
+                    name,
+                    reason,
+                });
+                return output;
+            }
+        }
+
         on_event(AgentEvent::ToolStarted {
             id: call.id.clone(),
             name: name.clone(),
@@ -191,7 +274,7 @@ impl<B: Backend> Agent<B> {
         });
         let started = Instant::now();
 
-        let (ok, output) = match self.tools.get(name.as_str()) {
+        let (ok, output) = match tool {
             None => (
                 false,
                 format!(
@@ -224,6 +307,14 @@ impl<B: Backend> Agent<B> {
             elapsed: started.elapsed(),
         });
         output
+    }
+}
+
+/// What the model is told when the user denied a call.
+fn denial_message(reason: Option<&str>) -> String {
+    match reason.map(str::trim).filter(|reason| !reason.is_empty()) {
+        Some(reason) => format!("Error: the user denied this tool call because: {reason}"),
+        None => "Error: the user denied this tool call".to_owned(),
     }
 }
 
@@ -360,7 +451,14 @@ mod tests {
         message: &str,
     ) -> (Result<String, TurnError>, Vec<AgentEvent>) {
         let mut events = Vec::new();
-        let result = agent.run_turn(message, |e| events.push(e)).await;
+        let result = agent
+            .run_turn(message, |e| {
+                // Step markers are checked by their own test.
+                if !matches!(e, AgentEvent::StepStarted { .. }) {
+                    events.push(e);
+                }
+            })
+            .await;
         (result, events)
     }
 
@@ -514,6 +612,24 @@ mod tests {
             ("c1", "echo", true, "echo: x")
         );
         assert_eq!(events.last(), Some(&AgentEvent::TurnFinished));
+    }
+
+    #[tokio::test]
+    async fn every_model_call_is_announced_with_its_number() {
+        let (mut agent, _) = agent(vec![
+            ScriptedReply::call("c1", "echo", r#"{"text":"x"}"#),
+            ScriptedReply::text("ok"),
+        ]);
+        let mut steps = Vec::new();
+        agent
+            .run_turn("go", |e| {
+                if let AgentEvent::StepStarted { step } = e {
+                    steps.push(step);
+                }
+            })
+            .await
+            .unwrap();
+        assert_eq!(steps, vec![1, 2]);
     }
 
     #[tokio::test]
@@ -921,5 +1037,243 @@ mod tests {
             delay: None,
         }]);
         assert_eq!(turn(&mut agent, "hi").await.0.unwrap(), "");
+    }
+
+    /// Answers from a script and records what it was asked.
+    struct Scripted {
+        decisions: Mutex<std::collections::VecDeque<Decision>>,
+        asked: Mutex<Vec<(String, bool)>>,
+    }
+
+    impl Scripted {
+        fn new(decisions: Vec<Decision>) -> Self {
+            Self {
+                decisions: Mutex::new(decisions.into()),
+                asked: Mutex::default(),
+            }
+        }
+    }
+
+    impl Approver for Scripted {
+        fn decide<'a>(&'a self, request: ApprovalRequest<'a>) -> BoxFuture<'a, Decision> {
+            self.asked
+                .lock()
+                .unwrap()
+                .push((request.id.to_string(), request.needs_confirmation));
+            let decision = self
+                .decisions
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or(Decision::Allow);
+            Box::pin(async move { decision })
+        }
+    }
+
+    /// Never answers.
+    struct Never;
+
+    impl Approver for Never {
+        fn decide<'a>(&'a self, _: ApprovalRequest<'a>) -> BoxFuture<'a, Decision> {
+            Box::pin(futures::future::pending())
+        }
+    }
+
+    async fn turn_with(
+        agent: &mut Agent<ScriptedBackend>,
+        approver: &dyn Approver,
+    ) -> (Result<String, TurnError>, Vec<AgentEvent>) {
+        let mut events = Vec::new();
+        let result = agent
+            .run_turn_with(
+                "go",
+                |e| {
+                    if !matches!(e, AgentEvent::StepStarted { .. }) {
+                        events.push(e);
+                    }
+                },
+                approver,
+            )
+            .await;
+        (result, events)
+    }
+
+    #[tokio::test]
+    async fn a_denied_call_does_not_run_and_the_model_is_told_why() {
+        let (mut agent, calls) = agent(vec![
+            ScriptedReply::call("c1", "echo", r#"{"text":"x"}"#),
+            ScriptedReply::text("understood"),
+        ]);
+        let approver = Scripted::new(vec![Decision::Deny {
+            reason: Some("private".into()),
+        }]);
+        let (result, events) = turn_with(&mut agent, &approver).await;
+
+        assert_eq!(result.unwrap(), "understood");
+        assert!(calls.lock().unwrap().is_empty(), "the tool must not run");
+        let second = &agent.backend().requests()[1].messages;
+        assert_eq!(
+            second[3].content.as_deref(),
+            Some("Error: the user denied this tool call because: private")
+        );
+        assert_eq!(
+            events[0],
+            AgentEvent::ToolDenied {
+                id: ToolCallId::from_static("c1"),
+                name: ToolName::from_static("echo"),
+                reason: Some("private".into()),
+            }
+        );
+        assert!(
+            !events.iter().any(|e| matches!(
+                e,
+                AgentEvent::ToolStarted { .. } | AgentEvent::ToolFinished { .. }
+            )),
+            "a denied call reports only the denial: {events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_denial_without_a_reason_says_so_plainly() {
+        let (mut agent, _) = agent(vec![
+            ScriptedReply::call("c1", "echo", r#"{"text":"x"}"#),
+            ScriptedReply::text("ok"),
+        ]);
+        let approver = Scripted::new(vec![Decision::Deny {
+            reason: Some("  ".into()),
+        }]);
+        turn_with(&mut agent, &approver).await.0.unwrap();
+        let second = &agent.backend().requests()[1].messages;
+        assert_eq!(
+            second[3].content.as_deref(),
+            Some("Error: the user denied this tool call")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_decision_comes_before_the_call_is_reported_started() {
+        let (mut agent, _) = agent(vec![
+            ScriptedReply::call("c1", "echo", r#"{"text":"x"}"#),
+            ScriptedReply::text("ok"),
+        ]);
+        let approver = Scripted::new(vec![Decision::Allow]);
+        let (_, events) = turn_with(&mut agent, &approver).await;
+        assert_eq!(
+            approver.asked.lock().unwrap().as_slice(),
+            &[("c1".to_owned(), false)]
+        );
+        assert!(matches!(events[0], AgentEvent::ToolStarted { .. }));
+        assert!(matches!(
+            events[1],
+            AgentEvent::ToolFinished { ok: true, .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn the_next_call_is_still_presented_after_a_denial_and_results_stay_in_order() {
+        let (mut agent, calls) = agent(vec![
+            ScriptedReply::tool_calls(
+                None,
+                vec![
+                    ToolCall::from_static("a", "echo", r#"{"text":"first"}"#),
+                    ToolCall::from_static("b", "echo", r#"{"text":"second"}"#),
+                ],
+            ),
+            ScriptedReply::text("done"),
+        ]);
+        let approver = Scripted::new(vec![Decision::Deny { reason: None }, Decision::Allow]);
+        turn_with(&mut agent, &approver).await.0.unwrap();
+
+        assert_eq!(
+            calls.lock().unwrap().as_slice(),
+            &[json!({"text": "second"})]
+        );
+        assert_eq!(approver.asked.lock().unwrap().len(), 2);
+        let results = agent.backend().requests()[1]
+            .messages
+            .iter()
+            .filter(|m| m.role == Role::Tool)
+            .map(|m| m.tool_call_id.as_ref().unwrap().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(results, vec!["a", "b"]);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_tool_does_not_ask() {
+        let (mut agent, _) = agent(vec![
+            ScriptedReply::call("c1", "missing", "{}"),
+            ScriptedReply::text("ok"),
+        ]);
+        let approver = Scripted::new(vec![Decision::Deny { reason: None }]);
+        let (_, events) = turn_with(&mut agent, &approver).await;
+        assert!(approver.asked.lock().unwrap().is_empty());
+        assert!(matches!(
+            events[1],
+            AgentEvent::ToolFinished { ok: false, .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_tool_that_needs_confirmation_says_so_in_the_request() {
+        struct Careful;
+        impl Tool for Careful {
+            fn name(&self) -> &ToolName {
+                static NAME: LazyLock<ToolName> =
+                    LazyLock::new(|| ToolName::from_static("careful"));
+                &NAME
+            }
+            fn description(&self) -> &str {
+                "needs confirmation"
+            }
+            fn parameters(&self) -> Value {
+                json!({"type": "object", "properties": {}})
+            }
+            fn needs_confirmation(&self) -> bool {
+                true
+            }
+            fn call(&self, _: Value) -> BoxFuture<'_, Result<String, ToolError>> {
+                Box::pin(async { Ok("done".into()) })
+            }
+        }
+        let (tools, _) = registry(vec![Arc::new(Careful)]);
+        let mut agent = Agent::new(
+            ScriptedBackend::new([
+                ScriptedReply::call("c1", "careful", "{}"),
+                ScriptedReply::text("ok"),
+            ]),
+            tools,
+            AgentConfig::default(),
+        );
+        let approver = Scripted::new(vec![]);
+        turn_with(&mut agent, &approver).await.0.unwrap();
+        assert_eq!(
+            approver.asked.lock().unwrap().as_slice(),
+            &[("c1".to_owned(), true)]
+        );
+    }
+
+    #[tokio::test]
+    async fn dropping_the_turn_while_a_decision_is_pending_leaves_the_history_alone() {
+        let (mut agent, calls) = agent(vec![ScriptedReply::call("c1", "echo", r#"{"text":"x"}"#)]);
+        let before = agent.history().len();
+        let waited = tokio::time::timeout(
+            Duration::from_millis(50),
+            agent.run_turn_with("go", |_| {}, &Never),
+        )
+        .await;
+        assert!(waited.is_err(), "the turn must wait for the user");
+        assert_eq!(agent.history().len(), before);
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn allow_all_is_the_default_behaviour() {
+        let (mut agent, calls) = agent(vec![
+            ScriptedReply::call("c1", "echo", r#"{"text":"x"}"#),
+            ScriptedReply::text("ok"),
+        ]);
+        let (_, events) = turn_with(&mut agent, &AllowAll).await;
+        assert_eq!(calls.lock().unwrap().len(), 1);
+        assert!(matches!(events[0], AgentEvent::ToolStarted { .. }));
     }
 }

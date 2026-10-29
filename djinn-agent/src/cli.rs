@@ -6,7 +6,7 @@ use clap::Parser;
 use djinn_core::values::{ModelId, SystemPrompt};
 
 use crate::backend::{DEFAULT_BASE_URL, DEFAULT_MODEL};
-use crate::settings::{ApiKey, ApiKeyParser, BaseUrl};
+use crate::settings::{ApiKey, ApiKeyParser, Approval, BaseUrl};
 
 /// A small agent: chat with a model that can use a few read-only tools.
 ///
@@ -38,6 +38,14 @@ pub struct Args {
     /// File containing the system prompt (replaces the built-in one).
     #[arg(long)]
     pub system: Option<PathBuf>,
+
+    /// Use the line-based REPL even on a terminal (the full-screen UI is the default there).
+    #[arg(long)]
+    pub plain: bool,
+
+    /// In the full-screen UI: `ask` confirms every tool call, `auto` only those of tools that need it.
+    #[arg(long, value_enum, default_value_t)]
+    pub approval: Approval,
 
     /// Answer this one message, print only the answer to stdout, and exit.
     #[arg(long, value_name = "MESSAGE")]
@@ -166,6 +174,27 @@ mod tests {
         assert_eq!(args.system, Some(PathBuf::from("prompt.txt")));
         assert_eq!(args.once.as_deref(), Some("What is 2+2?"));
         assert_eq!(args.api_key.as_ref().map(ApiKey::expose), Some("k"));
+    }
+
+    #[test]
+    fn plain_and_approval_have_defaults_and_parse() {
+        let args = with_env(&[], || parse(&[]).unwrap());
+        assert!(!args.plain);
+        assert_eq!(args.approval, Approval::Ask);
+        let args = with_env(&[], || parse(&["--plain", "--approval", "auto"]).unwrap());
+        assert!(args.plain);
+        assert_eq!(args.approval, Approval::Auto);
+    }
+
+    #[test]
+    fn an_unknown_approval_mode_names_the_flag_and_the_values() {
+        let error = with_env(&[], || parse(&["--approval", "sometimes"]).unwrap_err());
+        assert_eq!(error.exit_code(), 2);
+        let text = error.to_string();
+        assert!(
+            text.contains("--approval") && text.contains("ask") && text.contains("auto"),
+            "{text}"
+        );
     }
 
     #[test]

@@ -46,7 +46,7 @@ for running models
 
 ## `djinn-agent`
 
-a small agent: a chat REPL where the model can use a few read-only tools
+a small agent: a terminal chat UI (or, in pipes and with `--plain`, a line-based REPL) where the model can use a few read-only tools
 (`current_time`, `calculator`, `read_file` confined to a directory).
 It talks to any OpenAI-compatible server and does not depend on the model code or `djinn-server`.
 
@@ -65,6 +65,23 @@ just agent --base-url http://localhost:11434/v1 --model qwen2.5:1.5b
 
 flags can also be set with `DJINN_AGENT_BASE_URL`, `DJINN_AGENT_MODEL` and `DJINN_AGENT_API_KEY`.
 in the REPL, `/help` lists the commands; tool activity is printed to stderr and the answer to stdout.
+### terminal UI
+
+in a terminal `djinn-agent` opens a full-screen UI: the conversation (assistant text is rendered as Markdown), each tool call as a block that you can expand, a multi-line input box and a status bar. when stdin or stdout is a pipe, or with `--plain`, it runs the line-based REPL instead (`--once` is unchanged).
+
+| key | action |
+| --- | --- |
+| `Enter` | send the message |
+| `Alt-Enter` (`Shift-Enter`, `Ctrl-J`) | new line in the message |
+| `Up` / `Down` | recall earlier messages (on the first / last line of the input) |
+| `PageUp` / `PageDown`, mouse wheel | scroll the conversation; `Ctrl-Home` / `Ctrl-End` jump to the start / end |
+| `Tab` / `Shift-Tab` | select a tool call; `Enter` or `Space` opens or closes it, `Esc` deselects |
+| `Ctrl-C` | cancel the running turn (it never quits); `/exit` or `Ctrl-D` quits |
+
+tool calls need your approval before they run: `y` allows once, `a` allows that tool for the rest of the session, `n` denies (type an optional reason; the model is told). `--approval auto` only asks about tools that declare they need confirmation (the built-in tools do not); the default `--approval ask` asks about every call. 
+
+the UI captures the mouse so the wheel can scroll; hold Shift while dragging to select text in most terminals. build without the UI with `--no-default-features`.
+
 the djinn server needs an instruct model for chat; `configs/model/qwen2_5_instruct.toml` (1.5B) and
 `configs/model/qwen2_5_instruct_0_5b.toml` (0.5B) are provided.
 

@@ -584,3 +584,41 @@ async fn the_api_key_never_appears_in_any_output() {
         }
     }
 }
+
+#[tokio::test]
+async fn plain_and_approval_are_accepted_with_piped_input_and_tools_run_without_asking() {
+    let (url, requests) = serve(vec![
+        tool_reply("calculator", r#"{"expression":"2+2"}"#),
+        text_reply("It is 4."),
+    ])
+    .await;
+    let output = run(
+        args(&["--base-url", &url, "--plain", "--approval", "auto"]),
+        "2+2?\n",
+    )
+    .await;
+
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert_eq!(text(&output.stdout), "It is 4.\n");
+    assert_eq!(requests.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn an_invalid_approval_mode_exits_2_naming_the_flag_and_the_values() {
+    let output = run(args(&["--approval", "sometimes"]), "").await;
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = text(&output.stderr);
+    assert!(
+        stderr.contains("--approval") && stderr.contains("ask") && stderr.contains("auto"),
+        "{stderr}"
+    );
+}
+
+#[tokio::test]
+async fn piped_output_never_contains_terminal_control_sequences() {
+    let (url, _) = serve(vec![text_reply("plain words")]).await;
+    let output = run(args(&["--base-url", &url]), "hello\n").await;
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert!(!output.stdout.contains(&0x1b), "{:?}", text(&output.stdout));
+    assert!(!output.stderr.contains(&0x1b), "{:?}", text(&output.stderr));
+}

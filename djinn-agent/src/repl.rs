@@ -12,11 +12,10 @@ use tokio::sync::Notify;
 
 use crate::agent::{Agent, AgentEvent, TurnError};
 use crate::backend::Backend;
+use crate::commands::{Command, HELP, UnknownCommand};
 
 /// The text shown before each input line.
 pub const PROMPT: &str = "> ";
-
-const COMMANDS: &str = "/exit (or /quit)  end the session\n/reset            forget the conversation\n/tools            list the available tools\n/help             show this list";
 
 /// Runs the interactive loop until `/exit`, `/quit`, or end of input (Ctrl-D).
 ///
@@ -84,13 +83,13 @@ fn run_command<B: Backend>(
     out: &mut impl Write,
     err: &mut impl Write,
 ) -> std::io::Result<bool> {
-    match command.trim() {
-        "exit" | "quit" => return Ok(false),
-        "reset" => {
+    match Command::parse(command) {
+        Ok(Command::Exit) => return Ok(false),
+        Ok(Command::Reset) => {
             agent.reset();
             writeln!(err, "conversation reset")?;
         }
-        "tools" => {
+        Ok(Command::Tools) => {
             if agent.tools().is_empty() {
                 writeln!(out, "no tools are registered")?;
             }
@@ -98,9 +97,9 @@ fn run_command<B: Backend>(
                 writeln!(out, "{}: {}", tool.name(), tool.description())?;
             }
         }
-        "help" => writeln!(out, "{COMMANDS}")?,
-        other => {
-            writeln!(err, "unknown command `/{other}`. Commands:\n{COMMANDS}")?;
+        Ok(Command::Help) => writeln!(out, "{HELP}")?,
+        Err(UnknownCommand(other)) => {
+            writeln!(err, "unknown command `/{other}`. Commands:\n{HELP}")?;
         }
     }
     Ok(true)
@@ -174,7 +173,11 @@ fn show(
                 one_line(output, 120)
             )?;
         }
-        AgentEvent::StepLimit { .. } | AgentEvent::TurnFinished => {}
+        // The REPL never asks for approval, so a denial cannot happen here.
+        AgentEvent::StepStarted { .. }
+        | AgentEvent::ToolDenied { .. }
+        | AgentEvent::StepLimit { .. }
+        | AgentEvent::TurnFinished => {}
     }
     err.flush()
 }

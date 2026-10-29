@@ -1,0 +1,26 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: "screen(&mut app, 60, 22)"
+---
+› Show me an example
+
+Example
+
+Here is bold, italic and code:
+
+• one
+• two
+
+fn main() {
+    println!("hi");
+}
+
+Partial sent▍
+
+
+
+
+┌ message (sending waits for the reply) ───────────────────┐
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+ qwen2.5 · http://localhost:8080/v1 · ask · ⠋ working 1/8

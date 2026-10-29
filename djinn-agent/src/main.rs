@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -5,6 +6,7 @@ use clap::Parser;
 use djinn_agent::agent::{Agent, AgentConfig, DEFAULT_SYSTEM_PROMPT};
 use djinn_agent::backend::OpenAiBackend;
 use djinn_agent::cli::{Args, read_system_prompt};
+use djinn_agent::front_end::choose;
 use djinn_agent::repl;
 use djinn_agent::tools::ToolRegistry;
 use djinn_core::values::SystemPrompt;
@@ -22,6 +24,37 @@ async fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The full-screen UI. Nothing may be printed to the terminal while it runs, so a server that cannot
+/// be reached is reported inside it.
+#[cfg(feature = "tui")]
+async fn run_tui(
+    backend: OpenAiBackend,
+    tools: ToolRegistry,
+    config: AgentConfig,
+    args: &Args,
+) -> Result<bool, String> {
+    use djinn_agent::tui::app::{Level, Settings};
+
+    let mut startup = Vec::new();
+    if let Err(error) = backend.check_reachable().await {
+        startup.push((
+            Level::Warn,
+            format!("{error}\n(starting anyway; start the server and send your message again)"),
+        ));
+    }
+    let mut agent = Agent::new(backend, tools, config);
+    let settings = Settings::for_agent(
+        &agent,
+        args.model.clone(),
+        args.base_url.clone(),
+        args.approval,
+    );
+    djinn_agent::tui::run_terminal(&mut agent, settings, startup)
+        .await
+        .map_err(|error| format!("I/O error: {error}"))?;
+    Ok(true)
 }
 
 /// Returns whether the session ended successfully.
@@ -58,6 +91,21 @@ async fn run(args: Args) -> Result<bool, String> {
             .await
             .map_err(io_error);
     }
+
+    let front_end = choose(
+        args.plain,
+        std::io::stdin().is_terminal(),
+        std::io::stdout().is_terminal(),
+        cfg!(feature = "tui"),
+    );
+    #[cfg(feature = "tui")]
+    {
+        if front_end == djinn_agent::front_end::FrontEnd::Tui {
+            return run_tui(backend, tools, config, &args).await;
+        }
+    }
+    #[cfg(not(feature = "tui"))]
+    let _ = front_end;
 
     if let Err(error) = backend.check_reachable().await {
         eprintln!(

@@ -1,0 +1,14 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: "screen(&mut app(), 60, 10)"
+---
+
+
+
+
+
+
+┌ message ─────────────────────────────────────────────────┐
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+ qwen2.5 · http://localhost:8080/v1 · approval: ask · ● idle
