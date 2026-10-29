@@ -1,0 +1,20 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: "screen(&mut app, 40, 16)"
+---
+› a fairly long question that has to
+  wrap in a narrow terminal
+
+▸ ✓ read_file 12ms {"path":"some/long/p…
+
+An answer with a
+very_long_identifier_that_cannot_wrap_ni
+cely inside.▍
+
+
+
+
+┌ message (sending waits for the reply)┐
+│                                      │
+└──────────────────────────────────────┘
+ qwen2.5 · ask · ⠋ working 1/8

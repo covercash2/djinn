@@ -8,18 +8,28 @@ authors.workspace = true
 name = "djinn-agent"
 path = "src/main.rs"
 
+[features]
+default = ["tui"]
+# The full-screen terminal front end. Without it the binary only has the plain REPL.
+tui = ["dep:ratatui", "dep:crossterm", "dep:pulldown-cmark", "dep:unicode-width"]
+
 [dependencies]
 async-stream.workspace = true
 clap.workspace = true
+crossterm = { workspace = true, optional = true }
 djinn-core.workspace = true
 futures.workspace = true
+pulldown-cmark = { workspace = true, optional = true }
+ratatui = { workspace = true, optional = true }
 reqwest.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+unicode-width = { workspace = true, optional = true }
 
 [dev-dependencies]
 axum.workspace = true
+insta.workspace = true
 tempfile.workspace = true

@@ -1,0 +1,18 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: "screen(&mut app, 60, 14)"
+---
+› 2+2?
+
+▾ ✓ calculator 12ms {"expression":"2+2"}
+  arguments
+    {"expression":"2+2"}
+  result
+    4
+    second line of the result
+
+
+┌ message ─────────────────────────────────────────────────┐
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+ qwen2.5 · http://localhost:8080/v1 · approval: ask · ● idle

@@ -5,7 +5,7 @@
 ```sh
 just check          # typos + core-deps guard + fmt + clippy + tests (run before committing)
 just schema         # regenerate configs/**/*.schema.json (run after changing any config struct)
-just agent          # run the agent REPL against a running server (see README)
+just agent          # run the agent: terminal UI on a terminal, REPL when piped or with --plain (see README)
 just coverage       # HTML coverage report → target/llvm-cov/html/index.html
 cargo nextest run -p <crate> <test_name>  # single test
 ```
@@ -19,7 +19,7 @@ Dev environment: Nix flakes (`.envrc` runs `use flake`). Stable Rust, edition 20
 - `djinn-core` — shared, dependency-light code: config loading/validation, the serializable config types (`RunConfig`, `ModelConfig`, `Device`, ...), and the OpenAI-compatible chat wire types (`djinn_core::chat`) shared by the server and the agent, and the validated value types (`djinn_core::values`). **Must not depend on candle, tokenizers, or hf-hub**; `just check` enforces this (`just check-core-deps`).
 - `djinn-models` — everything that links candle: model loading, token streaming, the `LanguageModel` trait, and the hardware features.
 - `djinn-server` — axum HTTP API over a loaded `LanguageModel`: raw completion (`/complete`) and OpenAI-compatible chat with tool calls (`/v1/chat/completions`).
-- `djinn-agent` — the agent harness (REPL, tool loop, `Backend` and `Tool` traits). Talks to any OpenAI-compatible server over HTTP. **Must not depend on candle, `djinn-models`, or `djinn-server`**; `just check` enforces this (`just check-agent-deps`).
+- `djinn-agent` — the agent harness (terminal UI and plain REPL, tool loop with approval, `Backend` and `Tool` traits). Talks to any OpenAI-compatible server over HTTP. **Must not depend on candle, `djinn-models`, or `djinn-server`**; `just check` enforces this (`just check-agent-deps`).
 - `djinn-cli` — the `djinn-cli` binary (`server`, `server-config`, `single-run`, `config`).
 
 Work is planned and tracked as OpenSpec changes under `openspec/`; the owner commits (with `jj`), so do not stage or commit on their behalf.
@@ -35,6 +35,8 @@ Work is planned and tracked as OpenSpec changes under `openspec/`; the owner com
 - `String` stays correct for genuinely free text: message content, tool output, generated text, error messages, the ignored `model` field of a chat request, and values inside a tool's arguments (each tool validates its own).
 - Do not re-check a typed value downstream; if you need a rule, put it in the type. `validate_request` only holds rules that no single value can check (non-empty conversation, tool results answering an earlier call).
 - When a server must report a value error, the serde message already names the kind (`tool name`, `temperature`, ...); map data errors to 400 (see `ChatError::from(JsonRejection)`).
+
+**Terminal UI rule.** Text that came from a model, a tool or a server is never drawn directly: it goes through `tui::text::sanitise` (the Markdown renderer and the app state do this), so it cannot carry escape sequences. Only `tui/terminal.rs` touches the real terminal; the rest is testable with ratatui's `TestBackend`.
 
 The rules for each type are in the `domain-values` OpenSpec spec.
 

@@ -50,11 +50,11 @@ jobs:
       # Keep the ignore pattern in sync with `coverage_ignore` in the justfile.
       run: >
         cargo llvm-cov nextest --all --fail-under-lines 30
-        --ignore-filename-regex '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs)'
+        --ignore-filename-regex '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs|djinn-agent/src/tui/terminal\.rs)'
     - name: generate lcov
       run: >
         cargo llvm-cov --no-run --lcov --output-path lcov.info
-        --ignore-filename-regex '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs)'
+        --ignore-filename-regex '(djinn-models/src/lm/(model\.rs|loader/)|djinn-cli/src/main\.rs|djinn-server/src/lib\.rs|djinn-agent/src/tui/terminal\.rs)'
     - name: upload coverage
       uses: codecov/codecov-action@v5
       with:

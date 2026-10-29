@@ -43,6 +43,12 @@ pub trait Tool: Send + Sync {
     /// JSON Schema (an object schema) describing the arguments.
     fn parameters(&self) -> Value;
 
+    /// Whether calls of this tool need the user's confirmation even when the front end does not ask
+    /// about every call. Tools that change something outside the process should return `true`.
+    fn needs_confirmation(&self) -> bool {
+        false
+    }
+
     /// Runs the tool. `arguments` is the JSON object the model produced.
     fn call(&self, arguments: Value) -> BoxFuture<'_, Result<String, ToolError>>;
 }
@@ -226,6 +232,15 @@ mod tests {
                 spec.function.name
             );
             assert!(spec.function.description.is_some_and(|d| !d.is_empty()));
+        }
+    }
+
+    #[test]
+    fn tools_do_not_need_confirmation_unless_they_say_so() {
+        assert!(!Named(ToolName::from_static("a")).needs_confirmation());
+        let dir = tempfile::tempdir().unwrap();
+        for tool in ToolRegistry::builtin(dir.path()).unwrap().iter() {
+            assert!(!tool.needs_confirmation(), "{}", tool.name());
         }
     }
 
