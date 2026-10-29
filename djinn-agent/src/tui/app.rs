@@ -11,6 +11,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent
 use djinn_core::values::{ModelId, ToolArguments, ToolCallId, ToolName};
 
 use super::approval::{Dialog, Outcome, PendingApproval, SessionAllow};
+use super::completion::{Completions, completions};
 use super::input::InputBuffer;
 use super::text::sanitise;
 use crate::agent::{AgentEvent, Decision, TurnError};
@@ -151,6 +152,17 @@ pub enum Effect {
     Quit,
 }
 
+/// What the completion popup remembers between keys: the rest is derived from the input.
+#[derive(Clone, Debug, Default)]
+struct CompletionState {
+    /// The highlighted row (clamped when read).
+    selected: usize,
+    /// The input text when Esc closed the popup; it stays closed until the text changes.
+    dismissed: Option<String>,
+    /// The typed word when the state was last synchronised.
+    prefix: Option<String>,
+}
+
 pub struct App {
     pub settings: Settings,
     entries: Vec<Entry>,
@@ -173,6 +185,7 @@ pub struct App {
     pub dialog: Option<Dialog>,
     pub allowed: SessionAllow,
     pub spinner: usize,
+    completion: CompletionState,
 }
 
 impl App {
@@ -192,6 +205,7 @@ impl App {
             dialog: None,
             allowed,
             spinner: 0,
+            completion: CompletionState::default(),
         }
     }
 
@@ -216,11 +230,16 @@ impl App {
 
     pub fn update(&mut self, msg: Msg) -> Vec<Effect> {
         match msg {
-            Msg::Key(key) => self.on_key(key),
+            Msg::Key(key) => {
+                let effects = self.on_key(key);
+                self.sync_completion();
+                effects
+            }
             Msg::Paste(text) => {
                 if self.dialog.is_none() {
                     self.input.insert_str(&text);
                 }
+                self.sync_completion();
                 vec![]
             }
             Msg::Mouse(mouse) => {
@@ -311,6 +330,10 @@ impl App {
             return vec![];
         }
 
+        if let Some(handled) = self.on_completion_key(key) {
+            return handled;
+        }
+
         match key.code {
             KeyCode::Char('d') if ctrl && self.input.is_empty() => {
                 return vec![Effect::Quit];
@@ -393,6 +416,74 @@ impl App {
         {
             block.expanded = !block.expanded;
         }
+    }
+
+    // ---- command completion ----
+
+    /// The completions for what is typed, whether or not the popup may be shown right now.
+    fn raw_completions(&self) -> Option<Completions> {
+        let (row, col) = self.input.cursor();
+        completions(&self.input.text(), row, col)
+    }
+
+    fn is_dismissed(&self) -> bool {
+        self.completion.dismissed.as_deref() == Some(self.input.text().as_str())
+    }
+
+    /// The completions to show: only when idle, with no dialog open, and not dismissed.
+    pub fn visible_completions(&self) -> Option<Completions> {
+        if self.is_working() || self.dialog.is_some() || self.is_dismissed() {
+            return None;
+        }
+        self.raw_completions()
+    }
+
+    /// The popup's rows and the highlighted one, for drawing.
+    pub fn popup(&self) -> Option<(Completions, usize)> {
+        let shown = self.visible_completions()?;
+        let selected = self.completion.selected.min(shown.rows.len() - 1);
+        Some((shown, selected))
+    }
+
+    /// Starts over (first row) whenever the typed word changes, and forgets a dismissal once the text differs.
+    fn sync_completion(&mut self) {
+        if !self.is_dismissed() {
+            self.completion.dismissed = None;
+        }
+        let prefix = self.raw_completions().map(|c| c.prefix);
+        if prefix != self.completion.prefix {
+            self.completion.selected = 0;
+            self.completion.prefix = prefix;
+        }
+    }
+
+    /// Keys while the popup is open. `None` means the key is not for the popup.
+    fn on_completion_key(&mut self, key: KeyEvent) -> Option<Vec<Effect>> {
+        let (shown, selected) = self.popup()?;
+        let count = shown.rows.len();
+        match key.code {
+            KeyCode::Up => self.completion.selected = (selected + count - 1) % count,
+            KeyCode::Down => self.completion.selected = (selected + 1) % count,
+            KeyCode::Esc => self.completion.dismissed = Some(self.input.text()),
+            KeyCode::Tab => self.accept_completion(shown.rows[selected].name),
+            KeyCode::Enter
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::ALT | KeyModifiers::SHIFT) =>
+            {
+                let name = shown.rows[selected].name;
+                if self.input.text().trim() == format!("/{name}") {
+                    return None; // already typed in full: run it
+                }
+                self.accept_completion(name);
+            }
+            _ => return None,
+        }
+        Some(vec![])
+    }
+
+    fn accept_completion(&mut self, name: &str) {
+        self.input.replace(&format!("/{name}"));
     }
 
     fn interrupt(&mut self) -> Vec<Effect> {
@@ -663,6 +754,7 @@ pub fn help_text() -> String {
          Up/Down          recall earlier messages (first/last line of the input)\n\
          PageUp/PageDown  scroll the conversation (also the mouse wheel)\n\
          Ctrl-Home/End    jump to the start/end of the conversation\n\
+         / then Tab        complete a command; Up/Down choose, Esc closes the list\n\
          Tab/Shift-Tab    select a tool call; Enter or Space opens or closes it\n\
          Ctrl-C           cancel the running turn\n\
          Ctrl-D           quit (empty input)\n\
@@ -1226,5 +1318,185 @@ mod tests {
         send(&mut app, "x");
         app.update(Msg::Tick);
         assert_eq!(app.spinner, 1);
+    }
+
+    // ---- command completion ----
+
+    fn popup_names(app: &App) -> Option<Vec<&'static str>> {
+        app.popup()
+            .map(|(shown, _)| shown.rows.iter().map(|r| r.name).collect())
+    }
+
+    fn selected_name(app: &App) -> &'static str {
+        let (shown, selected) = app.popup().expect("a popup");
+        shown.rows[selected].name
+    }
+
+    #[test]
+    fn typing_a_slash_opens_the_popup_and_typing_narrows_it() {
+        let mut app = app();
+        assert_eq!(popup_names(&app), None);
+        type_text(&mut app, "/");
+        assert_eq!(
+            popup_names(&app),
+            Some(vec!["exit", "quit", "reset", "tools", "help"])
+        );
+        type_text(&mut app, "re");
+        assert_eq!(popup_names(&app), Some(vec!["reset"]));
+        type_text(&mut app, "x");
+        assert_eq!(popup_names(&app), None, "nothing matches");
+    }
+
+    #[test]
+    fn tab_accepts_the_selection_without_sending() {
+        let mut app = app();
+        type_text(&mut app, "/re");
+        assert_eq!(app.update(key(KeyCode::Tab)), vec![]);
+        assert_eq!(app.input.text(), "/reset");
+        assert_eq!(
+            popup_names(&app),
+            Some(vec!["reset"]),
+            "the exact match remains"
+        );
+        assert!(app.entries().is_empty());
+    }
+
+    #[test]
+    fn enter_completes_first_and_runs_second() {
+        let mut app = app();
+        type_text(&mut app, "/to");
+        assert_eq!(app.update(key(KeyCode::Enter)), vec![]);
+        assert_eq!(app.input.text(), "/tools");
+        assert!(app.entries().is_empty(), "completing does not run it");
+        app.update(key(KeyCode::Enter));
+        assert!(app.input.is_empty());
+        assert!(matches!(
+            kinds(&app)[0],
+            EntryKind::Notice { text, .. } if text.starts_with("calculator: Does math")
+        ));
+        assert!(!app.is_working(), "no model request");
+    }
+
+    #[test]
+    fn a_name_typed_in_full_runs_at_once() {
+        let mut app = app();
+        assert_eq!(send(&mut app, "/exit"), vec![Effect::Quit]);
+        let mut app = self::app();
+        assert_eq!(send(&mut app, "/reset"), vec![Effect::Reset]);
+    }
+
+    #[test]
+    fn a_name_typed_in_other_case_is_completed_not_run() {
+        let mut app = app();
+        type_text(&mut app, "/RESET");
+        assert_eq!(app.update(key(KeyCode::Enter)), vec![]);
+        assert_eq!(app.input.text(), "/reset");
+    }
+
+    #[test]
+    fn up_and_down_move_the_selection_and_wrap() {
+        let mut app = app();
+        type_text(&mut app, "/");
+        assert_eq!(selected_name(&app), "exit");
+        app.update(key(KeyCode::Down));
+        assert_eq!(selected_name(&app), "quit");
+        app.update(key(KeyCode::Up));
+        app.update(key(KeyCode::Up));
+        assert_eq!(selected_name(&app), "help", "wrapped to the last row");
+        app.update(key(KeyCode::Down));
+        assert_eq!(selected_name(&app), "exit", "and back to the first");
+        app.update(key(KeyCode::Down));
+        app.update(key(KeyCode::Tab));
+        assert_eq!(app.input.text(), "/quit");
+    }
+
+    #[test]
+    fn the_selection_starts_over_when_the_typed_word_changes() {
+        let mut app = app();
+        type_text(&mut app, "/");
+        app.update(key(KeyCode::Down));
+        app.update(key(KeyCode::Down));
+        assert_eq!(selected_name(&app), "reset");
+        // `/e` matches only `exit`, and going back to `/` begins at the first row again.
+        type_text(&mut app, "e");
+        assert_eq!(selected_name(&app), "exit");
+        app.update(key(KeyCode::Backspace));
+        assert_eq!(selected_name(&app), "exit");
+        assert_eq!(popup_names(&app).unwrap().len(), 5);
+    }
+
+    #[test]
+    fn escape_closes_the_popup_until_the_typed_word_changes() {
+        let mut app = app();
+        type_text(&mut app, "/r");
+        app.update(key(KeyCode::Esc));
+        assert_eq!(popup_names(&app), None);
+        // Other keys that leave the word alone do not bring it back.
+        app.update(key(KeyCode::Left));
+        app.update(key(KeyCode::Right));
+        assert_eq!(popup_names(&app), None);
+        type_text(&mut app, "e");
+        assert_eq!(popup_names(&app), Some(vec!["reset"]));
+    }
+
+    #[test]
+    fn with_the_popup_closed_enter_runs_what_was_typed() {
+        let mut app = app();
+        type_text(&mut app, "/re");
+        app.update(key(KeyCode::Esc));
+        app.update(key(KeyCode::Enter));
+        let EntryKind::Notice { level, text } = kinds(&app)[0] else {
+            panic!("expected a notice")
+        };
+        assert_eq!(*level, Level::Error, "{text}");
+        assert!(text.contains("unknown command `/re`"), "{text}");
+    }
+
+    #[test]
+    fn history_and_tool_selection_work_without_the_popup() {
+        let mut app = app_with_two_tools();
+        // Up on an empty input recalls the message sent earlier.
+        app.update(key(KeyCode::Up));
+        assert_eq!(app.input.text(), "x");
+        app.update(key(KeyCode::Esc));
+        type_text(&mut app, "y");
+        assert_eq!(popup_names(&app), None, "not a command");
+        app.input.clear();
+        app.update(key(KeyCode::Tab));
+        assert_eq!(app.focus, Some(2), "Tab still selects tool blocks");
+    }
+
+    #[test]
+    fn no_popup_while_working_with_a_dialog_or_on_several_lines() {
+        let mut app = app();
+        send(&mut app, "go");
+        type_text(&mut app, "/re");
+        assert_eq!(popup_names(&app), None, "working");
+        let _answer = approval(&mut app, "read_file", false);
+        assert_eq!(popup_names(&app), None, "dialog");
+        app.update(Msg::TurnEnded(Ok("x".into())));
+        assert_eq!(popup_names(&app), Some(vec!["reset"]), "idle again");
+
+        app.update(Msg::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)));
+        assert_eq!(popup_names(&app), None, "two lines");
+    }
+
+    #[test]
+    fn a_cursor_after_the_first_word_closes_the_popup() {
+        let mut app = app();
+        type_text(&mut app, "/re now");
+        assert_eq!(popup_names(&app), None);
+        app.update(Msg::Key(KeyEvent::new(
+            KeyCode::Char('a'),
+            KeyModifiers::CONTROL,
+        )));
+        for _ in 0..3 {
+            app.update(key(KeyCode::Right));
+        }
+        assert_eq!(
+            popup_names(&app),
+            Some(vec!["reset"]),
+            "inside the word again"
+        );
     }
 }

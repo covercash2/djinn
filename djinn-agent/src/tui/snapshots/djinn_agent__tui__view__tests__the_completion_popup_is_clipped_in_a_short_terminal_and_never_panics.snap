@@ -1,0 +1,11 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: short
+---
+┌ commands ────────────────────────┐
+│ /exit   end the session          │
+└──────────────────────────────────┘
+┌ message ─────────────────────────────┐
+│/                                     │
+└──────────────────────────────────────┘
+ qwen2.5 · ask · ● idle

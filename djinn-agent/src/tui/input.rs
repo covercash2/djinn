@@ -60,6 +60,17 @@ impl InputBuffer {
         self.lines.join("\n")
     }
 
+    /// The cursor as (line, column), the column counted in characters.
+    pub fn cursor(&self) -> (usize, usize) {
+        (self.row, self.col)
+    }
+
+    /// Replaces the whole text, with the cursor at its end.
+    pub fn replace(&mut self, text: &str) {
+        self.leave_history();
+        self.set_text(text);
+    }
+
     pub fn is_empty(&self) -> bool {
         self.lines.len() == 1 && self.lines[0].is_empty()
     }
@@ -416,6 +427,16 @@ mod tests {
         assert_eq!(input.text(), "on");
         input.kill_to_start();
         assert_eq!(input.text(), "");
+    }
+
+    #[test]
+    fn replace_sets_the_text_and_puts_the_cursor_at_the_end() {
+        let mut input = typed("old\ntext");
+        input.replace("/reset");
+        assert_eq!(input.text(), "/reset");
+        assert_eq!(input.cursor(), (0, 6));
+        input.replace("a\nbc");
+        assert_eq!(input.cursor(), (1, 2));
     }
 
     #[test]

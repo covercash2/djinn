@@ -1,0 +1,16 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: "screen(&mut app, 24, 12)"
+---
+
+┌ commands ────────────┐
+│ /exit   end the ses… │
+│ /quit   end the ses… │
+│ /reset  forget the … │
+│ /tools  list the av… │
+│ /help   show this l… │
+└──────────────────────┘
+┌ message ─────────────┐
+│/                     │
+└──────────────────────┘
+ qwen2.5 · ask · ● idle
