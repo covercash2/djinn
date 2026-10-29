@@ -11,7 +11,7 @@ use std::sync::Arc;
 use djinn_core::lm::ModelSource;
 use djinn_core::lm::config::{ModelConfig, ModelRun};
 use djinn_core::lm::model::ModelArchitecture;
-use djinn_core::values::{ModelId, WeightsFile};
+use djinn_core::values::{ModelId, Revision, WeightsFile};
 
 use super::chat::ChatTemplate;
 use super::model::{ModelContext, ModelContextBuilder, load_weights};
@@ -23,18 +23,26 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
 
     let device = crate::device::to_candle(crate::device::resolve(model_config.device))?;
 
-    let (revision, repo_id, weights_file, tokenizer_repo) = match &model_config.model_source {
-        ModelSource::HuggingFaceHub {
-            revision,
-            repo_id,
-            weights_file,
-            tokenizer_repo,
-        } => (revision, repo_id, weights_file, tokenizer_repo),
-        ModelSource::Files {
-            weight_files: _,
-            tokenizer_file: _,
-        } => todo!(),
-    };
+    let (revision, repo_id, weights_file, tokenizer_repo, tokenizer_revision) =
+        match &model_config.model_source {
+            ModelSource::HuggingFaceHub {
+                revision,
+                repo_id,
+                weights_file,
+                tokenizer_repo,
+                tokenizer_revision,
+            } => (
+                revision,
+                repo_id,
+                weights_file,
+                tokenizer_repo,
+                tokenizer_revision,
+            ),
+            ModelSource::Files {
+                weight_files: _,
+                tokenizer_file: _,
+            } => todo!(),
+        };
 
     let variant = model_config.variant;
     let api = Api::new()?;
@@ -54,10 +62,13 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
     let tokenizer_repo_id = tokenizer_repo
         .clone()
         .unwrap_or_else(|| variant.default_tokenizer_repo());
+    let tokenizer_revision = tokenizer_revision
+        .clone()
+        .unwrap_or_else(|| Revision::from_static("main"));
     let tokenizer_api_repo = api.repo(Repo::with_revision(
         tokenizer_repo_id.into_string(),
         RepoType::Model,
-        revision.to_string(),
+        tokenizer_revision.into_string(),
     ));
     let tokenizer_file = tokenizer_api_repo.get("tokenizer.json").await?;
     let tokenizer = Tokenizer::from_file(tokenizer_file).map_err(anyhow::Error::msg)?;

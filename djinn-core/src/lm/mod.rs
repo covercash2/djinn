@@ -29,6 +29,9 @@ pub enum ModelSource {
         /// (GGUF repositories usually do not ship a usable tokenizer).
         #[serde(default)]
         tokenizer_repo: Option<RepoId>,
+        /// Hub revision to take `tokenizer.json` from. Defaults to `main`.
+        #[serde(default)]
+        tokenizer_revision: Option<Revision>,
     },
     Files {
         weight_files: Vec<PathBuf>,
@@ -44,6 +47,7 @@ impl ModelSource {
             repo_id: None,
             weights_file: None,
             tokenizer_repo: None,
+            tokenizer_revision: None,
         }
     }
 }

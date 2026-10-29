@@ -11,7 +11,13 @@ default:
 
 # run the djinn server (loads configs/server/<name>.toml)
 server name="test":
-	cargo run --release --features djinn-models/cuda -- server-config --name {{name}}
+	#!/usr/bin/env sh
+	case "$(uname -s)" in
+		Darwin) feature=djinn-models/mac ;;
+		Linux) feature=djinn-models/cuda ;;
+		*) echo "unsupported platform: $(uname -s)" >&2; exit 1 ;;
+	esac
+	cargo run --release --features "$feature" -- server-config --name {{name}}
 
 # run the ollama-cli
 tui:

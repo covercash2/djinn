@@ -110,6 +110,18 @@
                   "minLength": 3,
                   "pattern": "^[A-Za-z0-9._-]{1,96}/[A-Za-z0-9._-]{1,96}$"
                 },
+                "tokenizer_revision": {
+                  "title": "revision",
+                  "description": "Hub revision to take `tokenizer.json` from. Defaults to `main`.",
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[^\\s\\x00-\\x1f\\x7f]{1,128}$"
+                },
                 "weights_file": {
                   "title": "weights file",
                   "description": "File to download from the repository (for GGUF models). Defaults to the architecture's standard file.",
