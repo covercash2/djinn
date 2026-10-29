@@ -7,6 +7,7 @@
 
 pub mod app;
 pub mod approval;
+pub mod completion;
 pub mod input;
 pub mod markdown;
 pub mod terminal;
@@ -760,5 +761,45 @@ mod tests {
             .map(|_| ())
             .unwrap_err();
         assert_eq!(error.to_string(), "boom");
+    }
+
+    #[tokio::test]
+    async fn a_command_can_be_completed_with_enter_and_then_run_without_a_model_request() {
+        let (mut agent, _dir) = new_agent(vec![]);
+        let outcome = session(
+            &mut agent,
+            Approval::Auto,
+            vec![],
+            |mut driver| async move {
+                driver.type_text("/to");
+                driver.press(KeyCode::Enter, KeyModifiers::NONE); // completes to /tools
+                driver.press(KeyCode::Enter, KeyModifiers::NONE); // runs it
+                driver
+                    .wait("the tools listing", |s| {
+                        s.transcript.contains("calculator:")
+                    })
+                    .await;
+                driver.quit();
+            },
+        )
+        .await;
+        assert!(agent.backend().requests().is_empty());
+        assert!(outcome.screen.contains("calculator:"), "{}", outcome.screen);
+    }
+
+    #[tokio::test]
+    async fn the_popup_is_on_screen_while_a_command_is_typed() {
+        let (mut agent, _dir) = new_agent(vec![]);
+        let outcome = session(&mut agent, Approval::Auto, vec![], |driver| async move {
+            driver.type_text("/");
+            // Wait for the draw that follows the key.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            driver.type_text("t");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            drop(driver);
+        })
+        .await;
+        assert!(outcome.screen.contains("/tools"), "{}", outcome.screen);
+        assert!(!outcome.screen.contains("/reset"), "{}", outcome.screen);
     }
 }

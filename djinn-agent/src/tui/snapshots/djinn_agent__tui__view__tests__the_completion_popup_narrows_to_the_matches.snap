@@ -1,0 +1,18 @@
+---
+source: djinn-agent/src/tui/view.rs
+expression: shown
+---
+
+
+
+
+
+
+
+┌ commands ───────────────────────┐
+│ /reset  forget the conversation │
+└─────────────────────────────────┘
+┌ message ─────────────────────────────────────────────────┐
+│/re                                                       │
+└──────────────────────────────────────────────────────────┘
+ qwen2.5 · http://localhost:8080/v1 · approval: ask · ● idle

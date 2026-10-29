@@ -75,6 +75,7 @@ in a terminal `djinn-agent` opens a full-screen UI: the conversation (assistant 
 | `Alt-Enter` (`Shift-Enter`, `Ctrl-J`) | new line in the message |
 | `Up` / `Down` | recall earlier messages (on the first / last line of the input) |
 | `PageUp` / `PageDown`, mouse wheel | scroll the conversation; `Ctrl-Home` / `Ctrl-End` jump to the start / end |
+| `/` then `Tab` | complete a command: a list pops up as you type, `Up` / `Down` choose, `Enter` completes (a second `Enter` runs it), `Esc` closes it |
 | `Tab` / `Shift-Tab` | select a tool call; `Enter` or `Space` opens or closes it, `Esc` deselects |
 | `Ctrl-C` | cancel the running turn (it never quits); `/exit` or `Ctrl-D` quits |
 

@@ -19,6 +19,8 @@ use crate::settings::Approval;
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 /// The most input rows shown before the box scrolls.
 const MAX_INPUT_ROWS: usize = 6;
+/// The most commands listed in the completion popup.
+const MAX_POPUP_ROWS: usize = 6;
 
 /// Lines laid out for one entry, valid while `rev`, `width` and `focused` stay the same.
 #[derive(Clone, Debug)]
@@ -402,6 +404,60 @@ fn render_dialog(frame: &mut Frame, dialog: &Dialog, area: Rect) {
     frame.render_widget(Paragraph::new(lines).block(block), rect);
 }
 
+/// The command completion popup, standing on the top edge of the input box.
+fn render_popup(frame: &mut Frame, app: &App, input_area: Rect) {
+    let Some((shown, selected)) = app.popup() else {
+        return;
+    };
+    let name_width = shown.rows.iter().map(|r| width(r.name)).max().unwrap_or(0);
+    let all: Vec<String> = shown
+        .rows
+        .iter()
+        .map(|r| format!("/{:<name_width$}  {}", r.name, r.description))
+        .collect();
+
+    // At most `MAX_POPUP_ROWS` rows, and only as many as fit above the input box.
+    let room = (input_area.y as usize).saturating_sub(2);
+    let visible = all.len().min(MAX_POPUP_ROWS).min(room);
+    if visible == 0 || input_area.width < 6 {
+        return;
+    }
+    let first = (selected + 1).saturating_sub(visible);
+    let longest = all.iter().map(|r| width(r)).max().unwrap_or(0);
+    let popup_width = ((longest + 4) as u16).min(input_area.width);
+    let height = visible as u16 + 2;
+    let rect = Rect {
+        x: input_area.x,
+        y: input_area.y - height,
+        width: popup_width,
+        height,
+    };
+    let inner = (popup_width as usize).saturating_sub(4);
+    let lines: Vec<Line<'static>> = all
+        .iter()
+        .enumerate()
+        .skip(first)
+        .take(visible)
+        .map(|(index, row)| {
+            let style = if index == selected {
+                Style::default().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            };
+            let text = truncate_columns(row, inner);
+            let pad = " ".repeat(inner.saturating_sub(width(&text)));
+            Line::from(Span::styled(format!("{text}{pad}"), style))
+        })
+        .collect();
+    frame.render_widget(Clear, rect);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(dim())
+        .padding(Padding::horizontal(1))
+        .title(" commands ");
+    frame.render_widget(Paragraph::new(lines).block(block), rect);
+}
+
 /// Draws the whole screen.
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
@@ -482,6 +538,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Paragraph::new(status_line(app, status_area.width as usize)),
         status_area,
     );
+
+    render_popup(frame, app, input_area);
 
     // Dialog on top, or the cursor in the input box.
     match &app.dialog {
@@ -807,5 +865,82 @@ mod tests {
         assert_eq!(truncate_columns("abcdef", 4), "abc…");
         assert_eq!(truncate_columns("你好吗", 4), "你…");
         assert_eq!(truncate_columns("abc", 0), "…");
+    }
+
+    fn typing(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.update(Msg::Key(KeyEvent::new(
+                KeyCode::Char(c),
+                KeyModifiers::NONE,
+            )));
+        }
+    }
+
+    #[test]
+    fn the_completion_popup_lists_every_command() {
+        let mut app = app();
+        typing(&mut app, "/");
+        insta::assert_snapshot!(screen(&mut app, 60, 14));
+    }
+
+    #[test]
+    fn the_completion_popup_narrows_to_the_matches() {
+        let mut app = app();
+        typing(&mut app, "/re");
+        let shown = screen(&mut app, 60, 14);
+        assert!(
+            shown.contains("/reset") && !shown.contains("/tools"),
+            "{shown}"
+        );
+        insta::assert_snapshot!(shown);
+    }
+
+    #[test]
+    fn the_completion_popup_highlights_the_selected_row() {
+        let mut app = app();
+        typing(&mut app, "/");
+        app.update(Msg::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)));
+        app.update(Msg::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)));
+        let mut terminal = Terminal::new(TestBackend::new(60, 14)).unwrap();
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let reversed: Vec<String> = (0..14)
+            .filter(|&y| {
+                (1..30).any(|x| {
+                    buffer[(x, y)].modifier.contains(Modifier::REVERSED) && y < 11 // the status bar is reversed too
+                })
+            })
+            .map(|y| (0..60).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect();
+        assert_eq!(reversed.len(), 1, "{reversed:?}");
+        assert!(reversed[0].contains("/reset"), "{reversed:?}");
+        insta::assert_snapshot!(screen(&mut app, 60, 14));
+    }
+
+    #[test]
+    fn the_completion_popup_in_a_narrow_terminal() {
+        let mut app = app();
+        typing(&mut app, "/");
+        insta::assert_snapshot!(screen(&mut app, 24, 12));
+    }
+
+    #[test]
+    fn the_completion_popup_is_clipped_in_a_short_terminal_and_never_panics() {
+        let mut app = app();
+        typing(&mut app, "/");
+        let short = screen(&mut app, 40, 7);
+        assert!(short.contains("/exit"), "{short}");
+        for (w, h) in [(1, 1), (3, 3), (10, 5), (40, 4), (40, 6)] {
+            let _ = screen(&mut app, w, h);
+        }
+        insta::assert_snapshot!(short);
+    }
+
+    #[test]
+    fn no_popup_for_ordinary_text() {
+        let mut app = app();
+        typing(&mut app, "hello /re");
+        let shown = screen(&mut app, 60, 14);
+        assert!(!shown.contains("commands"), "{shown}");
     }
 }
