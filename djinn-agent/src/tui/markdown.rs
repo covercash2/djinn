@@ -95,10 +95,14 @@ impl Renderer {
         if text.is_empty() {
             return;
         }
+        let text = sanitise(text);
+        if text.is_empty() {
+            return;
+        }
         self.segments
             .last_mut()
             .expect("at least one segment")
-            .push(Span::styled(text.to_owned(), style));
+            .push(Span::styled(text, style));
     }
 
     fn has_inline(&self) -> bool {
@@ -504,6 +508,13 @@ mod tests {
     #[test]
     fn escape_sequences_never_survive() {
         let out = rendered("clear \u{1b}[2J this", 40);
+        assert!(out.iter().all(|line| !line.contains('\u{1b}')), "{out:?}");
+        assert_eq!(out, vec!["clear \u{241b}[2J this"]);
+    }
+
+    #[test]
+    fn entity_decoded_escape_sequences_are_sanitised() {
+        let out = rendered("clear &#27;[2J this", 40);
         assert!(out.iter().all(|line| !line.contains('\u{1b}')), "{out:?}");
         assert_eq!(out, vec!["clear \u{241b}[2J this"]);
     }
