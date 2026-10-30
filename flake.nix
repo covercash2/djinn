@@ -27,6 +27,11 @@
 
   # The main content of the flake - what it provides to users
   outputs = inputs@{ self, nixpkgs, flake-utils, rust-overlay, crane, ... }:
+    {
+      # The NixOS module is system-independent. Its default package comes from `self.packages`.
+      nixosModules.default = import ./nix/module.nix self;
+      nixosModules.djinn = self.nixosModules.default;
+    } //
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = [ (import rust-overlay) ];
@@ -152,6 +157,28 @@
           cargoExtraArgs = commonArgs.cargoExtraArgs + " -p djinn-cli";
         });
 
+        # Explicit hardware variants (Linux). `djinn-cli` above keeps its meaning (CUDA on Linux);
+        # the NixOS module picks one of these. The CPU build needs no CUDA toolchain.
+        cpuArgs = commonArgs // {
+          buildInputs = commonDependencies;
+          nativeBuildInputs = with pkgs; [ rustToolchain pkg-config ];
+          CUDA_PATH = "";
+          CUDA_HOME = "";
+          CUDA_COMPUTE_CAP = "";
+          cargoExtraArgs = "";
+        };
+        cpuArtifacts = craneLib.buildDepsOnly cpuArgs;
+        djinn-cli-cpu = craneLib.buildPackage (cpuArgs // {
+          cargoArtifacts = cpuArtifacts;
+          pname = "djinn-cli-cpu";
+          cargoExtraArgs = "-p djinn-cli";
+        });
+        djinn-cli-cuda = craneLib.buildPackage (commonArgs // {
+          inherit cargoArtifacts;
+          pname = "djinn-cli-cuda";
+          cargoExtraArgs = "--features cuda -p djinn-cli";
+        });
+
         # Build the ollama-cli package
         ollama-cli = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
@@ -167,6 +194,8 @@
           djinn-cli = djinn-cli;
           ollama-cli = ollama-cli;
           default = djinn-cli;
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          inherit djinn-cli-cpu djinn-cli-cuda;
         };
 
         # Add other checks and test cases
@@ -175,6 +204,9 @@
           djinn-tests = craneLib.cargoTest (commonArgs // {
             inherit cargoArtifacts;
           });
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          # Evaluation-only check of the NixOS module (nix/tests/module-check.nix).
+          nixos-module = import ./nix/tests/module-check.nix { inherit self nixpkgs pkgs system; };
         };
 
         # Development shell with all dependencies

@@ -21,6 +21,7 @@ Dev environment: Nix flakes (`.envrc` runs `use flake`). Stable Rust, edition 20
 - `djinn-server` — axum HTTP API over a loaded `LanguageModel`: raw completion (`/complete`) and OpenAI-compatible chat with tool calls (`/v1/chat/completions`).
 - `djinn-agent` — the agent harness (terminal UI and plain REPL, tool loop with approval, `Backend` and `Tool` traits). Talks to any OpenAI-compatible server over HTTP. **Must not depend on candle, `djinn-models`, or `djinn-server`**; `just check` enforces this (`just check-agent-deps`).
 - `djinn-cli` — the `djinn-cli` binary (`server`, `server-config`, `single-run`, `config`).
+- `nix/module.nix` — the NixOS module (`services.djinn`, exported as `nixosModules.default`). Checked by evaluation only: `nix build path:.#checks.x86_64-linux.nixos-module` (also part of `nix flake check`); `path:.` because new files are invisible to a git flake until tracked.
 
 Work is planned and tracked as OpenSpec changes under `openspec/`; the owner commits (with `jj`), so do not stage or commit on their behalf.
 

@@ -3,7 +3,7 @@
 use candle_core::{self as candle};
 use futures::StreamExt;
 use futures::pin_mut;
-use hf_hub::{Repo, RepoType, api::tokio::Api};
+use hf_hub::{Repo, RepoType, api::tokio::ApiBuilder};
 use tokenizers::Tokenizer;
 
 use std::sync::Arc;
@@ -45,7 +45,8 @@ pub async fn create_new_context(model_config: &ModelConfig) -> anyhow::Result<Mo
         };
 
     let variant = model_config.variant;
-    let api = Api::new()?;
+    // `Api::new()` ignores `HF_HOME`; the NixOS service relies on it (its home directory is read-only).
+    let api = ApiBuilder::from_env().build()?;
     let repo_id = repo_id.clone().unwrap_or_else(|| variant.hf_repo_id());
     let weights_file = weights_file
         .clone()

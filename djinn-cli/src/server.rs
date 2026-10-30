@@ -52,12 +52,12 @@ impl TryFrom<ServerArgs> for Config {
         let ServerArgs {
             ip,
             port,
+            config_dir,
             model_config,
             ..
         } = value;
 
-        let filename = format!("{model_config}.toml");
-        let path = PathBuf::from("./configs/").join(filename);
+        let path = config_dir.join(format!("{model_config}.toml"));
 
         let full_address = SocketAddr::new(ip, port);
         Ok(Config::new(full_address, path))
@@ -136,6 +136,32 @@ mod tests {
             let args = ServerArgs::try_parse_from(["server", "--ip", ip]).unwrap();
             assert_eq!(args.ip, ip.parse::<IpAddr>().unwrap());
         }
+    }
+
+    #[test]
+    fn the_model_config_is_looked_up_under_the_config_dir() {
+        let args = ServerArgs::try_parse_from([
+            "server",
+            "--config-dir",
+            "/etc/djinn",
+            "--model-config",
+            "model/custom",
+        ])
+        .unwrap();
+        let config: Config = args.try_into().unwrap();
+        assert_eq!(
+            config.model_config,
+            PathBuf::from("/etc/djinn/model/custom.toml")
+        );
+    }
+
+    #[test]
+    fn the_default_config_dir_keeps_the_old_path() {
+        let config: Config = ServerArgs::default().try_into().unwrap();
+        assert_eq!(
+            config.model_config,
+            PathBuf::from("./configs/model/qwen2_5_instruct.toml")
+        );
     }
 
     #[test]
