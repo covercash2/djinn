@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use djinn_core::lm::config::ModelConfig;
 use djinn_models::lm::loader::create_new_context;
 pub use server::{Config, HttpServer};
@@ -20,7 +21,9 @@ pub use error::{Error, Result};
 pub async fn run_server(config: Config) -> anyhow::Result<()> {
     let model_path = &config.model_config;
     tracing::debug!("loading model config at {model_path:?}");
-    let contents = tokio::fs::read_to_string(model_path).await?;
+    let contents = tokio::fs::read_to_string(model_path)
+        .await
+        .with_context(|| format!("reading the model config {}", model_path.display()))?;
     let model_config = djinn_core::config::validate_and_load::<ModelConfig>(&contents, model_path)?;
 
     let model = Box::new(create_new_context(&model_config).await?)

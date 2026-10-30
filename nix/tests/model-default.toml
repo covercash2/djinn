@@ -1,0 +1,6 @@
+# What the NixOS module renders for its default model options. The module check compares the
+# rendering with this file, and a djinn-core test loads it as a ModelConfig.
+variant = "qwen2_5_instruct"
+
+[model_source.hugging_face_hub]
+revision = "main"

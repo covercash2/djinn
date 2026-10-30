@@ -183,6 +183,20 @@ mod tests {
     }
 
     #[test]
+    fn the_nixos_module_default_model_config_is_valid() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../nix/tests/model-default.toml");
+        let contents = std::fs::read_to_string(&path).unwrap();
+        let config = config::validate_and_load::<ModelConfig>(&contents, &path).unwrap();
+        assert_eq!(config.variant, ModelArchitecture::Qwen25Instruct);
+        assert!(matches!(
+            config.model_source,
+            ModelSource::HuggingFaceHub { .. }
+        ));
+        assert!(config.device.is_none());
+    }
+
+    #[test]
     fn every_shipped_model_config_is_valid() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../configs/model");
         let mut checked = Vec::new();

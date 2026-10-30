@@ -111,6 +111,37 @@ breakdown:
 
 Arguments are validated when they are parsed: for example `djinn-cli server --ip not-an-ip` is a usage error that names `--ip`, before anything starts.
 
+## NixOS
+
+The flake exports a NixOS module that runs the server as a systemd service:
+
+```nix
+{
+  inputs.djinn.url = "github:covercash2/djinn";
+
+  # in your nixosSystem modules:
+  imports = [ inputs.djinn.nixosModules.default ];
+
+  services.djinn = {
+    enable = true;
+    port = 9000;                 # default 8080
+    address = "0.0.0.0";         # default 127.0.0.1
+    openFirewall = true;         # default false
+    model.source.huggingFace = { # default: Qwen2.5-1.5B-Instruct (Q4_K_M)
+      repo = "Qwen/Qwen2.5-0.5B-Instruct-GGUF";
+      weightsFile = "qwen2.5-0.5b-instruct-q4_k_m.gguf";
+      tokenizerRepo = "Qwen/Qwen2.5-0.5B-Instruct";
+    };
+  };
+}
+```
+
+- The model is configured with options (`model.architecture`, `model.source.huggingFace.*`, or `model.source.files` for local weights); the module renders the TOML config the server reads.
+- It runs as a dynamic user. State lives in `/var/lib/djinn`, and the Hugging Face cache in `/var/lib/djinn/huggingface` (`HF_HOME`), so the weights are downloaded once (about 1 GB for the default model; the first start takes a while).
+- CUDA is **opt-in**: `services.djinn.cuda.enable = true` selects the CUDA build, sets `device = "Cuda"` and allows the NVIDIA device nodes. It needs `hardware.graphics.enable = true` and the NVIDIA driver. Without it the CPU build runs. `package` overrides the build (a CUDA build is then your job).
+- `logLevel` sets `RUST_LOG`; `extraEnvironment` adds variables; `environmentFile = "/run/secrets/djinn.env"` is read by systemd for secrets such as a Hugging Face token and is never copied into the Nix store.
+- `nix flake check` evaluates the module in several configurations (`nix/tests/module-check.nix`). `nix build .#djinn-cli-cpu` / `.#djinn-cli-cuda` build the two variants; `.#djinn-cli` is unchanged (CUDA on Linux, Metal on macOS).
+
 ## Validated settings
 
 Identifiers, names, paths, addresses, URLs, secrets and tuning parameters are checked when they are read, not when they are used, so a mistake fails early and says which value and which rule:
