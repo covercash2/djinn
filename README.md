@@ -65,6 +65,25 @@ just agent --base-url http://localhost:11434/v1 --model qwen2.5:1.5b
 
 flags can also be set with `DJINN_AGENT_BASE_URL`, `DJINN_AGENT_MODEL` and `DJINN_AGENT_API_KEY`.
 in the REPL, `/help` lists the commands; tool activity is printed to stderr and the answer to stdout.
+### installing
+
+the flake exports `djinn-agent` (no GPU or CUDA needed, one build for every machine):
+
+```sh
+nix run github:covercash2/djinn#djinn-agent        # try it
+nix profile install github:covercash2/djinn#djinn-agent
+```
+
+or on NixOS, next to the [server module](#nixos):
+
+```nix
+environment.systemPackages = [ inputs.djinn.packages.${pkgs.stdenv.hostPlatform.system}.djinn-agent ];
+```
+
+with no flags it talks to `http://localhost:8080/v1`, which is where `services.djinn` listens by default. use `--base-url` / `DJINN_AGENT_BASE_URL` (and `--model`, `DJINN_AGENT_API_KEY`) for another server.
+
+the `read_file` tool is confined to the directory you start the agent in; pass `--tool-root <dir>` to choose another.
+
 ### terminal UI
 
 in a terminal `djinn-agent` opens a full-screen UI: the conversation (assistant text is rendered as Markdown), each tool call as a block that you can expand, a multi-line input box and a status bar. when stdin or stdout is a pipe, or with `--plain`, it runs the line-based REPL instead (`--once` is unchanged).

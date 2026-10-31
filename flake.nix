@@ -116,6 +116,14 @@
           filter = craneLib.filterCargoSources;
         };
 
+        # The agent's tests compare against insta snapshots (`*.snap`), which crane's filter drops.
+        # A separate source set keeps every other derivation (and its hash) unchanged.
+        agentSrc = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type:
+            craneLib.filterCargoSources path type || pkgs.lib.hasSuffix ".snap" path;
+        };
+
         # Build common args that apply to all crates
         commonArgs = {
           inherit src;
@@ -179,6 +187,16 @@
           cargoExtraArgs = "--features cuda -p djinn-cli";
         });
 
+        # The agent talks to a server over HTTP and has no hardware features, so one build serves
+        # every machine. It reuses the CPU dependency artifacts (the whole workspace's dependencies).
+        djinn-agent = craneLib.buildPackage (cpuArgs // {
+          src = agentSrc;
+          cargoArtifacts = cpuArtifacts;
+          pname = "djinn-agent";
+          cargoExtraArgs = "-p djinn-agent";
+          meta.mainProgram = "djinn-agent";
+        });
+
         # Build the ollama-cli package
         ollama-cli = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
@@ -192,6 +210,7 @@
         # Use djinn-cli as the default package
         packages = {
           djinn-cli = djinn-cli;
+          inherit djinn-agent;
           ollama-cli = ollama-cli;
           default = djinn-cli;
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -201,6 +220,15 @@
         # Add other checks and test cases
         # https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-flake-check.html
         checks = {
+          # The package builds and its binary starts, with the flags the docs promise.
+          djinn-agent-starts = pkgs.runCommand "djinn-agent-starts" { } ''
+            ${djinn-agent}/bin/djinn-agent --version
+            ${djinn-agent}/bin/djinn-agent --help </dev/null > help.txt
+            for flag in --base-url --model --plain --approval --tool-root; do
+              grep -q -- "$flag" help.txt || { echo "missing flag $flag" >&2; exit 1; }
+            done
+            touch $out
+          '';
           djinn-tests = craneLib.cargoTest (commonArgs // {
             inherit cargoArtifacts;
           });
